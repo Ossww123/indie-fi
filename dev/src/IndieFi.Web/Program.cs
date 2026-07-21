@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +14,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // Hashes passwords with PBKDF2. Used on its own, without the rest of Identity.
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+
+// Signing in writes an encrypted cookie; the browser sends it back on every request.
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(7);
+        options.SlidingExpiration = true;
+    });
 
 var app = builder.Build();
 
@@ -28,6 +39,8 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 
+// Order matters: work out who the caller is, then decide what they may do.
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
