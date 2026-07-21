@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IndieFi.Web/IndieFi.Web.csproj" />
+  </Folder>
+</Solution>
