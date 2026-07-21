@@ -1,0 +1,70 @@
+# ── 개인 문서/지침 (커밋 제외 — 실제 프로젝트 코드만 올림) ──
+# 커밋 대상은 dev/ 아래 코드뿐. 기획·설계 문서와 Claude 작업 지침은 로컬 개인 파일.
+CLAUDE.md
+**/CLAUDE.md
+docs/
+
+# 1차 시도 보관함 (2026-07-21). 참고용으로만 남김 — 커밋하지 않는다.
+_archive/
+
+# Claude Code / 에이전트 로컬 설정 (개인)
+.claude/settings.local.json
+
+# ── .NET / ASP.NET Core ──
+# Build results
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*_i.c
+*_p.c
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+TestResults/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+.nuget/
+
+# EF Core / tooling
+*.dbmdl
+*.dbproj.schemaview
+
+# Secrets / local config (절대 커밋 금지)
+*.env
+.env
+.env.*
+appsettings.*.local.json
+secrets.json
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log
