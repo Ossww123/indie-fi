@@ -1,0 +1,26 @@
+# 로컬 개발용 PostgreSQL.
+#   띄우기: docker compose up -d
+#   끄기:   docker compose down
+#   데이터까지 지우기: docker compose down -v
+services:
+  db:
+    image: postgres:18
+    container_name: indiefi-db
+    environment:
+      POSTGRES_USER: indiefi
+      POSTGRES_PASSWORD: indiefi_local_dev
+      POSTGRES_DB: indiefi
+    ports:
+      - "5432:5432"
+    volumes:
+      # PostgreSQL 18+ stores data in a version-specific subdirectory,
+      # so the mount point is /var/lib/postgresql (not .../data).
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indiefi -d indiefi"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db-data:
