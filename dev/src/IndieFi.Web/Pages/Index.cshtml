@@ -4,6 +4,11 @@
     ViewData["Title"] = "홈";
 }
 
+@if (TempData["SignupMessage"] is string signupMessage)
+{
+    <div class="alert alert-success">@signupMessage</div>
+}
+
 <div class="text-center">
     <h1 class="display-4">Indie-Fi</h1>
     <p class="text-muted">인디 게임 피드백 플랫폼</p>
