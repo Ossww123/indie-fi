@@ -1,0 +1,42 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "내 게임";
+}
+
+<div class="d-flex justify-content-between align-items-start">
+    <h1 class="h3 mb-4">내 게임</h1>
+    <a asp-page="/Games/New" class="btn btn-primary">게임 등록</a>
+</div>
+
+@if (TempData["GameMessage"] is string gameMessage)
+{
+    <div class="alert alert-success">@gameMessage</div>
+}
+
+@if (Model.Games.Count == 0)
+{
+    <div class="alert alert-secondary">등록한 게임이 없습니다. 첫 게임을 등록해 보세요.</div>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var game in Model.Games)
+        {
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">@game.Title</span>
+                    <span class="text-muted">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                </div>
+                @if (game.Description is not null)
+                {
+                    <div>@game.Description</div>
+                }
+                else
+                {
+                    <div class="text-muted">(소개 없음)</div>
+                }
+            </div>
+        }
+    </div>
+}

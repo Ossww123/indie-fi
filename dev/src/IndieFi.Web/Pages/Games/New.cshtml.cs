@@ -51,6 +51,6 @@ public class NewModel : PageModel
 
         // Redirect after a successful POST so refreshing the page does not resubmit.
         TempData["GameMessage"] = $"'{game.Title}' 등록 완료";
-        return RedirectToPage("/Index");
+        return RedirectToPage("/Games/Index");
     }
 }
