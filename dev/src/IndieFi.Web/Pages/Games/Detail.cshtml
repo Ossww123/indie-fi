@@ -4,7 +4,21 @@
     ViewData["Title"] = Model.Game.Title;
 }
 
-<h1 class="h3 mb-1">@Model.Game.Title</h1>
+@if (TempData["GameMessage"] is string gameMessage)
+{
+    <div class="alert alert-success">@gameMessage</div>
+}
+
+<div class="d-flex align-items-center gap-2">
+    <h1 class="h3 mb-1">@Model.Game.Title</h1>
+    @* Hiding this link is only UX; the Edit endpoint enforces ownership. *@
+    @if (Model.IsOwner)
+    {
+        <a asp-page="/Games/Edit"
+           asp-route-id="@Model.Game.Id"
+           class="btn btn-outline-secondary btn-sm">수정</a>
+    }
+</div>
 <p class="text-muted small">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
 
 @if (Model.Game.Description is not null)

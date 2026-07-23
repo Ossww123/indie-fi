@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +18,7 @@ public class DetailModel : PageModel
     }
 
     public Game Game { get; private set; } = null!;
+    public bool IsOwner { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(long id)
     {
@@ -31,6 +33,9 @@ public class DetailModel : PageModel
         // because feedback added later is left by other people. Ownership is only
         // enforced when editing a game.
         Game = game;
+        IsOwner = long.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out var ownerId) && game.OwnerId == ownerId;
         return Page();
     }
 }
