@@ -15,6 +15,8 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<Game> Games => Set<Game>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -42,6 +44,37 @@ public class AppDbContext : DbContext
 
             // No two accounts may share an email address.
             user.HasIndex(u => u.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<Game>(game =>
+        {
+            game.ToTable("games");
+
+            game.HasKey(g => g.Id);
+            game.Property(g => g.Id).HasColumnName("id");
+
+            game.Property(g => g.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            game.Property(g => g.Title)
+                .HasColumnName("title")
+                .HasMaxLength(200)
+                .IsRequired();
+
+            game.Property(g => g.Description)
+                .HasColumnName("description");
+
+            game.Property(g => g.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            // A game belongs to the user who registered it; the foreign key lets
+            // the database reject a game with no real owner.
+            game.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(g => g.OwnerId);
         });
     }
 }

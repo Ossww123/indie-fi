@@ -1,0 +1,25 @@
+@page
+@model NewModel
+@{
+    ViewData["Title"] = "게임 등록";
+}
+
+<h1 class="h3 mb-4">게임 등록</h1>
+
+<form method="post" class="col-md-5">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <div class="mb-3">
+        <label asp-for="Title" class="form-label">게임 제목</label>
+        <input asp-for="Title" class="form-control" />
+        <span asp-validation-for="Title" class="text-danger small"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Description" class="form-label">소개</label>
+        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+        <span asp-validation-for="Description" class="text-danger small"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">게임 등록</button>
+</form>
