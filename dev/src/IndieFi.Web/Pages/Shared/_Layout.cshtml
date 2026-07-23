@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="utf-8" />
@@ -27,6 +27,12 @@
                     <ul class="navbar-nav">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-page="/Games/Index">내 게임</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-page="/Games/New">게임 등록</a>
+                            </li>
                             <li class="nav-item">
                                 <span class="nav-link text-dark">@User.Identity.Name 님</span>
                             </li>
