@@ -1,0 +1,245 @@
+using IndieFi.Web.Data;
+using IndieFi.Web.Entities;
+using IndieFi.Web.Services;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace IndieFi.Web.Tests;
+
+[Collection(PostgreSqlCollection.Name)]
+public sealed class KeyClaimServiceTests
+{
+    private readonly PostgreSqlFixture _fixture;
+
+    public KeyClaimServiceTests(PostgreSqlFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    // A drop must not grant a key before its opening time.
+    [Fact]
+    public async Task ClaimAsync_WhenDropOpensInFuture_ReturnsNotOpenWithoutCreatingGrant()
+    {
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(1),
+                keyCount: 1)).Id;
+        }
+
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var service = new KeyClaimService(serviceDb);
+            result = await service.ClaimAsync(dropId, userId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var grantCount = await verificationDb.KeyGrants
+            .CountAsync(
+                grant => grant.DropId == dropId,
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(ClaimOutcome.NotOpen, result.Outcome);
+        Assert.Equal(0, grantCount);
+    }
+
+    // A user can receive only one key from the same drop.
+    [Fact]
+    public async Task ClaimAsync_WhenSameUserClaimsTwice_GrantsOnceThenReturnsAlreadyClaimed()
+    {
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 2)).Id;
+        }
+
+        ClaimResult firstResult;
+        await using (var firstServiceDb = _fixture.NewDbContext())
+        {
+            var service = new KeyClaimService(firstServiceDb);
+            firstResult = await service.ClaimAsync(dropId, userId);
+        }
+
+        ClaimResult secondResult;
+        await using (var secondServiceDb = _fixture.NewDbContext())
+        {
+            var service = new KeyClaimService(secondServiceDb);
+            secondResult = await service.ClaimAsync(dropId, userId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var userGrantCount = await verificationDb.KeyGrants
+            .CountAsync(
+                grant => grant.DropId == dropId && grant.UserId == userId,
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(ClaimOutcome.Granted, firstResult.Outcome);
+        Assert.Equal(ClaimOutcome.AlreadyClaimed, secondResult.Outcome);
+        Assert.Equal(1, userGrantCount);
+    }
+
+    // Repeating a claim must preserve the original key and consume no extra key.
+    [Fact]
+    public async Task ClaimAsync_WhenClaimIsRepeated_KeepsOriginalKeyAndConsumesOnlyOneKey()
+    {
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 2)).Id;
+        }
+
+        ClaimResult firstResult;
+        await using (var firstServiceDb = _fixture.NewDbContext())
+        {
+            var service = new KeyClaimService(firstServiceDb);
+            firstResult = await service.ClaimAsync(dropId, userId);
+        }
+
+        long firstKeyId;
+        await using (var afterFirstClaimDb = _fixture.NewDbContext())
+        {
+            firstKeyId = await afterFirstClaimDb.KeyGrants
+                .Where(grant => grant.DropId == dropId && grant.UserId == userId)
+                .Select(grant => grant.KeyId)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        ClaimResult secondResult;
+        await using (var secondServiceDb = _fixture.NewDbContext())
+        {
+            var service = new KeyClaimService(secondServiceDb);
+            secondResult = await service.ClaimAsync(dropId, userId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var finalKeyId = await verificationDb.KeyGrants
+            .Where(grant => grant.DropId == dropId && grant.UserId == userId)
+            .Select(grant => grant.KeyId)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var remainingKeyCount = await verificationDb.SteamKeys
+            .CountAsync(key =>
+                key.DropId == dropId &&
+                !verificationDb.KeyGrants.Any(grant => grant.KeyId == key.Id),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(ClaimOutcome.Granted, firstResult.Outcome);
+        Assert.Equal(ClaimOutcome.AlreadyClaimed, secondResult.Outcome);
+        Assert.Equal(firstKeyId, finalKeyId);
+        Assert.Equal(1, remainingKeyCount);
+    }
+
+    // A drop must stop granting after every available key is assigned once.
+    [Fact]
+    public async Task ClaimAsync_WhenFourUsersClaimThreeKeys_GrantsThreeUniqueKeysThenReturnsSoldOut()
+    {
+        var userIds = new List<long>();
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            for (var index = 0; index < 4; index++)
+            {
+                userIds.Add((await CreateUserAsync(arrangeDb)).Id);
+            }
+
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 3)).Id;
+        }
+
+        var outcomes = new List<ClaimOutcome>();
+        foreach (var userId in userIds)
+        {
+            await using var serviceDb = _fixture.NewDbContext();
+            var service = new KeyClaimService(serviceDb);
+            outcomes.Add((await service.ClaimAsync(dropId, userId)).Outcome);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var grants = await verificationDb.KeyGrants
+            .Where(grant => grant.DropId == dropId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [
+                ClaimOutcome.Granted,
+                ClaimOutcome.Granted,
+                ClaimOutcome.Granted,
+                ClaimOutcome.SoldOut
+            ],
+            outcomes);
+        Assert.Equal(3, grants.Count);
+        Assert.Equal(3, grants.Select(grant => grant.KeyId).Distinct().Count());
+    }
+
+    private static async Task<User> CreateUserAsync(AppDbContext db)
+    {
+        var user = new User
+        {
+            Email = $"{Guid.NewGuid():N}@example.test",
+            PasswordHash = "test-password-hash"
+        };
+
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user;
+    }
+
+    private static async Task<KeyDrop> CreateDropAsync(
+        AppDbContext db,
+        DateTimeOffset opensAt,
+        int keyCount)
+    {
+        var owner = await CreateUserAsync(db);
+        var game = new Game
+        {
+            OwnerId = owner.Id,
+            Title = $"Test Game {Guid.NewGuid():N}"
+        };
+
+        db.Games.Add(game);
+        await db.SaveChangesAsync();
+
+        var drop = new KeyDrop
+        {
+            GameId = game.Id,
+            OwnerId = owner.Id,
+            OpensAt = opensAt,
+            TotalKeys = keyCount
+        };
+
+        db.KeyDrops.Add(drop);
+        await db.SaveChangesAsync();
+
+        for (var index = 0; index < keyCount; index++)
+        {
+            db.SteamKeys.Add(new SteamKey
+            {
+                DropId = drop.Id,
+                KeyValue = $"TEST-{Guid.NewGuid():N}"
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return drop;
+    }
+}
