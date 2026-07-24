@@ -4,6 +4,7 @@ using IndieFi.Web.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Pages.Games;
 
@@ -19,6 +20,7 @@ public class DetailModel : PageModel
 
     public Game Game { get; private set; } = null!;
     public bool IsOwner { get; private set; }
+    public int ScheduledDropCount { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(long id)
     {
@@ -36,6 +38,12 @@ public class DetailModel : PageModel
         IsOwner = long.TryParse(
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             out var ownerId) && game.OwnerId == ownerId;
+
+        if (IsOwner)
+        {
+            ScheduledDropCount = await _db.KeyDrops.CountAsync(d => d.GameId == game.Id);
+        }
+
         return Page();
     }
 }

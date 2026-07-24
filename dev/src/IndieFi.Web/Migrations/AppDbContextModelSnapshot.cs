@@ -58,6 +58,77 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("games", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.KeyDrop", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("GameId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("game_id");
+
+                    b.Property<DateTimeOffset>("OpensAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("opens_at");
+
+                    b.Property<long>("OwnerId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("owner_id");
+
+                    b.Property<int>("TotalKeys")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_keys");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("key_drops", (string)null);
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.SteamKey", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("DropId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("drop_id");
+
+                    b.Property<string>("KeyValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key_value");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DropId");
+
+                    b.ToTable("steam_keys", (string)null);
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.User", b =>
                 {
                     b.Property<long>("Id")
@@ -99,6 +170,32 @@ namespace IndieFi.Web.Migrations
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.KeyDrop", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.Game", null)
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.SteamKey", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.KeyDrop", "Drop")
+                        .WithMany()
+                        .HasForeignKey("DropId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Drop");
                 });
 #pragma warning restore 612, 618
         }

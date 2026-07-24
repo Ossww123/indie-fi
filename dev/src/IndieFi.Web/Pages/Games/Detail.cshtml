@@ -17,9 +17,17 @@
         <a asp-page="/Games/Edit"
            asp-route-id="@Model.Game.Id"
            class="btn btn-outline-secondary btn-sm">수정</a>
+        <a asp-page="/KeyDrops/New"
+           asp-route-gameId="@Model.Game.Id"
+           class="btn btn-outline-secondary btn-sm">드롭 예약</a>
     }
 </div>
 <p class="text-muted small">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
+
+@if (Model.IsOwner)
+{
+    <p>예약된 드롭 @(Model.ScheduledDropCount)개</p>
+}
 
 @if (Model.Game.Description is not null)
 {

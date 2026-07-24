@@ -17,6 +17,10 @@ public class AppDbContext : DbContext
 
     public DbSet<Game> Games => Set<Game>();
 
+    public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
+
+    public DbSet<SteamKey> SteamKeys => Set<SteamKey>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -75,6 +79,69 @@ public class AppDbContext : DbContext
             game.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(g => g.OwnerId);
+        });
+
+        modelBuilder.Entity<KeyDrop>(keyDrop =>
+        {
+            keyDrop.ToTable("key_drops");
+
+            keyDrop.HasKey(d => d.Id);
+            keyDrop.Property(d => d.Id).HasColumnName("id");
+
+            keyDrop.Property(d => d.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            keyDrop.Property(d => d.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            keyDrop.Property(d => d.OpensAt)
+                .HasColumnName("opens_at")
+                .IsRequired();
+
+            keyDrop.Property(d => d.TotalKeys)
+                .HasColumnName("total_keys")
+                .IsRequired();
+
+            keyDrop.Property(d => d.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            keyDrop.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(d => d.GameId);
+
+            keyDrop.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(d => d.OwnerId);
+        });
+
+        modelBuilder.Entity<SteamKey>(steamKey =>
+        {
+            steamKey.ToTable("steam_keys");
+
+            steamKey.HasKey(k => k.Id);
+            steamKey.Property(k => k.Id).HasColumnName("id");
+
+            steamKey.Property(k => k.DropId)
+                .HasColumnName("drop_id")
+                .IsRequired();
+
+            steamKey.Property(k => k.KeyValue)
+                .HasColumnName("key_value")
+                .IsRequired();
+
+            steamKey.Property(k => k.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            steamKey.HasOne(k => k.Drop)
+                .WithMany()
+                .HasForeignKey(k => k.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
