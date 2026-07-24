@@ -68,3 +68,6 @@ Desktop.ini
 
 # Logs
 *.log
+
+dev/loadtest/drop.json
+dev/loadtest/results/
