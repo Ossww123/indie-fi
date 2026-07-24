@@ -98,6 +98,46 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("key_drops", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.KeyGrant", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("DropId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("drop_id");
+
+                    b.Property<long>("KeyId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("key_id");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeyId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("DropId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("key_grants", (string)null);
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.SteamKey", b =>
                 {
                     b.Property<long>("Id")
@@ -183,6 +223,27 @@ namespace IndieFi.Web.Migrations
                     b.HasOne("IndieFi.Web.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.KeyGrant", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.KeyDrop", null)
+                        .WithMany()
+                        .HasForeignKey("DropId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.SteamKey", null)
+                        .WithMany()
+                        .HasForeignKey("KeyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

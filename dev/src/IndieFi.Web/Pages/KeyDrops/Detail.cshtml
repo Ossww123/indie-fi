@@ -9,12 +9,17 @@
     <a asp-page="/Games/Detail" asp-route-id="@Model.Game.Id">@Model.Game.Title</a>
 </p>
 
+@if (TempData["ClaimMessage"] is string claimMessage)
+{
+    <div class="alert alert-warning" role="alert">@claimMessage</div>
+}
+
 <dl class="row">
     <dt class="col-sm-2">오픈 시각</dt>
     <dd class="col-sm-10">@Model.Drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</dd>
 
     <dt class="col-sm-2">키 수</dt>
-    <dd class="col-sm-10">키 @(Model.Drop.TotalKeys)개</dd>
+    <dd class="col-sm-10">총 @(Model.Drop.TotalKeys)개 중 @(Model.RemainingKeys)개 남음</dd>
 
     <dt class="col-sm-2">상태</dt>
     <dd class="col-sm-10">
@@ -28,6 +33,29 @@
         }
     </dd>
 </dl>
+
+@if (Model.ClaimedKey is not null)
+{
+    <div class="alert alert-success" role="alert">
+        받은 키: <strong>@Model.ClaimedKey</strong>
+    </div>
+}
+else if (User.Identity?.IsAuthenticated != true)
+{
+    <p>
+        키를 받으려면 <a asp-page="/Login">로그인</a>해 주세요.
+    </p>
+}
+else if (!Model.IsOpen)
+{
+    <button type="button" class="btn btn-primary" disabled>오픈 예정</button>
+}
+else
+{
+    <form method="post" asp-page-handler="Claim">
+        <button type="submit" class="btn btn-primary">키 받기</button>
+    </form>
+}
 
 <a asp-page="/Games/Detail"
    asp-route-id="@Model.Game.Id"
