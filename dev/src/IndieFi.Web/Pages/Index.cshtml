@@ -9,17 +9,35 @@
     <div class="alert alert-success">@signupMessage</div>
 }
 
-<div class="text-center">
+<div class="text-center mb-4">
     <h1 class="display-4">Indie-Fi</h1>
     <p class="text-muted">인디 게임 피드백 플랫폼</p>
-
-    @if (Model.DatabaseConnected)
-    {
-        <p class="text-success fw-bold">DB 연결: 정상</p>
-    }
-    else
-    {
-        <p class="text-danger fw-bold">DB 연결: 실패</p>
-        <p class="text-muted small">@Model.DatabaseError</p>
-    }
 </div>
+
+<h2 class="h4 mb-3">게임 둘러보기</h2>
+@if (Model.Games.Count == 0)
+{
+    <div class="alert alert-secondary">아직 등록된 게임이 없습니다.</div>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var game in Model.Games)
+        {
+            <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">@game.Title</span>
+                    <span class="text-muted">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                </div>
+                @if (game.Description is not null)
+                {
+                    <div>@game.Description</div>
+                }
+                else
+                {
+                    <div class="text-muted">(소개 없음)</div>
+                }
+            </a>
+        }
+    </div>
+}
