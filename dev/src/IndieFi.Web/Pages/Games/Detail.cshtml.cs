@@ -1,14 +1,14 @@
 using System.Security.Claims;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Pages.Games;
 
-[Authorize]
+// Public: anyone (including logged-out visitors) can view a game's detail and its
+// key drops. IsOwner stays false for anonymous users, hiding the owner-only actions.
 public class DetailModel : PageModel
 {
     private readonly AppDbContext _db;
