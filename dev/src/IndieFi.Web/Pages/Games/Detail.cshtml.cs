@@ -20,7 +20,7 @@ public class DetailModel : PageModel
 
     public Game Game { get; private set; } = null!;
     public bool IsOwner { get; private set; }
-    public int ScheduledDropCount { get; private set; }
+    public List<DropListItem> Drops { get; private set; } = [];
 
     public async Task<IActionResult> OnGetAsync(long id)
     {
@@ -39,11 +39,17 @@ public class DetailModel : PageModel
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             out var ownerId) && game.OwnerId == ownerId;
 
-        if (IsOwner)
-        {
-            ScheduledDropCount = await _db.KeyDrops.CountAsync(d => d.GameId == game.Id);
-        }
+        Drops = await _db.KeyDrops
+            .Where(drop => drop.GameId == game.Id)
+            .OrderBy(drop => drop.OpensAt)
+            .Select(drop => new DropListItem(drop.Id, drop.OpensAt))
+            .ToListAsync();
 
         return Page();
+    }
+
+    public sealed record DropListItem(long Id, DateTimeOffset OpensAt)
+    {
+        public bool IsOpen => OpensAt <= DateTimeOffset.Now;
     }
 }

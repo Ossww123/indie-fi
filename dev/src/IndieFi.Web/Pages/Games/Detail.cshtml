@@ -24,11 +24,6 @@
 </div>
 <p class="text-muted small">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
 
-@if (Model.IsOwner)
-{
-    <p>예약된 드롭 @(Model.ScheduledDropCount)개</p>
-}
-
 @if (Model.Game.Description is not null)
 {
     <p>@Model.Game.Description</p>
@@ -36,6 +31,35 @@
 else
 {
     <p class="text-muted">(소개 없음)</p>
+}
+
+<h2 class="h5 mt-4">예약된 드롭</h2>
+@if (Model.Drops.Count == 0)
+{
+    <div class="alert alert-secondary">예약된 드롭 없음</div>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var drop in Model.Drops)
+        {
+            <a asp-page="/KeyDrops/Detail"
+               asp-route-id="@drop.Id"
+               class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>@drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    @if (drop.IsOpen)
+                    {
+                        <span class="badge bg-success">진행 중</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">오픈 예정</span>
+                    }
+                </div>
+            </a>
+        }
+    </div>
 }
 
 <a asp-page="/Games/Index" class="btn btn-link px-0">← 목록으로</a>
