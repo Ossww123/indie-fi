@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,8 @@ builder.Services.AddRazorPages();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
+
+builder.Services.AddScoped<KeyClaimService>();
 
 // Hashes passwords with PBKDF2. Used on its own, without the rest of Identity.
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
