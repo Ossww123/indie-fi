@@ -10,14 +10,16 @@
    docker start indiefi-db
    ```
 
-2. 별도 터미널에서 앱 디렉터리로 이동하고 HTTP 프로필로 앱을 시작한다.
+2. 별도 터미널에서 앱 디렉터리로 이동하고 HTTP 프로필로 앱을 시작한다. **로그를 파일로 함께 남긴다** — 받기 결과(성공/소진/충돌)의 종류는 화면이 아니라 이 로그에서 센다.
 
    ```powershell
    cd dev/src/IndieFi.Web
-   dotnet run --launch-profile http
+   dotnet run --launch-profile http 2>&1 | Tee-Object -FilePath ..\..\loadtest\app.log
    ```
 
    앱 주소가 `http://localhost:5258`인지 확인한다. 이 터미널은 측정이 끝날 때까지 그대로 둔다.
+
+   > **왜 로그로 세나:** 받기 결과는 화면에 리다이렉트 뒤 안내 메시지로 뜨는데, 그 메시지(한 번 쓰고 지워지는 쿠키)가 부하 흐름에서 불안정하게 유실된다. 그래서 k6 화면 판정으로는 `soldout`·`conflict`가 `other`로 뭉친다. 서버가 남기는 `KeyClaim outcome=...` 로그가 종류별로 정확한 신호다.
 
 3. 저장소 루트 터미널에서 계정과 새 드롭을 준비한다.
 
@@ -35,7 +37,22 @@
 
    ⚠️ 오픈까지 남은 90초 안에 700개 흐름이 전부 로그인을 끝내야 한다. 여기서 꾸물거리면 일부가 오픈 시각을 놓쳐 "동시에 몰림"이 아니게 된다. 결과에서 `notopen`이 0이 아니거나 `granted + conflict + soldout`의 합이 700보다 한참 적으면 `--opens-in`을 늘려서 다시 잰다.
 
-5. 콘솔 표와 `dev/loadtest/results/last-run.json`을 확인한다.
+5. 콘솔 표와 `dev/loadtest/results/last-run.json`을 확인한다. k6 표의 `granted`는 정확하다(화면이 DB를 다시 조회해 그린다). `other`에 뭉친 실패의 **종류**는 로그로 센다:
+
+   ```bash
+   bash dev/loadtest/tally.sh
+   ```
+
+   이번 드롭의 결과를 종류별로 집계한다 — 예:
+
+   ```
+   drop 7 claim outcomes:
+       100 Granted
+       380 Conflict
+       220 SoldOut
+   ```
+
+   `Conflict`는 **락 없이 같은 키를 동시에 고른 요청들**이 `UNIQUE(key_id)`에 걸려 실패한 수다. 이게 규모를 키울수록 늘어나는 것이 이번 관측의 핵심이다.
 
 ## 세 시나리오
 

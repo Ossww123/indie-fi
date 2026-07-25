@@ -1,6 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace IndieFi.Web.Services;
@@ -22,10 +23,12 @@ public class KeyClaimService
     private const string UniqueViolation = "23505";
 
     private readonly AppDbContext _db;
+    private readonly ILogger<KeyClaimService> _logger;
 
-    public KeyClaimService(AppDbContext db)
+    public KeyClaimService(AppDbContext db, ILogger<KeyClaimService> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<ClaimResult> ClaimAsync(long dropId, long userId)
@@ -34,7 +37,7 @@ public class KeyClaimService
 
         if (drop is null)
         {
-            return new ClaimResult(ClaimOutcome.DropNotFound);
+            return Result(ClaimOutcome.DropNotFound, dropId, userId);
         }
 
         // One database clock keeps the open boundary consistent across app servers.
@@ -44,7 +47,7 @@ public class KeyClaimService
 
         if (drop.OpensAt > databaseNow)
         {
-            return new ClaimResult(ClaimOutcome.NotOpen);
+            return Result(ClaimOutcome.NotOpen, dropId, userId);
         }
 
         var alreadyClaimed = await _db.KeyGrants
@@ -52,7 +55,7 @@ public class KeyClaimService
 
         if (alreadyClaimed)
         {
-            return new ClaimResult(ClaimOutcome.AlreadyClaimed);
+            return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
         }
 
         var key = await _db.SteamKeys
@@ -64,7 +67,7 @@ public class KeyClaimService
 
         if (key is null)
         {
-            return new ClaimResult(ClaimOutcome.SoldOut);
+            return Result(ClaimOutcome.SoldOut, dropId, userId);
         }
 
         _db.KeyGrants.Add(new KeyGrant
@@ -77,13 +80,24 @@ public class KeyClaimService
         try
         {
             await _db.SaveChangesAsync();
-            return new ClaimResult(ClaimOutcome.Granted);
+            return Result(ClaimOutcome.Granted, dropId, userId);
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException { SqlState: UniqueViolation })
         {
             // The next step will observe callers racing for the same key, so do not retry here.
-            return new ClaimResult(ClaimOutcome.Conflict);
+            return Result(ClaimOutcome.Conflict, dropId, userId);
         }
+    }
+
+    // One structured line per claim. Under load the screen message (redirect +
+    // one-shot TempData cookie) is an unreliable signal, so the outcome - especially
+    // Conflict vs SoldOut - is counted from these logs instead.
+    private ClaimResult Result(ClaimOutcome outcome, long dropId, long userId)
+    {
+        _logger.LogInformation(
+            "KeyClaim outcome={Outcome} drop={DropId} user={UserId}",
+            outcome, dropId, userId);
+        return new ClaimResult(outcome);
     }
 }
