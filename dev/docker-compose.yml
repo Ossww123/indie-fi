@@ -6,6 +6,12 @@ services:
   db:
     image: postgres:18
     container_name: indiefi-db
+    # Default max_connections is 100, which the app's Npgsql pool (also 100) can fully
+    # consume under load - leaving no slot for the read-only diagnostic poller (4-b).
+    # Raising the ceiling gives the observer headroom without changing app behaviour
+    # (the pool still caps at 100). The connection-exhaustion itself is a separate
+    # finding, revisited on its own, not by hiding it here.
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_USER: indiefi
       POSTGRES_PASSWORD: indiefi_local_dev

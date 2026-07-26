@@ -72,3 +72,4 @@ Desktop.ini
 dev/loadtest/drop.json
 dev/loadtest/results/
 dev/loadtest/app.log
+dev/loadtest/diagnose/dump-*.txt
