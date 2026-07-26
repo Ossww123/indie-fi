@@ -11,7 +11,15 @@ services:
     # Raising the ceiling gives the observer headroom without changing app behaviour
     # (the pool still caps at 100). The connection-exhaustion itself is a separate
     # finding, revisited on its own, not by hiding it here.
-    command: ["postgres", "-c", "max_connections=200"]
+    # pg_stat_statements accumulates per-statement call counts and timing, which is
+    # how we quantify brief-but-frequent contention that instantaneous lock sampling
+    # misses. It must be preloaded at startup, hence the -c flags here.
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
     environment:
       POSTGRES_USER: indiefi
       POSTGRES_PASSWORD: indiefi_local_dev
