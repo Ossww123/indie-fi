@@ -192,6 +192,47 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(3, grants.Select(grant => grant.KeyId).Distinct().Count());
     }
 
+    // When many users claim at the same instant and there are enough keys for all of
+    // them, every claim must get a distinct key. Nobody should fail with Conflict while
+    // keys are still free - that is the wasteful failure this drop is meant to avoid.
+    [Fact]
+    public async Task ClaimAsync_WhenManyUsersClaimAtOnceWithEnoughKeys_AllGetDistinctKeysWithoutConflict()
+    {
+        const int count = 20;
+        var userIds = new List<long>();
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            for (var index = 0; index < count; index++)
+            {
+                userIds.Add((await CreateUserAsync(arrangeDb)).Id);
+            }
+
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: count)).Id;
+        }
+
+        // Fire every claim at once, each on its own connection, so they truly race.
+        var outcomes = await Task.WhenAll(userIds.Select(async userId =>
+        {
+            await using var serviceDb = _fixture.NewDbContext();
+            return (await NewService(serviceDb).ClaimAsync(dropId, userId)).Outcome;
+        }));
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var grantedKeyIds = await verificationDb.KeyGrants
+            .Where(grant => grant.DropId == dropId)
+            .Select(grant => grant.KeyId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(count, outcomes.Count(outcome => outcome == ClaimOutcome.Granted));
+        Assert.DoesNotContain(ClaimOutcome.Conflict, outcomes);
+        Assert.Equal(count, grantedKeyIds.Distinct().Count());
+    }
+
     // The service takes a logger it uses for one line per claim; tests do not assert on
     // logs, so a no-op logger keeps the call sites readable.
     private static KeyClaimService NewService(AppDbContext db) =>
