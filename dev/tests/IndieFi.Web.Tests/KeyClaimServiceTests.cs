@@ -2,6 +2,7 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -35,7 +36,7 @@ public sealed class KeyClaimServiceTests
         ClaimResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            var service = new KeyClaimService(serviceDb);
+            var service = NewService(serviceDb);
             result = await service.ClaimAsync(dropId, userId);
         }
 
@@ -68,14 +69,14 @@ public sealed class KeyClaimServiceTests
         ClaimResult firstResult;
         await using (var firstServiceDb = _fixture.NewDbContext())
         {
-            var service = new KeyClaimService(firstServiceDb);
+            var service = NewService(firstServiceDb);
             firstResult = await service.ClaimAsync(dropId, userId);
         }
 
         ClaimResult secondResult;
         await using (var secondServiceDb = _fixture.NewDbContext())
         {
-            var service = new KeyClaimService(secondServiceDb);
+            var service = NewService(secondServiceDb);
             secondResult = await service.ClaimAsync(dropId, userId);
         }
 
@@ -109,7 +110,7 @@ public sealed class KeyClaimServiceTests
         ClaimResult firstResult;
         await using (var firstServiceDb = _fixture.NewDbContext())
         {
-            var service = new KeyClaimService(firstServiceDb);
+            var service = NewService(firstServiceDb);
             firstResult = await service.ClaimAsync(dropId, userId);
         }
 
@@ -125,7 +126,7 @@ public sealed class KeyClaimServiceTests
         ClaimResult secondResult;
         await using (var secondServiceDb = _fixture.NewDbContext())
         {
-            var service = new KeyClaimService(secondServiceDb);
+            var service = NewService(secondServiceDb);
             secondResult = await service.ClaimAsync(dropId, userId);
         }
 
@@ -170,7 +171,7 @@ public sealed class KeyClaimServiceTests
         foreach (var userId in userIds)
         {
             await using var serviceDb = _fixture.NewDbContext();
-            var service = new KeyClaimService(serviceDb);
+            var service = NewService(serviceDb);
             outcomes.Add((await service.ClaimAsync(dropId, userId)).Outcome);
         }
 
@@ -190,6 +191,11 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(3, grants.Count);
         Assert.Equal(3, grants.Select(grant => grant.KeyId).Distinct().Count());
     }
+
+    // The service takes a logger it uses for one line per claim; tests do not assert on
+    // logs, so a no-op logger keeps the call sites readable.
+    private static KeyClaimService NewService(AppDbContext db) =>
+        new(db, NullLogger<KeyClaimService>.Instance);
 
     private static async Task<User> CreateUserAsync(AppDbContext db)
     {
