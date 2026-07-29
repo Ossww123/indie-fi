@@ -17,6 +17,12 @@ public class AppDbContext : DbContext
 
     public DbSet<Game> Games => Set<Game>();
 
+    public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
+
+    public DbSet<SteamKey> SteamKeys => Set<SteamKey>();
+
+    public DbSet<KeyGrant> KeyGrants => Set<KeyGrant>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -75,6 +81,115 @@ public class AppDbContext : DbContext
             game.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(g => g.OwnerId);
+        });
+
+        modelBuilder.Entity<KeyDrop>(keyDrop =>
+        {
+            keyDrop.ToTable("key_drops");
+
+            keyDrop.HasKey(d => d.Id);
+            keyDrop.Property(d => d.Id).HasColumnName("id");
+
+            keyDrop.Property(d => d.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            keyDrop.Property(d => d.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            keyDrop.Property(d => d.OpensAt)
+                .HasColumnName("opens_at")
+                .IsRequired();
+
+            keyDrop.Property(d => d.TotalKeys)
+                .HasColumnName("total_keys")
+                .IsRequired();
+
+            keyDrop.Property(d => d.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            keyDrop.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(d => d.GameId);
+
+            keyDrop.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(d => d.OwnerId);
+        });
+
+        modelBuilder.Entity<SteamKey>(steamKey =>
+        {
+            steamKey.ToTable("steam_keys");
+
+            steamKey.HasKey(k => k.Id);
+            steamKey.Property(k => k.Id).HasColumnName("id");
+
+            steamKey.Property(k => k.DropId)
+                .HasColumnName("drop_id")
+                .IsRequired();
+
+            steamKey.Property(k => k.KeyValue)
+                .HasColumnName("key_value")
+                .IsRequired();
+
+            steamKey.Property(k => k.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            steamKey.HasOne(k => k.Drop)
+                .WithMany()
+                .HasForeignKey(k => k.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KeyGrant>(keyGrant =>
+        {
+            keyGrant.ToTable("key_grants");
+
+            keyGrant.HasKey(g => g.Id);
+            keyGrant.Property(g => g.Id).HasColumnName("id");
+
+            keyGrant.Property(g => g.DropId)
+                .HasColumnName("drop_id")
+                .IsRequired();
+
+            keyGrant.Property(g => g.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+
+            keyGrant.Property(g => g.KeyId)
+                .HasColumnName("key_id")
+                .IsRequired();
+
+            keyGrant.Property(g => g.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            keyGrant.HasOne<KeyDrop>()
+                .WithMany()
+                .HasForeignKey(g => g.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            keyGrant.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(g => g.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            keyGrant.HasOne<SteamKey>()
+                .WithMany()
+                .HasForeignKey(g => g.KeyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // A user can receive only one key from a drop.
+            keyGrant.HasIndex(g => new { g.DropId, g.UserId }).IsUnique();
+
+            // A Steam key can be granted to only one user.
+            keyGrant.HasIndex(g => g.KeyId).IsUnique();
         });
     }
 }

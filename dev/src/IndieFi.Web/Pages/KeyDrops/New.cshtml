@@ -1,0 +1,34 @@
+@page
+@model NewModel
+@{
+    ViewData["Title"] = "드롭 예약";
+}
+
+<h1 class="h3 mb-1">드롭 예약</h1>
+<p class="text-muted mb-4">@Model.Game.Title</p>
+
+<form method="post"
+      asp-route-gameId="@Model.Game.Id"
+      class="col-md-5">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <div class="mb-3">
+        <label asp-for="OpensAt" class="form-label">오픈 시각</label>
+        <input asp-for="OpensAt" type="datetime-local" class="form-control" />
+        <span asp-validation-for="OpensAt" class="text-danger small"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="KeysText" class="form-label">스팀 키</label>
+        <textarea asp-for="KeysText"
+                  class="form-control"
+                  rows="8"
+                  placeholder="한 줄에 키 하나"></textarea>
+        <span asp-validation-for="KeysText" class="text-danger small"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">드롭 예약</button>
+    <a asp-page="/Games/Detail"
+       asp-route-id="@Model.Game.Id"
+       class="btn btn-link">취소</a>
+</form>

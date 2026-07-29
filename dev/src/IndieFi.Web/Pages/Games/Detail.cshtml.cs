@@ -1,13 +1,14 @@
 using System.Security.Claims;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Pages.Games;
 
-[Authorize]
+// Public: anyone (including logged-out visitors) can view a game's detail and its
+// key drops. IsOwner stays false for anonymous users, hiding the owner-only actions.
 public class DetailModel : PageModel
 {
     private readonly AppDbContext _db;
@@ -19,6 +20,7 @@ public class DetailModel : PageModel
 
     public Game Game { get; private set; } = null!;
     public bool IsOwner { get; private set; }
+    public List<DropListItem> Drops { get; private set; } = [];
 
     public async Task<IActionResult> OnGetAsync(long id)
     {
@@ -36,6 +38,18 @@ public class DetailModel : PageModel
         IsOwner = long.TryParse(
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             out var ownerId) && game.OwnerId == ownerId;
+
+        Drops = await _db.KeyDrops
+            .Where(drop => drop.GameId == game.Id)
+            .OrderBy(drop => drop.OpensAt)
+            .Select(drop => new DropListItem(drop.Id, drop.OpensAt))
+            .ToListAsync();
+
         return Page();
+    }
+
+    public sealed record DropListItem(long Id, DateTimeOffset OpensAt)
+    {
+        public bool IsOpen => OpensAt <= DateTimeOffset.Now;
     }
 }

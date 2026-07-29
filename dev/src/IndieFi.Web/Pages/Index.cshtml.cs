@@ -1,4 +1,5 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Entities;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,20 +14,15 @@ public class IndexModel : PageModel
         _db = db;
     }
 
-    public bool DatabaseConnected { get; private set; }
-
-    public string? DatabaseError { get; private set; }
+    public IReadOnlyList<Game> Games { get; private set; } = [];
 
     public async Task OnGetAsync()
     {
-        try
-        {
-            DatabaseConnected = await _db.Database.CanConnectAsync();
-        }
-        catch (Exception exception)
-        {
-            DatabaseConnected = false;
-            DatabaseError = exception.Message;
-        }
+        // The home page is a public gallery: every registered game, newest first.
+        // No owner filter and no [Authorize] — logged-out visitors browse here and
+        // follow a game into its public detail (and its key drops).
+        Games = await _db.Games
+            .OrderByDescending(g => g.CreatedAt)
+            .ToListAsync();
     }
 }
