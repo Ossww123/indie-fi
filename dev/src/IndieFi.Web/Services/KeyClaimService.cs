@@ -1,5 +1,4 @@
 using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -23,6 +22,12 @@ public class KeyClaimService
     private const string UniqueViolation = "23505";
     private const string OneKeyPerUserIndex = "IX_key_grants_drop_id_user_id";
 
+    private sealed record ClaimPrecheck
+    {
+        public bool IsOpen { get; init; }
+        public bool AlreadyClaimed { get; init; }
+    }
+
     private readonly AppDbContext _db;
     private readonly ILogger<KeyClaimService> _logger;
 
@@ -34,88 +39,78 @@ public class KeyClaimService
 
     public async Task<ClaimResult> ClaimAsync(long dropId, long userId)
     {
-        var drop = await _db.KeyDrops.FindAsync(dropId);
+        // Evaluate the open boundary inside the database so every app server uses
+        // the same clock. This also combines all independent pre-checks in one trip.
+        var precheck = await _db.Database
+            .SqlQuery<ClaimPrecheck>($@"
+                SELECT (d.opens_at <= now()) AS ""IsOpen"",
+                       EXISTS (
+                           SELECT 1
+                           FROM key_grants AS g
+                           WHERE g.drop_id = d.id AND g.user_id = {userId}
+                       ) AS ""AlreadyClaimed""
+                FROM key_drops AS d
+                WHERE d.id = {dropId}")
+            .SingleOrDefaultAsync();
 
-        if (drop is null)
+        if (precheck is null)
         {
             return Result(ClaimOutcome.DropNotFound, dropId, userId);
         }
 
-        // One database clock keeps the open boundary consistent across app servers.
-        var databaseNow = await _db.Database
-            .SqlQuery<DateTimeOffset>($"SELECT now() AS \"Value\"")
-            .SingleAsync();
-
-        if (drop.OpensAt > databaseNow)
+        if (!precheck.IsOpen)
         {
             return Result(ClaimOutcome.NotOpen, dropId, userId);
         }
 
-        var alreadyClaimed = await _db.KeyGrants
-            .AnyAsync(grant => grant.DropId == dropId && grant.UserId == userId);
-
-        if (alreadyClaimed)
+        if (precheck.AlreadyClaimed)
         {
             return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
         }
 
-        // Hand this claimer one free key. FOR UPDATE SKIP LOCKED lets concurrent
-        // claimers each lock a DIFFERENT free key instead of all colliding on the lowest
-        // id, so nobody fails while keys remain. EF Core cannot express SKIP LOCKED, so
-        // this is raw SQL (the concurrency-critical path).
-        //
-        // One residual race remains: we lock the steam_keys row, but "taken" lives in
-        // key_grants. Under READ COMMITTED another claimer can commit a grant for the
-        // same key between our snapshot and our lock, so the unique index still rejects
-        // us. That is rare, so we simply retry onto the next free key a few times.
+        // One PostgreSQL statement is one transaction, so the FOR UPDATE lock survives
+        // through the INSERT and no explicit transaction is needed. A residual race remains:
+        // the lock covers steam_keys, while "taken" lives in key_grants; under READ COMMITTED,
+        // another claimer can commit between our snapshot and lock acquisition. The unique
+        // index rejects that collision, so retries are still required.
         const int maxAttempts = 5;
 
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            await using var transaction = await _db.Database.BeginTransactionAsync();
-
-            var keyIds = await _db.Database
-                .SqlQuery<long>($@"
-                    SELECT s.id AS ""Value""
-                    FROM steam_keys AS s
-                    WHERE s.drop_id = {dropId}
-                      AND NOT EXISTS (
-                          SELECT 1 FROM key_grants AS g WHERE g.key_id = s.id)
-                    ORDER BY s.id
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1")
-                .ToListAsync();
-
-            if (keyIds.Count == 0)
-            {
-                // No key is free for us: every key is granted or held by someone else.
-                return Result(ClaimOutcome.SoldOut, dropId, userId);
-            }
-
-            var grant = new KeyGrant
-            {
-                DropId = dropId,
-                UserId = userId,
-                KeyId = keyIds[0]
-            };
-            _db.KeyGrants.Add(grant);
-
             try
             {
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                var keyIds = await _db.Database
+                    .SqlQuery<long>($@"
+                        WITH picked AS (
+                            SELECT s.id
+                            FROM steam_keys AS s
+                            WHERE s.drop_id = {dropId}
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM key_grants AS g WHERE g.key_id = s.id)
+                            ORDER BY s.id
+                            FOR UPDATE SKIP LOCKED
+                            LIMIT 1
+                        )
+                        INSERT INTO key_grants (drop_id, user_id, key_id)
+                        SELECT {dropId}, {userId}, picked.id FROM picked
+                        RETURNING key_id")
+                    .ToListAsync();
+
+                if (keyIds.Count == 0)
+                {
+                    // No key is free for us: every key is granted or held by someone else.
+                    return Result(ClaimOutcome.SoldOut, dropId, userId);
+                }
+
                 return Result(ClaimOutcome.Granted, dropId, userId);
             }
-            catch (DbUpdateException exception)
-                when (exception.InnerException is PostgresException { SqlState: UniqueViolation } postgresException)
+            catch (PostgresException exception) when (exception.SqlState == UniqueViolation)
             {
                 // The two unique indexes mean opposites: a key collision can be retried,
                 // while a one-key-per-user violation can never succeed on retry.
                 // This name comes from EF Core's convention; if a migration renames it,
                 // this branch silently stops matching, so the concurrency test guards it.
-                _db.Entry(grant).State = EntityState.Detached;
-
-                if (postgresException.ConstraintName == OneKeyPerUserIndex)
+                if (exception.ConstraintName == OneKeyPerUserIndex)
                 {
                     return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
                 }
