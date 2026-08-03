@@ -23,6 +23,12 @@ public class KeyClaimService
     private const string UniqueViolation = "23505";
     private const string OneKeyPerUserIndex = "IX_key_grants_drop_id_user_id";
 
+    private sealed record ClaimPrecheck
+    {
+        public bool IsOpen { get; init; }
+        public bool AlreadyClaimed { get; init; }
+    }
+
     private readonly AppDbContext _db;
     private readonly ILogger<KeyClaimService> _logger;
 
@@ -34,27 +40,31 @@ public class KeyClaimService
 
     public async Task<ClaimResult> ClaimAsync(long dropId, long userId)
     {
-        var drop = await _db.KeyDrops.FindAsync(dropId);
+        // Evaluate the open boundary inside the database so every app server uses
+        // the same clock. This also combines all independent pre-checks in one trip.
+        var precheck = await _db.Database
+            .SqlQuery<ClaimPrecheck>($@"
+                SELECT (d.opens_at <= now()) AS ""IsOpen"",
+                       EXISTS (
+                           SELECT 1
+                           FROM key_grants AS g
+                           WHERE g.drop_id = d.id AND g.user_id = {userId}
+                       ) AS ""AlreadyClaimed""
+                FROM key_drops AS d
+                WHERE d.id = {dropId}")
+            .SingleOrDefaultAsync();
 
-        if (drop is null)
+        if (precheck is null)
         {
             return Result(ClaimOutcome.DropNotFound, dropId, userId);
         }
 
-        // One database clock keeps the open boundary consistent across app servers.
-        var databaseNow = await _db.Database
-            .SqlQuery<DateTimeOffset>($"SELECT now() AS \"Value\"")
-            .SingleAsync();
-
-        if (drop.OpensAt > databaseNow)
+        if (!precheck.IsOpen)
         {
             return Result(ClaimOutcome.NotOpen, dropId, userId);
         }
 
-        var alreadyClaimed = await _db.KeyGrants
-            .AnyAsync(grant => grant.DropId == dropId && grant.UserId == userId);
-
-        if (alreadyClaimed)
+        if (precheck.AlreadyClaimed)
         {
             return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
         }

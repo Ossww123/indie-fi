@@ -273,7 +273,7 @@ public sealed class KeyClaimServiceTests
     [Fact]
     public async Task ClaimAsync_WhenGrantingAKey_MakesTheExpectedNumberOfDatabaseRoundTrips()
     {
-        const int ExpectedRoundTrips = 7;
+        const int ExpectedRoundTrips = 5;
         long userId;
         long dropId;
 
