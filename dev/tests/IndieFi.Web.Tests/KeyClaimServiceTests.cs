@@ -267,6 +267,37 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(1, userGrantCount);
     }
 
+    // Measurements showed that database SQL execution time was negligible while round trips were costly.
+    // This count is a budget: adding another query later must fail this test.
+    // We count round trips instead of p95 latency because front-end saturation hides latency on a development laptop.
+    [Fact]
+    public async Task ClaimAsync_WhenGrantingAKey_MakesTheExpectedNumberOfDatabaseRoundTrips()
+    {
+        const int ExpectedRoundTrips = 7;
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 3)).Id;
+        }
+
+        var interceptor = new RoundTripCountingInterceptor();
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext(interceptor))
+        {
+            var service = NewService(serviceDb);
+            result = await service.ClaimAsync(dropId, userId);
+        }
+
+        Assert.Equal(ClaimOutcome.Granted, result.Outcome);
+        Assert.Equal(ExpectedRoundTrips, interceptor.Count);
+    }
+
     // The service takes a logger it uses for one line per claim; tests do not assert on
     // logs, so a no-op logger keeps the call sites readable.
     private static KeyClaimService NewService(AppDbContext db) =>

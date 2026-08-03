@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -23,8 +24,14 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 
     public AppDbContext NewDbContext()
     {
+        return NewDbContext([]);
+    }
+
+    public AppDbContext NewDbContext(params IInterceptor[] interceptors)
+    {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(_container.GetConnectionString())
+            .AddInterceptors(interceptors)
             .Options;
 
         return new AppDbContext(options);
