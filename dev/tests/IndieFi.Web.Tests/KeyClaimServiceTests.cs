@@ -233,6 +233,40 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(count, grantedKeyIds.Distinct().Count());
     }
 
+    // Concurrent duplicate submissions cannot be resolved by retrying with another key.
+    // A duplicate-user unique violation must be reported immediately as AlreadyClaimed.
+    [Fact]
+    public async Task ClaimAsync_WhenOneUserClaimsManyTimesAtOnce_GrantsOnceAndReportsAlreadyClaimed()
+    {
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 5)).Id;
+        }
+
+        var outcomes = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            await using var serviceDb = _fixture.NewDbContext();
+            return (await NewService(serviceDb).ClaimAsync(dropId, userId)).Outcome;
+        }));
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var userGrantCount = await verificationDb.KeyGrants
+            .CountAsync(
+                grant => grant.DropId == dropId && grant.UserId == userId,
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, outcomes.Count(outcome => outcome == ClaimOutcome.Granted));
+        Assert.Equal(0, outcomes.Count(outcome => outcome == ClaimOutcome.Conflict));
+        Assert.Equal(1, userGrantCount);
+    }
+
     // The service takes a logger it uses for one line per claim; tests do not assert on
     // logs, so a no-op logger keeps the call sites readable.
     private static KeyClaimService NewService(AppDbContext db) =>

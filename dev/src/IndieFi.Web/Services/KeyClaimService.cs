@@ -21,6 +21,7 @@ public record ClaimResult(ClaimOutcome Outcome);
 public class KeyClaimService
 {
     private const string UniqueViolation = "23505";
+    private const string OneKeyPerUserIndex = "IX_key_grants_drop_id_user_id";
 
     private readonly AppDbContext _db;
     private readonly ILogger<KeyClaimService> _logger;
@@ -106,11 +107,18 @@ public class KeyClaimService
                 return Result(ClaimOutcome.Granted, dropId, userId);
             }
             catch (DbUpdateException exception)
-                when (exception.InnerException is PostgresException { SqlState: UniqueViolation })
+                when (exception.InnerException is PostgresException { SqlState: UniqueViolation } postgresException)
             {
-                // Lost the residual race (or the same user claimed twice). Drop the
-                // failed grant and let the loop try another free key.
+                // The two unique indexes mean opposites: a key collision can be retried,
+                // while a one-key-per-user violation can never succeed on retry.
+                // This name comes from EF Core's convention; if a migration renames it,
+                // this branch silently stops matching, so the concurrency test guards it.
                 _db.Entry(grant).State = EntityState.Detached;
+
+                if (postgresException.ConstraintName == OneKeyPerUserIndex)
+                {
+                    return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
+                }
             }
         }
 
