@@ -51,3 +51,8 @@ app.MapRazorPages()
    .WithStaticAssets();
 
 app.Run();
+
+// This file has no class of its own: the code above is compiled into a generated
+// entry-point class that is internal. Tests need to name that class to boot the app
+// in memory, so this line makes it public without changing anything at run time.
+public partial class Program;
