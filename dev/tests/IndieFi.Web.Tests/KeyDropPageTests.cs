@@ -1,9 +1,5 @@
 using System.Net;
-using System.Text.RegularExpressions;
-using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -54,7 +50,7 @@ public sealed class KeyDropPageTests
             TestContext.Current.CancellationToken);
         var detailHtml = await detailResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
-        var antiforgeryToken = ExtractAntiforgeryToken(detailHtml);
+        var antiforgeryToken = PageTestSupport.ExtractAntiforgeryToken(detailHtml);
 
         using var claimForm = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -108,23 +104,14 @@ public sealed class KeyDropPageTests
 
     private async Task LoginAsync(HttpClient client)
     {
-        const string password = "Known-Test-Password-123!";
-        var email = $"{Guid.NewGuid():N}@example.test";
-
-        await using (var db = _fixture.NewDbContext())
-        {
-            var user = new User { Email = email };
-            user.PasswordHash = new PasswordHasher<User>().HashPassword(user, password);
-            db.Users.Add(user);
-            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
 
         using var loginPageResponse = await client.GetAsync(
             "/Login",
             TestContext.Current.CancellationToken);
         var loginHtml = await loginPageResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
-        var antiforgeryToken = ExtractAntiforgeryToken(loginHtml);
+        var antiforgeryToken = PageTestSupport.ExtractAntiforgeryToken(loginHtml);
 
         using var loginForm = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -138,22 +125,6 @@ public sealed class KeyDropPageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
-    }
-
-    private static string ExtractAntiforgeryToken(string html)
-    {
-        var match = Regex.Match(
-            html,
-            """<input\b(?=[^>]*\btype="hidden")(?=[^>]*\bname="__RequestVerificationToken")[^>]*\bvalue="([^"]+)"[^>]*>""",
-            RegexOptions.IgnoreCase);
-
-        if (!match.Success)
-        {
-            throw new InvalidOperationException(
-                "The response HTML did not contain an antiforgery token.");
-        }
-
-        return WebUtility.HtmlDecode(match.Groups[1].Value);
     }
 
     private async Task<(long DropId, string GameTitle)> CreateOpenDropAsync(int keyCount)
