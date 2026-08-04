@@ -9,7 +9,7 @@
     <a asp-page="/Games/Detail" asp-route-id="@Model.Game.Id">@Model.Game.Title</a>
 </p>
 
-@if (TempData["ClaimMessage"] is string claimMessage)
+@if (Model.ClaimMessage is string claimMessage)
 {
     <div class="alert alert-warning" role="alert">@claimMessage</div>
 }
