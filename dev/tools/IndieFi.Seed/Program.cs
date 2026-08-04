@@ -9,8 +9,9 @@ namespace IndieFi.Seed;
 
 internal static class Program
 {
-    private const string DefaultConnection =
-        "Host=localhost;Port=5432;Database=indiefi;Username=indiefi;Password=indiefi_local_dev";
+    // The database password is not kept in the repository, so the connection string
+    // comes from the environment. loadtest.bat builds this variable from dev/.env.
+    private const string ConnectionVariable = "ConnectionStrings__Database";
     private const string Password = "LoadTest123!";
     private const string BaseUrl = "http://localhost:5258";
     private const string GameTitle = "IndieFi Load Test Game";
@@ -164,7 +165,7 @@ internal static class Program
             var lateUserCount = 200;
             var keyCount = 100;
             var opensInSeconds = 90;
-            var connection = DefaultConnection;
+            var connection = Environment.GetEnvironmentVariable(ConnectionVariable);
 
             for (var index = 0; index < args.Length; index += 2)
             {
@@ -201,6 +202,13 @@ internal static class Program
                     default:
                         throw new ArgumentException($"Unknown argument: {name}");
                 }
+            }
+
+            if (string.IsNullOrWhiteSpace(connection))
+            {
+                throw new ArgumentException(
+                    $"No database connection string. Set {ConnectionVariable}, or pass --connection. " +
+                    "loadtest.bat sets it from dev/.env - copy dev/.env.example if that file is missing.");
             }
 
             return new SeedOptions(
