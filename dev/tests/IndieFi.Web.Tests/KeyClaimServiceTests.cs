@@ -298,6 +298,35 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(ExpectedRoundTrips, interceptor.Count);
     }
 
+    // The recently rewritten missing-drop path was the only claim outcome without coverage.
+    [Fact]
+    public async Task ClaimAsync_WhenDropDoesNotExist_ReturnsDropNotFoundWithoutCreatingGrant()
+    {
+        const long DropId = long.MaxValue;
+        long userId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+        }
+
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var service = NewService(serviceDb);
+            result = await service.ClaimAsync(DropId, userId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var grantCount = await verificationDb.KeyGrants
+            .CountAsync(
+                grant => grant.DropId == DropId,
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(ClaimOutcome.DropNotFound, result.Outcome);
+        Assert.Equal(0, grantCount);
+    }
+
     // The service takes a logger it uses for one line per claim; tests do not assert on
     // logs, so a no-op logger keeps the call sites readable.
     private static KeyClaimService NewService(AppDbContext db) =>

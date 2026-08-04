@@ -22,6 +22,10 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         await db.Database.MigrateAsync();
     }
 
+    // Page tests boot the whole app, so they need the address of this container
+    // rather than a DbContext. The fixture owns the container, so it answers for it.
+    public string ConnectionString => _container.GetConnectionString();
+
     public AppDbContext NewDbContext()
     {
         return NewDbContext([]);

@@ -9,7 +9,7 @@
     <a asp-page="/Games/Detail" asp-route-id="@Model.Game.Id">@Model.Game.Title</a>
 </p>
 
-@if (TempData["ClaimMessage"] is string claimMessage)
+@if (Model.ClaimMessage is string claimMessage)
 {
     <div class="alert alert-warning" role="alert">@claimMessage</div>
 }
@@ -43,7 +43,8 @@
 else if (User.Identity?.IsAuthenticated != true)
 {
     <p>
-        키를 받으려면 <a asp-page="/Login">로그인</a>해 주세요.
+        키를 받으려면 <a asp-page="/Login"
+                       asp-route-returnUrl="@Url.Page("/KeyDrops/Detail", new { id = Model.Drop.Id })">로그인</a>해 주세요.
     </p>
 }
 else if (!Model.IsOpen)

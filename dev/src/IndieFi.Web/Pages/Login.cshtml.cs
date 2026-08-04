@@ -32,6 +32,9 @@ public class LoginModel : PageModel
     [DataType(DataType.Password)]
     public string Password { get; set; } = string.Empty;
 
+    [BindProperty(SupportsGet = true)]
+    public string? ReturnUrl { get; set; }
+
     public async Task<IActionResult> OnPostAsync()
     {
         if (!ModelState.IsValid)
@@ -64,6 +67,12 @@ public class LoginModel : PageModel
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity));
+
+        // ReturnUrl is attacker-controlled, so only local URLs may become post-login redirects.
+        if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
+        {
+            return LocalRedirect(ReturnUrl);
+        }
 
         return RedirectToPage("/Index");
     }

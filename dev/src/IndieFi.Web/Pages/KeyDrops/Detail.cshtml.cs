@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Extensions;
 using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -10,6 +10,15 @@ namespace IndieFi.Web.Pages.KeyDrops;
 
 public class DetailModel : PageModel
 {
+    private sealed record ClaimNotice(ClaimOutcome Outcome, string Code, string Message);
+
+    private static readonly ClaimNotice[] ClaimNotices =
+    [
+        new(ClaimOutcome.NotOpen, "notopen", "아직 오픈되지 않았습니다."),
+        new(ClaimOutcome.SoldOut, "soldout", "키가 모두 소진되었습니다."),
+        new(ClaimOutcome.Conflict, "conflict", "동시 요청으로 키를 발급하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    ];
+
     private readonly AppDbContext _db;
     private readonly KeyClaimService _keyClaimService;
 
@@ -24,9 +33,15 @@ public class DetailModel : PageModel
     public bool IsOpen { get; private set; }
     public int RemainingKeys { get; private set; }
     public string? ClaimedKey { get; private set; }
+    public string? ClaimMessage { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(long id)
+    public async Task<IActionResult> OnGetAsync(long id, string? claim)
     {
+        // Query strings are user-controlled, so only known codes may select displayed text.
+        ClaimMessage = ClaimNotices
+            .FirstOrDefault(notice => notice.Code == claim)
+            ?.Message;
+
         var drop = await _db.KeyDrops.FindAsync(id);
 
         if (drop is null)
@@ -55,7 +70,7 @@ public class DetailModel : PageModel
 
         if (User.Identity?.IsAuthenticated == true)
         {
-            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var userId = User.GetUserId();
 
             ClaimedKey = await _db.KeyGrants
                 .Where(grant => grant.DropId == id && grant.UserId == userId)
@@ -79,7 +94,7 @@ public class DetailModel : PageModel
             return Challenge();
         }
 
-        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserId();
         var result = await _keyClaimService.ClaimAsync(id, userId);
 
         if (result.Outcome == ClaimOutcome.DropNotFound)
@@ -87,17 +102,12 @@ public class DetailModel : PageModel
             return NotFound();
         }
 
-        switch (result.Outcome)
+        var claimNotice = ClaimNotices
+            .FirstOrDefault(notice => notice.Outcome == result.Outcome);
+
+        if (claimNotice is not null)
         {
-            case ClaimOutcome.NotOpen:
-                TempData["ClaimMessage"] = "아직 오픈되지 않았습니다.";
-                break;
-            case ClaimOutcome.SoldOut:
-                TempData["ClaimMessage"] = "키가 모두 소진되었습니다.";
-                break;
-            case ClaimOutcome.Conflict:
-                TempData["ClaimMessage"] = "동시 요청으로 키를 발급하지 못했습니다. 잠시 후 다시 시도해 주세요.";
-                break;
+            return RedirectToPage(new { id, claim = claimNotice.Code });
         }
 
         return RedirectToPage(new { id });
