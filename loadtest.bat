@@ -8,6 +8,18 @@ REM   loadtest.bat --users 500 --late-users 200 --keys 100 --opens-in 90
 setlocal
 cd /d "%~dp0"
 
+REM The database password is not kept in the repository. dev\.env holds it locally
+REM and is not committed, so read it here and hand the seeder a connection string.
+if not exist "dev\.env" (
+    echo.
+    echo [dev\.env is missing]
+    echo   Copy dev\.env.example to dev\.env and fill in POSTGRES_PASSWORD.
+    pause
+    exit /b 1
+)
+for /f "usebackq eol=# tokens=1,* delims==" %%a in ("dev\.env") do set "%%a=%%b"
+set "ConnectionStrings__Database=Host=localhost;Port=5432;Database=indiefi;Username=indiefi;Password=%POSTGRES_PASSWORD%"
+
 docker start indiefi-db
 
 REM The app is NOT started here - it must already be running in its own terminal.

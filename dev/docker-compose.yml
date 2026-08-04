@@ -22,7 +22,9 @@ services:
       - "shared_preload_libraries=pg_stat_statements"
     environment:
       POSTGRES_USER: indiefi
-      POSTGRES_PASSWORD: indiefi_local_dev
+      # Read from dev/.env, which is not committed. The :? form makes compose refuse
+      # to start with a clear message instead of silently creating an empty password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in dev/.env - copy dev/.env.example}
       POSTGRES_DB: indiefi
     ports:
       - "5432:5432"
