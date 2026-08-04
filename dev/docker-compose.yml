@@ -1,0 +1,42 @@
+# 로컬 개발용 PostgreSQL.
+#   띄우기: docker compose up -d
+#   끄기:   docker compose down
+#   데이터까지 지우기: docker compose down -v
+services:
+  db:
+    image: postgres:18
+    container_name: indiefi-db
+    # Default max_connections is 100, which the app's Npgsql pool (also 100) can fully
+    # consume under load - leaving no slot for the read-only diagnostic poller (4-b).
+    # Raising the ceiling gives the observer headroom without changing app behaviour
+    # (the pool still caps at 100). The connection-exhaustion itself is a separate
+    # finding, revisited on its own, not by hiding it here.
+    # pg_stat_statements accumulates per-statement call counts and timing, which is
+    # how we quantify brief-but-frequent contention that instantaneous lock sampling
+    # misses. It must be preloaded at startup, hence the -c flags here.
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+    environment:
+      POSTGRES_USER: indiefi
+      # Read from dev/.env, which is not committed. The :? form makes compose refuse
+      # to start with a clear message instead of silently creating an empty password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in dev/.env - copy dev/.env.example}
+      POSTGRES_DB: indiefi
+    ports:
+      - "5432:5432"
+    volumes:
+      # PostgreSQL 18+ stores data in a version-specific subdirectory,
+      # so the mount point is /var/lib/postgresql (not .../data).
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indiefi -d indiefi"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db-data:

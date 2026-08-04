@@ -1,0 +1,195 @@
+using IndieFi.Web.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace IndieFi.Web.Data;
+
+/// <summary>
+/// Entry point for all database access.
+/// </summary>
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options)
+        : base(options)
+    {
+    }
+
+    public DbSet<User> Users => Set<User>();
+
+    public DbSet<Game> Games => Set<Game>();
+
+    public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
+
+    public DbSet<SteamKey> SteamKeys => Set<SteamKey>();
+
+    public DbSet<KeyGrant> KeyGrants => Set<KeyGrant>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
+        // identifiers to lower case, and this project writes raw SQL by hand.
+        modelBuilder.Entity<User>(user =>
+        {
+            user.ToTable("users");
+
+            user.HasKey(u => u.Id);
+            user.Property(u => u.Id).HasColumnName("id");
+
+            user.Property(u => u.Email)
+                .HasColumnName("email")
+                .HasMaxLength(320)
+                .IsRequired();
+
+            user.Property(u => u.PasswordHash)
+                .HasColumnName("password_hash")
+                .IsRequired();
+
+            user.Property(u => u.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            // No two accounts may share an email address.
+            user.HasIndex(u => u.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<Game>(game =>
+        {
+            game.ToTable("games");
+
+            game.HasKey(g => g.Id);
+            game.Property(g => g.Id).HasColumnName("id");
+
+            game.Property(g => g.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            game.Property(g => g.Title)
+                .HasColumnName("title")
+                .HasMaxLength(200)
+                .IsRequired();
+
+            game.Property(g => g.Description)
+                .HasColumnName("description");
+
+            game.Property(g => g.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            // A game belongs to the user who registered it; the foreign key lets
+            // the database reject a game with no real owner.
+            game.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(g => g.OwnerId);
+        });
+
+        modelBuilder.Entity<KeyDrop>(keyDrop =>
+        {
+            keyDrop.ToTable("key_drops");
+
+            keyDrop.HasKey(d => d.Id);
+            keyDrop.Property(d => d.Id).HasColumnName("id");
+
+            keyDrop.Property(d => d.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            keyDrop.Property(d => d.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            keyDrop.Property(d => d.OpensAt)
+                .HasColumnName("opens_at")
+                .IsRequired();
+
+            keyDrop.Property(d => d.TotalKeys)
+                .HasColumnName("total_keys")
+                .IsRequired();
+
+            keyDrop.Property(d => d.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            keyDrop.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(d => d.GameId);
+
+            keyDrop.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(d => d.OwnerId);
+        });
+
+        modelBuilder.Entity<SteamKey>(steamKey =>
+        {
+            steamKey.ToTable("steam_keys");
+
+            steamKey.HasKey(k => k.Id);
+            steamKey.Property(k => k.Id).HasColumnName("id");
+
+            steamKey.Property(k => k.DropId)
+                .HasColumnName("drop_id")
+                .IsRequired();
+
+            steamKey.Property(k => k.KeyValue)
+                .HasColumnName("key_value")
+                .IsRequired();
+
+            steamKey.Property(k => k.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            steamKey.HasOne(k => k.Drop)
+                .WithMany()
+                .HasForeignKey(k => k.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KeyGrant>(keyGrant =>
+        {
+            keyGrant.ToTable("key_grants");
+
+            keyGrant.HasKey(g => g.Id);
+            keyGrant.Property(g => g.Id).HasColumnName("id");
+
+            keyGrant.Property(g => g.DropId)
+                .HasColumnName("drop_id")
+                .IsRequired();
+
+            keyGrant.Property(g => g.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+
+            keyGrant.Property(g => g.KeyId)
+                .HasColumnName("key_id")
+                .IsRequired();
+
+            keyGrant.Property(g => g.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            keyGrant.HasOne<KeyDrop>()
+                .WithMany()
+                .HasForeignKey(g => g.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            keyGrant.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(g => g.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            keyGrant.HasOne<SteamKey>()
+                .WithMany()
+                .HasForeignKey(g => g.KeyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // A user can receive only one key from a drop.
+            keyGrant.HasIndex(g => new { g.DropId, g.UserId }).IsUnique();
+
+            // A Steam key can be granted to only one user.
+            keyGrant.HasIndex(g => g.KeyId).IsUnique();
+        });
+    }
+}

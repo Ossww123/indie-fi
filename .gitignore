@@ -60,6 +60,8 @@ TestResults/
 .env.*
 appsettings.*.local.json
 secrets.json
+# 예시 파일은 값이 비어 있으므로 커밋한다 (무엇을 채워야 하는지 알려주는 용도)
+!dev/.env.example
 
 # OS
 Thumbs.db
@@ -68,3 +70,8 @@ Desktop.ini
 
 # Logs
 *.log
+
+dev/loadtest/drop.json
+dev/loadtest/results/
+dev/loadtest/app.log
+dev/loadtest/diagnose/dump-*.txt
