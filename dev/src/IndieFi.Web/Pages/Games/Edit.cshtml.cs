@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
 using IndieFi.Web.Data;
+using IndieFi.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -29,7 +29,7 @@ public class EditModel : PageModel
     public async Task<IActionResult> OnGetAsync(long id)
     {
         var game = await _db.Games.FindAsync(id);
-        var ownerId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ownerId = User.GetUserId();
 
         // Return 404 (not 403) when the game is missing OR not owned by the caller —
         // a 403 would reveal that the game exists. Same reason the login page does
@@ -52,7 +52,7 @@ public class EditModel : PageModel
         }
 
         var game = await _db.Games.FindAsync(id);
-        var ownerId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ownerId = User.GetUserId();
 
         // The ownership check must be repeated on POST: an attacker can send this
         // POST directly without ever loading the GET page. Hiding the edit link in

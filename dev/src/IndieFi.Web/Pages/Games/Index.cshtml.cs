@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +21,7 @@ public class IndexModel : PageModel
 
     public async Task OnGetAsync()
     {
-        var ownerId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ownerId = User.GetUserId();
 
         // Only the signed-in user's own games; the owner id comes from the cookie,
         // same as when a game is registered.

@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Extensions;
 using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -70,7 +70,7 @@ public class DetailModel : PageModel
 
         if (User.Identity?.IsAuthenticated == true)
         {
-            var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var userId = User.GetUserId();
 
             ClaimedKey = await _db.KeyGrants
                 .Where(grant => grant.DropId == id && grant.UserId == userId)
@@ -94,7 +94,7 @@ public class DetailModel : PageModel
             return Challenge();
         }
 
-        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserId();
         var result = await _keyClaimService.ClaimAsync(id, userId);
 
         if (result.Outcome == ClaimOutcome.DropNotFound)
