@@ -1,0 +1,29 @@
+name: test
+
+# Every push and pull request, on every branch. Listing branches here means a new
+# branch prefix silently stops being covered until someone remembers to add it.
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Build the whole solution rather than letting `dotnet test` build only what
+      # the tests need. That is what catches a project which stopped compiling but
+      # is not referenced by any test - it happened once and went unnoticed for
+      # several commits.
+      - name: Build
+        run: dotnet build dev/IndieFi.slnx
+
+      # The tests start a throwaway PostgreSQL through Testcontainers, so this needs
+      # Docker. ubuntu-latest runners already have it. The first run also pulls the
+      # postgres:18 image, so expect it to take far longer than the 2s it takes locally.
+      - name: Test
+        run: dotnet test dev/IndieFi.slnx --no-build
