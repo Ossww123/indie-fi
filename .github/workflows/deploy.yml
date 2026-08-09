@@ -18,9 +18,23 @@ jobs:
       contents: read
 
     steps:
-      # The role only trusts a subject carrying GitHub's immutable owner and repo ids
-      # (repo:owner@id/name@id:...), not the plain repo:owner/name form most examples
-      # show. Renaming the repository therefore breaks this until the role is updated.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Framework-dependent, so the 21MB this produces carries no runtime: the server
+      # already has aspnetcore-runtime-10.0 from apt. Publishing here rather than on a
+      # laptop is what makes "what is committed" and "what is on the server" the same
+      # thing - uncommitted edits and machine-local packages cannot leak into a deploy.
+      - name: Publish the app
+        run: dotnet publish dev/src/IndieFi.Web -c Release -o publish
+
+      # Everything above takes tens of seconds and needs nothing from the server, so
+      # port 22 stays shut until here. The role only trusts a subject carrying GitHub's
+      # immutable owner and repo ids (repo:owner@id/name@id:...), not the plain
+      # repo:owner/name form most examples show; renaming the repository breaks this.
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -44,33 +58,53 @@ jobs:
 
       # The private key remains on the runner disk for the rest of this job. GitHub
       # discards the runner afterward, but the key must never be printed to the log.
-      - name: Write the SSH private key
+      # The config file is here so that every ssh and scp line below stays short
+      # enough to read at a glance.
+      #
+      # The EC2 public IP changes when the instance is restarted, so pinning a host
+      # key to that IP would break on each change. accept-new records the first key
+      # this throwaway runner sees, but it cannot detect a man-in-the-middle on that
+      # first connection; that is the known cost of the choice.
+      - name: Set up SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           mkdir -p "$HOME/.ssh"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
           chmod 600 "$HOME/.ssh/deploy_key"
 
-      # The EC2 public IP changes when the instance is restarted, so pinning a host
-      # key to that IP would break on each change. accept-new records the first key
-      # seen by this temporary runner, but it cannot prevent a man-in-the-middle
-      # attack on that first connection; that is the known limitation of this choice.
-      - name: Check the server over SSH
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+          cat > "$HOME/.ssh/config" <<EOF
+          Host deploy-target
+            HostName $SSH_HOST
+            User ubuntu
+            IdentityFile $HOME/.ssh/deploy_key
+            StrictHostKeyChecking accept-new
+          EOF
+
+      # The app is running out of ~/app right now, and Linux happily lets a running
+      # binary be overwritten, so a transfer that dies halfway would leave that folder
+      # half new and half old - broken only at the next restart, with nothing to point
+      # at the cause. Landing beside it keeps the running copy untouched.
+      #
+      # scp copies into a directory that already exists but creates one that does not,
+      # so the same command would nest publish/ inside app-new/ from the second run
+      # onward. Removing the destination first makes every run end the same way.
+      - name: Send the published app next to the running one
         run: |
-          ssh \
-            -i "$HOME/.ssh/deploy_key" \
-            -o StrictHostKeyChecking=accept-new \
-            "ubuntu@$SSH_HOST" <<'REMOTE'
-          uname -a
-          systemctl is-active indiefi
-          # ubuntu was added to the docker group while setting postgres up, so this
-          # needs no sudo. It is also the last command here, so its exit status is
-          # the one that decides whether this step passes.
-          docker ps --format '{{.Names}} {{.Status}}'
-          REMOTE
+          ssh deploy-target 'rm -rf ~/app-new'
+          scp -r publish deploy-target:~/app-new
+
+      # The browser still shows the old version at this point, because ~/app has not
+      # been touched. Printing both facts together is the proof: fresh files arrived,
+      # and the service kept serving the previous copy through the whole transfer.
+      - name: Show what arrived
+        run: |
+          ssh deploy-target '
+            ls -l ~/app-new/IndieFi.Web.dll
+            echo "files: $(ls ~/app-new | wc -l)"
+            systemctl is-active indiefi
+          '
 
       # always() covers ordinary failures above, but a forced workflow cancellation
       # can prevent cleanup from running. The described ingress rule then remains
