@@ -1,16 +1,47 @@
-name: deploy
+name: ci
 
-# The manual button only shows up for workflows that already exist on the default
-# branch, so while this file lives on a work branch there is no way to start it by
-# hand. Pushing the branch is the only trigger left. The branch line is temporary
-# and comes out before this merges; workflow_dispatch is what remains.
+# Tests run on every push and pull request, on every branch. Listing branches here means
+# a new branch prefix silently stops being covered until someone remembers to add it.
+#
+# Deploying is a button press instead of a consequence of pushing, because the demo box is
+# kept stopped between sessions to hold the bill near a couple of dollars a month. Wiring
+# it to pushes on main would turn "the box is off" into a red run on every merge, and a
+# pipeline that is normally red is a pipeline nobody reads.
 on:
-  workflow_dispatch:
   push:
-    branches: [chore/auto-deploy]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Build the whole solution rather than letting `dotnet test` build only what
+      # the tests need. That is what catches a project which stopped compiling but
+      # is not referenced by any test - it happened once and went unnoticed for
+      # several commits.
+      - name: Build
+        run: dotnet build dev/IndieFi.slnx
+
+      # The tests start a throwaway PostgreSQL through Testcontainers, so this needs
+      # Docker. ubuntu-latest runners already have it. The first run also pulls the
+      # postgres:18 image, so expect it to take far longer than the 2s it takes locally.
+      - name: Test
+        run: dotnet test dev/IndieFi.slnx --no-build
+
+  # Both jobs live in one file so that this one can wait for the other. Copying the test
+  # steps into a second file would work until someone edited one copy: the deploy gate
+  # would keep passing while testing something older than what is being shipped.
   deploy:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     permissions:
@@ -28,6 +59,7 @@ jobs:
       # already has aspnetcore-runtime-10.0 from apt. Publishing here rather than on a
       # laptop is what makes "what is committed" and "what is on the server" the same
       # thing - uncommitted edits and machine-local packages cannot leak into a deploy.
+      #
       # SourceRevisionId ends up appended to the assembly's informational version, which is
       # where the footer reads it from. The SDK would infer the same value from the checkout
       # on its own; passing it explicitly ties the footer to the commit this run reports, so
