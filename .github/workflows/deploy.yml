@@ -35,6 +35,28 @@ jobs:
       - name: Publish the app
         run: dotnet publish dev/src/IndieFi.Web -c Release -o publish -p:SourceRevisionId=${{ github.sha }}
 
+      # The server has no SDK and no source, so it cannot run migrations the way a laptop
+      # does. This bakes them into one executable instead.
+      #
+      # -r is short for --target-runtime here and not for --runtime, which is a different
+      # option: passing the wrong one produces a Windows executable that builds cleanly and
+      # only fails once it reaches the server. The RID restore has to come first, otherwise
+      # the build stops at NETSDK1047, and it does not survive between builds.
+      - name: Build the migration bundle
+        run: |
+          dotnet tool install --global dotnet-ef
+          export PATH="$PATH:$HOME/.dotnet/tools"
+
+          dotnet restore dev/src/IndieFi.Web -r linux-x64
+          dotnet ef migrations bundle \
+            --project dev/src/IndieFi.Web \
+            --target-runtime linux-x64 \
+            --configuration Release \
+            --output efbundle \
+            --force
+
+          file efbundle
+
       # Everything above takes tens of seconds and needs nothing from the server, so
       # port 22 stays shut until here. The role only trusts a subject carrying GitHub's
       # immutable owner and repo ids (repo:owner@id/name@id:...), not the plain
@@ -98,6 +120,7 @@ jobs:
         run: |
           ssh deploy-target 'rm -rf ~/app-new'
           scp -r publish deploy-target:~/app-new
+          scp efbundle deploy-target:~/efbundle
 
       # The browser still shows the old version at this point, because ~/app has not
       # been touched. Printing both facts together is the proof: fresh files arrived,
@@ -105,7 +128,7 @@ jobs:
       - name: Show what arrived
         run: |
           ssh deploy-target '
-            ls -l ~/app-new/IndieFi.Web.dll
+            ls -l ~/app-new/IndieFi.Web.dll ~/efbundle
             echo "files: $(ls ~/app-new | wc -l)"
             systemctl is-active indiefi
           '
@@ -122,31 +145,42 @@ jobs:
       # The app takes a few seconds to come up, so a single curl right after start
       # would call a normal boot a failure. The elapsed seconds printed here are the
       # real downtime of this deploy.
-      - name: Swap in the new copy and wait for it to answer
+      - name: Swap in the new copy, migrate, and wait for it to answer
         run: |
-          ssh deploy-target '
-            set -e
-            START=$(date +%s)
-            sudo systemctl stop indiefi
+          ssh deploy-target bash -s <<'REMOTE'
+          set -e
+          START=$(date +%s)
+          sudo systemctl stop indiefi
 
-            rm -rf ~/app-old
-            mv ~/app ~/app-old
-            mv ~/app-new ~/app
+          rm -rf ~/app-old
+          mv ~/app ~/app-old
+          mv ~/app-new ~/app
 
-            sudo systemctl start indiefi
+          # Migrations run while nothing is serving, so the new code never meets the old
+          # schema. The bundle skips what is already applied, which is why it can run on
+          # every deploy instead of someone having to remember whether the schema moved.
+          #
+          # /etc/indiefi.env is systemd's format, not shell. The connection string holds
+          # semicolons, so sourcing the file would end the value at the first one and hand
+          # the bundle a string with no password. Reading the single line avoids that, and
+          # building the value inside the shell rather than passing it as an argument keeps
+          # the password off the process list.
+          sudo bash -c 'export ConnectionStrings__Database="$(sed -n "s/^ConnectionStrings__Database=//p" /etc/indiefi.env)"; exec /home/ubuntu/efbundle'
 
-            for i in $(seq 1 15); do
-              if curl -fsS http://127.0.0.1:5000/ >/dev/null 2>&1; then
-                echo "healthy after $(( $(date +%s) - START ))s of downtime"
-                ls -l ~/app/IndieFi.Web.dll
-                exit 0
-              fi
-              sleep 2
-            done
+          sudo systemctl start indiefi
 
-            echo "the new copy never answered - ~/app-old still holds the previous one" >&2
-            exit 1
-          '
+          for i in $(seq 1 15); do
+            if curl -fsS http://127.0.0.1:5000/ >/dev/null 2>&1; then
+              echo "healthy after $(( $(date +%s) - START ))s of downtime"
+              ls -l ~/app/IndieFi.Web.dll
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "the new copy never answered - ~/app-old still holds the previous one" >&2
+          exit 1
+          REMOTE
 
       # always() covers ordinary failures above, but a forced workflow cancellation
       # can prevent cleanup from running. The described ingress rule then remains
