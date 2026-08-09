@@ -28,8 +28,12 @@ jobs:
       # already has aspnetcore-runtime-10.0 from apt. Publishing here rather than on a
       # laptop is what makes "what is committed" and "what is on the server" the same
       # thing - uncommitted edits and machine-local packages cannot leak into a deploy.
+      # SourceRevisionId ends up appended to the assembly's informational version, which is
+      # where the footer reads it from. The SDK would infer the same value from the checkout
+      # on its own; passing it explicitly ties the footer to the commit this run reports, so
+      # the page and the run that produced it can never name different commits.
       - name: Publish the app
-        run: dotnet publish dev/src/IndieFi.Web -c Release -o publish
+        run: dotnet publish dev/src/IndieFi.Web -c Release -o publish -p:SourceRevisionId=${{ github.sha }}
 
       # Everything above takes tens of seconds and needs nothing from the server, so
       # port 22 stays shut until here. The role only trusts a subject carrying GitHub's
