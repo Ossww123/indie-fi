@@ -1,0 +1,234 @@
+name: ci
+
+# Tests run on every push and pull request, on every branch. Listing branches here means
+# a new branch prefix silently stops being covered until someone remembers to add it.
+#
+# Deploying is a button press instead of a consequence of pushing, because the demo box is
+# kept stopped between sessions to hold the bill near a couple of dollars a month. Wiring
+# it to pushes on main would turn "the box is off" into a red run on every merge, and a
+# pipeline that is normally red is a pipeline nobody reads.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Build the whole solution rather than letting `dotnet test` build only what
+      # the tests need. That is what catches a project which stopped compiling but
+      # is not referenced by any test - it happened once and went unnoticed for
+      # several commits.
+      - name: Build
+        run: dotnet build dev/IndieFi.slnx
+
+      # The tests start a throwaway PostgreSQL through Testcontainers, so this needs
+      # Docker. ubuntu-latest runners already have it. The first run also pulls the
+      # postgres:18 image, so expect it to take far longer than the 2s it takes locally.
+      - name: Test
+        run: dotnet test dev/IndieFi.slnx --no-build
+
+  # Both jobs live in one file so that this one can wait for the other. Copying the test
+  # steps into a second file would work until someone edited one copy: the deploy gate
+  # would keep passing while testing something older than what is being shipped.
+  deploy:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Framework-dependent, so the 21MB this produces carries no runtime: the server
+      # already has aspnetcore-runtime-10.0 from apt. Publishing here rather than on a
+      # laptop is what makes "what is committed" and "what is on the server" the same
+      # thing - uncommitted edits and machine-local packages cannot leak into a deploy.
+      #
+      # SourceRevisionId ends up appended to the assembly's informational version, which is
+      # where the footer reads it from. The SDK would infer the same value from the checkout
+      # on its own; passing it explicitly ties the footer to the commit this run reports, so
+      # the page and the run that produced it can never name different commits.
+      - name: Publish the app
+        run: dotnet publish dev/src/IndieFi.Web -c Release -o publish -p:SourceRevisionId=${{ github.sha }}
+
+      # The server has no SDK and no source, so it cannot run migrations the way a laptop
+      # does. This bakes them into one executable instead.
+      #
+      # -r is short for --target-runtime here and not for --runtime, which is a different
+      # option: passing the wrong one produces a Windows executable that builds cleanly and
+      # only fails once it reaches the server. The RID restore has to come first, otherwise
+      # the build stops at NETSDK1047, and it does not survive between builds.
+      - name: Build the migration bundle
+        run: |
+          dotnet tool install --global dotnet-ef
+          export PATH="$PATH:$HOME/.dotnet/tools"
+
+          dotnet restore dev/src/IndieFi.Web -r linux-x64
+          dotnet ef migrations bundle \
+            --project dev/src/IndieFi.Web \
+            --target-runtime linux-x64 \
+            --configuration Release \
+            --output efbundle \
+            --force
+
+          file efbundle
+
+      # Everything above takes tens of seconds and needs nothing from the server, so
+      # port 22 stays shut until here. The role only trusts a subject carrying GitHub's
+      # immutable owner and repo ids (repo:owner@id/name@id:...), not the plain
+      # repo:owner/name form most examples show; renaming the repository breaks this.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: Find the runner public IP
+        run: |
+          RUNNER_IP="$(curl -s https://checkip.amazonaws.com)"
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+
+      # Only this short-lived runner needs port 22. The description makes the rule
+      # recognizable if a failed cleanup leaves it for someone to remove by hand.
+      - name: Allow SSH from the runner
+        env:
+          AWS_SG_ID: ${{ secrets.AWS_SG_ID }}
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$AWS_SG_ID" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${RUNNER_IP}/32,Description=github-actions-deploy}]"
+          echo "SSH_INGRESS_ADDED=true" >> "$GITHUB_ENV"
+
+      # The private key remains on the runner disk for the rest of this job. GitHub
+      # discards the runner afterward, but the key must never be printed to the log.
+      # The config file is here so that every ssh and scp line below stays short
+      # enough to read at a glance.
+      #
+      # The EC2 public IP changes when the instance is restarted, so pinning a host
+      # key to that IP would break on each change. accept-new records the first key
+      # this throwaway runner sees, but it cannot detect a man-in-the-middle on that
+      # first connection; that is the known cost of the choice.
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+
+          cat > "$HOME/.ssh/config" <<EOF
+          Host deploy-target
+            HostName $SSH_HOST
+            User ubuntu
+            IdentityFile $HOME/.ssh/deploy_key
+            StrictHostKeyChecking accept-new
+          EOF
+
+      # The app is running out of ~/app right now, and Linux happily lets a running
+      # binary be overwritten, so a transfer that dies halfway would leave that folder
+      # half new and half old - broken only at the next restart, with nothing to point
+      # at the cause. Landing beside it keeps the running copy untouched.
+      #
+      # scp copies into a directory that already exists but creates one that does not,
+      # so the same command would nest publish/ inside app-new/ from the second run
+      # onward. Removing the destination first makes every run end the same way.
+      - name: Send the published app next to the running one
+        run: |
+          ssh deploy-target 'rm -rf ~/app-new'
+          scp -r publish deploy-target:~/app-new
+          scp efbundle deploy-target:~/efbundle
+
+      # The browser still shows the old version at this point, because ~/app has not
+      # been touched. Printing both facts together is the proof: fresh files arrived,
+      # and the service kept serving the previous copy through the whole transfer.
+      - name: Show what arrived
+        run: |
+          ssh deploy-target '
+            ls -l ~/app-new/IndieFi.Web.dll ~/efbundle
+            echo "files: $(ls ~/app-new | wc -l)"
+            systemctl is-active indiefi
+          '
+
+      # The whole swap runs in one ssh session so nothing can reconnect between the
+      # stop and the start. The previous copy stays as ~/app-old, which is the way
+      # back if the new one does not come up.
+      #
+      # There is deliberately no automatic rollback. A deploy that fails should stay
+      # failed and loud: an automatic recovery would hide how often this breaks and
+      # would be a safeguard built before anything had gone wrong. Going back is two
+      # commands, and the health check below says plainly that they are needed.
+      #
+      # The app takes a few seconds to come up, so a single curl right after start
+      # would call a normal boot a failure. The elapsed seconds printed here are the
+      # real downtime of this deploy.
+      - name: Swap in the new copy, migrate, and wait for it to answer
+        run: |
+          ssh deploy-target bash -s <<'REMOTE'
+          set -e
+          START=$(date +%s)
+          sudo systemctl stop indiefi
+
+          rm -rf ~/app-old
+          mv ~/app ~/app-old
+          mv ~/app-new ~/app
+
+          # Migrations run while nothing is serving, so the new code never meets the old
+          # schema. The bundle skips what is already applied, which is why it can run on
+          # every deploy instead of someone having to remember whether the schema moved.
+          #
+          # /etc/indiefi.env is systemd's format, not shell. The connection string holds
+          # semicolons, so sourcing the file would end the value at the first one and hand
+          # the bundle a string with no password. Reading the single line avoids that, and
+          # building the value inside the shell rather than passing it as an argument keeps
+          # the password off the process list.
+          sudo bash -c 'export ConnectionStrings__Database="$(sed -n "s/^ConnectionStrings__Database=//p" /etc/indiefi.env)"; exec /home/ubuntu/efbundle'
+
+          sudo systemctl start indiefi
+
+          for i in $(seq 1 15); do
+            if curl -fsS http://127.0.0.1:5000/ >/dev/null 2>&1; then
+              echo "healthy after $(( $(date +%s) - START ))s of downtime"
+              ls -l ~/app/IndieFi.Web.dll
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "the new copy never answered - ~/app-old still holds the previous one" >&2
+          exit 1
+          REMOTE
+
+      # always() covers ordinary failures above, but a forced workflow cancellation
+      # can prevent cleanup from running. The described ingress rule then remains
+      # and must be removed by hand. The marker avoids deleting a pre-existing rule
+      # when this run did not successfully add one.
+      - name: Remove SSH access from the runner
+        if: always()
+        env:
+          AWS_SG_ID: ${{ secrets.AWS_SG_ID }}
+        run: |
+          if [ "${SSH_INGRESS_ADDED:-}" != "true" ]; then
+            exit 0
+          fi
+
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$AWS_SG_ID" \
+            --protocol tcp \
+            --port 22 \
+            --cidr "$RUNNER_IP/32"
