@@ -106,6 +106,44 @@ jobs:
             systemctl is-active indiefi
           '
 
+      # The whole swap runs in one ssh session so nothing can reconnect between the
+      # stop and the start. The previous copy stays as ~/app-old, which is the way
+      # back if the new one does not come up.
+      #
+      # There is deliberately no automatic rollback. A deploy that fails should stay
+      # failed and loud: an automatic recovery would hide how often this breaks and
+      # would be a safeguard built before anything had gone wrong. Going back is two
+      # commands, and the health check below says plainly that they are needed.
+      #
+      # The app takes a few seconds to come up, so a single curl right after start
+      # would call a normal boot a failure. The elapsed seconds printed here are the
+      # real downtime of this deploy.
+      - name: Swap in the new copy and wait for it to answer
+        run: |
+          ssh deploy-target '
+            set -e
+            START=$(date +%s)
+            sudo systemctl stop indiefi
+
+            rm -rf ~/app-old
+            mv ~/app ~/app-old
+            mv ~/app-new ~/app
+
+            sudo systemctl start indiefi
+
+            for i in $(seq 1 15); do
+              if curl -fsS http://127.0.0.1:5000/ >/dev/null 2>&1; then
+                echo "healthy after $(( $(date +%s) - START ))s of downtime"
+                ls -l ~/app/IndieFi.Web.dll
+                exit 0
+              fi
+              sleep 2
+            done
+
+            echo "the new copy never answered - ~/app-old still holds the previous one" >&2
+            exit 1
+          '
+
       # always() covers ordinary failures above, but a forced workflow cancellation
       # can prevent cleanup from running. The described ingress rule then remains
       # and must be removed by hand. The marker avoids deleting a pre-existing rule
