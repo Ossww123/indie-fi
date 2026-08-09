@@ -1,0 +1,92 @@
+name: deploy
+
+# The manual button only shows up for workflows that already exist on the default
+# branch, so while this file lives on a work branch there is no way to start it by
+# hand. Pushing the branch is the only trigger left. The branch line is temporary
+# and comes out before this merges; workflow_dispatch is what remains.
+on:
+  workflow_dispatch:
+  push:
+    branches: [chore/auto-deploy]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # The role only trusts a subject carrying GitHub's immutable owner and repo ids
+      # (repo:owner@id/name@id:...), not the plain repo:owner/name form most examples
+      # show. Renaming the repository therefore breaks this until the role is updated.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: Find the runner public IP
+        run: |
+          RUNNER_IP="$(curl -s https://checkip.amazonaws.com)"
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+
+      # Only this short-lived runner needs port 22. The description makes the rule
+      # recognizable if a failed cleanup leaves it for someone to remove by hand.
+      - name: Allow SSH from the runner
+        env:
+          AWS_SG_ID: ${{ secrets.AWS_SG_ID }}
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$AWS_SG_ID" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${RUNNER_IP}/32,Description=github-actions-deploy}]"
+          echo "SSH_INGRESS_ADDED=true" >> "$GITHUB_ENV"
+
+      # The private key remains on the runner disk for the rest of this job. GitHub
+      # discards the runner afterward, but the key must never be printed to the log.
+      - name: Write the SSH private key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+
+      # The EC2 public IP changes when the instance is restarted, so pinning a host
+      # key to that IP would break on each change. accept-new records the first key
+      # seen by this temporary runner, but it cannot prevent a man-in-the-middle
+      # attack on that first connection; that is the known limitation of this choice.
+      - name: Check the server over SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          ssh \
+            -i "$HOME/.ssh/deploy_key" \
+            -o StrictHostKeyChecking=accept-new \
+            "ubuntu@$SSH_HOST" <<'REMOTE'
+          uname -a
+          systemctl is-active indiefi
+          # ubuntu was added to the docker group while setting postgres up, so this
+          # needs no sudo. It is also the last command here, so its exit status is
+          # the one that decides whether this step passes.
+          docker ps --format '{{.Names}} {{.Status}}'
+          REMOTE
+
+      # always() covers ordinary failures above, but a forced workflow cancellation
+      # can prevent cleanup from running. The described ingress rule then remains
+      # and must be removed by hand. The marker avoids deleting a pre-existing rule
+      # when this run did not successfully add one.
+      - name: Remove SSH access from the runner
+        if: always()
+        env:
+          AWS_SG_ID: ${{ secrets.AWS_SG_ID }}
+        run: |
+          if [ "${SSH_INGRESS_ADDED:-}" != "true" ]; then
+            exit 0
+          fi
+
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$AWS_SG_ID" \
+            --protocol tcp \
+            --port 22 \
+            --cidr "$RUNNER_IP/32"
