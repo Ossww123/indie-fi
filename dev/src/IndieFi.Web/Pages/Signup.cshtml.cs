@@ -14,6 +14,10 @@ public class SignupModel : PageModel
     /// <summary>PostgreSQL SQLSTATE for a unique constraint violation.</summary>
     private const string UniqueViolation = "23505";
 
+    // Users earn credits by giving feedback on other users' requests, but no one
+    // can create a request while everyone has zero credits, so this grant starts the cycle.
+    private const int SignupGrant = 3;
+
     private readonly AppDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
 
@@ -46,9 +50,17 @@ public class SignupModel : PageModel
         user.PasswordHash = _passwordHasher.HashPassword(user, Password);
 
         _db.Users.Add(user);
+        _db.CreditLedgerEntries.Add(new CreditLedgerEntry
+        {
+            User = user,
+            Kind = CreditEntryKind.Grant,
+            Delta = SignupGrant,
+        });
 
         try
         {
+            // Saving both rows together prevents an intermediate state where the
+            // account exists but its signup grant does not.
             await _db.SaveChangesAsync();
         }
         catch (DbUpdateException exception)

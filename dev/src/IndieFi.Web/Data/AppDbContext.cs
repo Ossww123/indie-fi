@@ -23,6 +23,8 @@ public class AppDbContext : DbContext
 
     public DbSet<KeyGrant> KeyGrants => Set<KeyGrant>();
 
+    public DbSet<CreditLedgerEntry> CreditLedgerEntries => Set<CreditLedgerEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -190,6 +192,43 @@ public class AppDbContext : DbContext
 
             // A Steam key can be granted to only one user.
             keyGrant.HasIndex(g => g.KeyId).IsUnique();
+        });
+
+        // Credit history is append-only: rows are never updated or deleted, and
+        // a user's balance is the sum of all of their delta values.
+        modelBuilder.Entity<CreditLedgerEntry>(creditLedgerEntry =>
+        {
+            creditLedgerEntry.ToTable("credit_ledger_entries");
+
+            creditLedgerEntry.HasKey(e => e.Id);
+            creditLedgerEntry.Property(e => e.Id).HasColumnName("id");
+
+            creditLedgerEntry.Property(e => e.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+
+            // Text is readable in psql audit records and prevents enum reordering
+            // from changing the meaning of historical entries.
+            creditLedgerEntry.Property(e => e.Kind)
+                .HasColumnName("kind")
+                .HasConversion<string>()
+                .IsRequired();
+
+            creditLedgerEntry.Property(e => e.Delta)
+                .HasColumnName("delta")
+                .IsRequired();
+
+            creditLedgerEntry.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            creditLedgerEntry.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId);
+
+            // Balance reads sum every entry for one user, the ledger's only read path.
+            creditLedgerEntry.HasIndex(e => e.UserId);
         });
     }
 }
