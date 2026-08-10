@@ -25,13 +25,22 @@ public class AppDbContext : DbContext
 
     public DbSet<CreditLedgerEntry> CreditLedgerEntries => Set<CreditLedgerEntry>();
 
+    public DbSet<ReviewRequest> ReviewRequests => Set<ReviewRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
         // identifiers to lower case, and this project writes raw SQL by hand.
         modelBuilder.Entity<User>(user =>
         {
-            user.ToTable("users");
+            user.ToTable("users", table =>
+            {
+                // The database must reject a negative balance regardless of application
+                // mistakes, so this constraint is the final line of defense.
+                table.HasCheckConstraint(
+                    "CK_users_credit_balance_not_negative",
+                    "credit_balance >= 0");
+            });
 
             user.HasKey(u => u.Id);
             user.Property(u => u.Id).HasColumnName("id");
@@ -44,6 +53,11 @@ public class AppDbContext : DbContext
             user.Property(u => u.PasswordHash)
                 .HasColumnName("password_hash")
                 .IsRequired();
+
+            user.Property(u => u.CreditBalance)
+                .HasColumnName("credit_balance")
+                .IsRequired()
+                .HasDefaultValue(0);
 
             user.Property(u => u.CreatedAt)
                 .HasColumnName("created_at")
@@ -227,8 +241,52 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.UserId);
 
-            // Balance reads sum every entry for one user, the ledger's only read path.
+            // The ledger screen reads one user's history in this order.
             creditLedgerEntry.HasIndex(e => e.UserId);
+        });
+
+        modelBuilder.Entity<ReviewRequest>(reviewRequest =>
+        {
+            reviewRequest.ToTable("review_requests");
+
+            reviewRequest.HasKey(r => r.Id);
+            reviewRequest.Property(r => r.Id).HasColumnName("id");
+
+            reviewRequest.Property(r => r.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            reviewRequest.Property(r => r.RequesterId)
+                .HasColumnName("requester_id")
+                .IsRequired();
+
+            reviewRequest.Property(r => r.SpendEntryId)
+                .HasColumnName("spend_entry_id")
+                .IsRequired();
+
+            reviewRequest.Property(r => r.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            reviewRequest.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(r => r.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            reviewRequest.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(r => r.RequesterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            reviewRequest.HasOne(r => r.SpendEntry)
+                .WithMany()
+                .HasForeignKey(r => r.SpendEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One credit spend creates exactly one request, so the database rejects
+            // a second request even if application code tries to create it.
+            reviewRequest.HasIndex(r => r.SpendEntryId).IsUnique();
         });
     }
 }

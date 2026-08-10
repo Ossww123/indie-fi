@@ -14,6 +14,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
 
 builder.Services.AddScoped<KeyClaimService>();
+builder.Services.AddScoped<ReviewRequestService>();
 
 // Hashes passwords with PBKDF2. Used on its own, without the rest of Identity.
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();

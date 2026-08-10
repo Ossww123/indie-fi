@@ -1,6 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Extensions;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -11,19 +12,48 @@ namespace IndieFi.Web.Pages.Games;
 // key drops. IsOwner stays false for anonymous users, hiding the owner-only actions.
 public class DetailModel : PageModel
 {
-    private readonly AppDbContext _db;
+    public sealed record RequestNotice(
+        ReviewRequestOutcome Outcome,
+        string Code,
+        string Message,
+        bool IsSuccess);
 
-    public DetailModel(AppDbContext db)
+    private static readonly RequestNotice[] RequestNotices =
+    [
+        new(
+            ReviewRequestOutcome.Queued,
+            "queued",
+            "피드백 요청을 등록했습니다. 크레딧 1을 사용했습니다.",
+            true),
+        new(
+            ReviewRequestOutcome.InsufficientCredit,
+            "nocredit",
+            "크레딧이 부족합니다. 다른 개발자의 게임에 피드백을 주면 크레딧을 벌 수 있습니다.",
+            false),
+    ];
+
+    private readonly AppDbContext _db;
+    private readonly ReviewRequestService _reviewRequestService;
+
+    public DetailModel(AppDbContext db, ReviewRequestService reviewRequestService)
     {
         _db = db;
+        _reviewRequestService = reviewRequestService;
     }
 
     public Game Game { get; private set; } = null!;
     public bool IsOwner { get; private set; }
     public List<DropListItem> Drops { get; private set; } = [];
+    public int PendingRequestCount { get; private set; }
+    public RequestNotice? RequestMessage { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(long id)
+    public async Task<IActionResult> OnGetAsync(long id, string? request)
     {
+        // 028 showed that TempData notices can be lost, so the result travels in the URL.
+        // Query strings are user-controlled, so only known codes may select displayed text.
+        RequestMessage = RequestNotices
+            .FirstOrDefault(notice => notice.Code == request);
+
         var game = await _db.Games.FindAsync(id);
 
         if (game is null)
@@ -37,6 +67,9 @@ public class DetailModel : PageModel
         Game = game;
         IsOwner = User.TryGetUserId(out var ownerId) && game.OwnerId == ownerId;
 
+        PendingRequestCount = await _db.ReviewRequests
+            .CountAsync(reviewRequest => reviewRequest.GameId == game.Id);
+
         Drops = await _db.KeyDrops
             .Where(drop => drop.GameId == game.Id)
             .OrderBy(drop => drop.OpensAt)
@@ -44,6 +77,39 @@ public class DetailModel : PageModel
             .ToListAsync();
 
         return Page();
+    }
+
+    public async Task<IActionResult> OnPostRequestFeedbackAsync(long id)
+    {
+        // The page itself stays public, so requesting feedback is guarded here instead.
+        // [Authorize] cannot do it: Razor Pages ignores the attribute on a handler.
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Challenge();
+        }
+
+        var userId = User.GetUserId();
+        var result = await _reviewRequestService.RequestAsync(id, userId);
+
+        if (result.Outcome == ReviewRequestOutcome.GameNotFound)
+        {
+            return NotFound();
+        }
+
+        if (result.Outcome == ReviewRequestOutcome.NotOwner)
+        {
+            return Forbid();
+        }
+
+        var requestNotice = RequestNotices
+            .FirstOrDefault(notice => notice.Outcome == result.Outcome);
+
+        if (requestNotice is not null)
+        {
+            return RedirectToPage(new { id, request = requestNotice.Code });
+        }
+
+        return RedirectToPage(new { id });
     }
 
     public sealed record DropListItem(long Id, DateTimeOffset OpensAt)

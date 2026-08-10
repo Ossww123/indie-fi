@@ -173,6 +173,45 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("key_grants", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.ReviewRequest", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("GameId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("game_id");
+
+                    b.Property<long>("RequesterId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("requester_id");
+
+                    b.Property<long>("SpendEntryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("spend_entry_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId");
+
+                    b.HasIndex("RequesterId");
+
+                    b.HasIndex("SpendEntryId")
+                        .IsUnique();
+
+                    b.ToTable("review_requests", (string)null);
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.SteamKey", b =>
                 {
                     b.Property<long>("Id")
@@ -219,6 +258,12 @@ namespace IndieFi.Web.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<int>("CreditBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("credit_balance");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(320)
@@ -235,7 +280,10 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_users_credit_balance_not_negative", "credit_balance >= 0");
+                        });
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.CreditLedgerEntry", b =>
@@ -292,6 +340,29 @@ namespace IndieFi.Web.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.ReviewRequest", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.Game", null)
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.CreditLedgerEntry", "SpendEntry")
+                        .WithMany()
+                        .HasForeignKey("SpendEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SpendEntry");
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.SteamKey", b =>

@@ -28,4 +28,5 @@ public class CreditLedgerEntry
 public enum CreditEntryKind
 {
     Grant,
+    Spend,
 }

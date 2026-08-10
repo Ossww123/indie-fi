@@ -30,9 +30,12 @@ public class IndexModel : PageModel
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync();
 
-        // All entries are already loaded for this unpaged screen, so summing them here
-        // avoids a second database round trip. If the list is paginated, move the
-        // balance calculation to a database SUM so it still covers the complete ledger.
-        Balance = Entries.Sum(e => e.Delta);
+        // Show the same value protected by the CHECK constraint: summing the ledger
+        // here could hide a divergence between it and the cached balance. This makes
+        // two database round trips (ledger entries plus the user row) by design.
+        Balance = await _db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.CreditBalance)
+            .SingleAsync();
     }
 }
