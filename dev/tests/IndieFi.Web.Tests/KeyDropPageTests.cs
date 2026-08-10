@@ -105,26 +105,7 @@ public sealed class KeyDropPageTests
     private async Task LoginAsync(HttpClient client)
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
-
-        using var loginPageResponse = await client.GetAsync(
-            "/Login",
-            TestContext.Current.CancellationToken);
-        var loginHtml = await loginPageResponse.Content.ReadAsStringAsync(
-            TestContext.Current.CancellationToken);
-        var antiforgeryToken = PageTestSupport.ExtractAntiforgeryToken(loginHtml);
-
-        using var loginForm = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["Email"] = email,
-            ["Password"] = password,
-            ["__RequestVerificationToken"] = antiforgeryToken,
-        });
-        using var loginResponse = await client.PostAsync(
-            "/Login",
-            loginForm,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        await PageTestSupport.LoginAsync(client, email, password);
     }
 
     private async Task<(long DropId, string GameTitle)> CreateOpenDropAsync(int keyCount)
