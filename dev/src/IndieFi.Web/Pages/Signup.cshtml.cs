@@ -49,9 +49,8 @@ public class SignupModel : PageModel
         var user = new User { Email = Email };
         user.PasswordHash = _passwordHasher.HashPassword(user, Password);
 
-        // The ledger and its derived balance must always move together in the same
-        // transaction; changing only one would make the two values diverge.
-        user.CreditBalance = SignupGrant;
+        // The database trigger derives the balance from the ledger. Because application
+        // code writes only the ledger, there is no code path that can make them diverge.
         _db.Users.Add(user);
         _db.CreditLedgerEntries.Add(new CreditLedgerEntry
         {

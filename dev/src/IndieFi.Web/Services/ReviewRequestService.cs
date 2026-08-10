@@ -2,6 +2,7 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace IndieFi.Web.Services;
 
@@ -17,6 +18,9 @@ public record ReviewRequestResult(ReviewRequestOutcome Outcome);
 
 public class ReviewRequestService
 {
+    /// <summary>PostgreSQL SQLSTATE for a check constraint violation.</summary>
+    private const string CheckViolation = "23514";
+
     private const int RequestCost = 1;
 
     private readonly AppDbContext _db;
@@ -45,28 +49,6 @@ public class ReviewRequestService
             return Result(ReviewRequestOutcome.NotOwner, gameId, requesterId);
         }
 
-        // The successful path uses five database round trips: pre-check, transaction begin,
-        // conditional debit, the batched SaveChanges, and commit.
-        // ExecuteUpdateAsync runs immediately without the change tracker, while the inserts
-        // wait for SaveChangesAsync. The explicit transaction prevents a debit from being
-        // committed without its ledger entry and review request.
-        await using var transaction = await _db.Database.BeginTransactionAsync();
-
-        // Reading the balance before writing would let another request spend it in between.
-        // Putting the balance check in the UPDATE makes the check and debit one atomic
-        // operation, so only one concurrent request can affect the row. The non-negative
-        // CHECK constraint remains the final defense.
-        var affected = await _db.Users
-            .Where(user => user.Id == requesterId && user.CreditBalance >= RequestCost)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(
-                user => user.CreditBalance, user => user.CreditBalance - RequestCost));
-
-        if (affected == 0)
-        {
-            await transaction.RollbackAsync();
-            return Result(ReviewRequestOutcome.InsufficientCredit, gameId, requesterId);
-        }
-
         var spendEntry = new CreditLedgerEntry
         {
             UserId = requesterId,
@@ -83,9 +65,21 @@ public class ReviewRequestService
 
         _db.CreditLedgerEntries.Add(spendEntry);
         _db.ReviewRequests.Add(reviewRequest);
-        await _db.SaveChangesAsync();
 
-        await transaction.CommitAsync();
+        // The balance check now lives inside the database CHECK constraint. Concurrent
+        // trigger updates serialize on the same user row, so only one competing spend can
+        // succeed. Insufficient credit raises instead of silently affecting no rows, and
+        // the SaveChanges transaction rolls back all of its inserts.
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: CheckViolation })
+        {
+            return Result(ReviewRequestOutcome.InsufficientCredit, gameId, requesterId);
+        }
+
         return Result(ReviewRequestOutcome.Queued, gameId, requesterId);
     }
 
