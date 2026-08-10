@@ -33,11 +33,51 @@ public sealed class CreditPageTests
             .Where(entry => entry.UserId == user.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
 
-        // The account and grant must commit together because splitting SaveChanges
-        // can leave an account without credits; the complete ledger guards that invariant.
+        // Signup saves the ledger entry and balance together; checking only one side
+        // would let the test pass if the other side were omitted.
+        Assert.Equal(3, user.CreditBalance);
         var entry = Assert.Single(entries);
         Assert.Equal(CreditEntryKind.Grant, entry.Kind);
         Assert.Equal(3, entry.Delta);
+    }
+
+    [Fact]
+    public async Task AfterSignup_EveryUsersCreditBalance_MatchesTheirLedgerSum()
+    {
+        // Signing up here is what makes this test self-sufficient. Relying on other
+        // tests to produce credit-carrying users made it pass for the wrong reason:
+        // xUnit runs this class roughly in name order, so it ran before they existed
+        // and reported success against an empty set.
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await SignupAsync(client, $"{Guid.NewGuid():N}@example.test", "Known-Test-Password-123!");
+
+        await using var db = _fixture.NewDbContext();
+
+        // The sweep still covers every user, not just the one above, so a break in any
+        // other path shows up here too whenever that path ran first.
+        var mismatches = await db.Users
+            .Select(user => new
+            {
+                UserId = user.Id,
+                Balance = user.CreditBalance,
+                LedgerSum = db.CreditLedgerEntries
+                    .Where(entry => entry.UserId == user.Id)
+                    .Sum(entry => (int?)entry.Delta) ?? 0,
+            })
+            .Where(values => values.Balance != values.LedgerSum)
+            .OrderBy(values => values.UserId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        if (mismatches.Count > 0)
+        {
+            var details = string.Join(
+                Environment.NewLine,
+                mismatches.Select(values =>
+                    $"User {values.UserId}: balance={values.Balance}, ledger sum={values.LedgerSum}"));
+
+            Assert.Fail($"Credit balance mismatches:{Environment.NewLine}{details}");
+        }
     }
 
     [Fact]

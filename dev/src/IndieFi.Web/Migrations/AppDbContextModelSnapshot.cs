@@ -219,6 +219,12 @@ namespace IndieFi.Web.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<int>("CreditBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("credit_balance");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(320)
@@ -235,7 +241,10 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_users_credit_balance_not_negative", "credit_balance >= 0");
+                        });
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.CreditLedgerEntry", b =>
