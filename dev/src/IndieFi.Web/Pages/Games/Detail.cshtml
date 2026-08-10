@@ -9,6 +9,13 @@
     <div class="alert alert-success">@gameMessage</div>
 }
 
+@if (Model.RequestMessage is { } requestMessage)
+{
+    <div class="alert @(requestMessage.IsSuccess ? "alert-success" : "alert-warning")">
+        @requestMessage.Message
+    </div>
+}
+
 <div class="d-flex align-items-center gap-2">
     <h1 class="h3 mb-1">@Model.Game.Title</h1>
     @* Hiding this link is only UX; the Edit endpoint enforces ownership. *@
@@ -20,6 +27,12 @@
         <a asp-page="/KeyDrops/New"
            asp-route-gameId="@Model.Game.Id"
            class="btn btn-outline-secondary btn-sm">드롭 예약</a>
+        @* Hiding this button is only UX; the handler enforces ownership. *@
+        <form method="post"
+              asp-page-handler="RequestFeedback"
+              asp-route-id="@Model.Game.Id">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">피드백 요청</button>
+        </form>
     }
 </div>
 <p class="text-muted small">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
@@ -32,6 +45,8 @@ else
 {
     <p class="text-muted">(소개 없음)</p>
 }
+
+<p class="text-muted">대기 중인 피드백 요청 @(Model.PendingRequestCount)개</p>
 
 <h2 class="h5 mt-4">예약된 드롭</h2>
 @if (Model.Drops.Count == 0)

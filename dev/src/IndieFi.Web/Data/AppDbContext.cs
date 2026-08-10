@@ -25,6 +25,8 @@ public class AppDbContext : DbContext
 
     public DbSet<CreditLedgerEntry> CreditLedgerEntries => Set<CreditLedgerEntry>();
 
+    public DbSet<ReviewRequest> ReviewRequests => Set<ReviewRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -241,6 +243,50 @@ public class AppDbContext : DbContext
 
             // The ledger screen reads one user's history in this order.
             creditLedgerEntry.HasIndex(e => e.UserId);
+        });
+
+        modelBuilder.Entity<ReviewRequest>(reviewRequest =>
+        {
+            reviewRequest.ToTable("review_requests");
+
+            reviewRequest.HasKey(r => r.Id);
+            reviewRequest.Property(r => r.Id).HasColumnName("id");
+
+            reviewRequest.Property(r => r.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            reviewRequest.Property(r => r.RequesterId)
+                .HasColumnName("requester_id")
+                .IsRequired();
+
+            reviewRequest.Property(r => r.SpendEntryId)
+                .HasColumnName("spend_entry_id")
+                .IsRequired();
+
+            reviewRequest.Property(r => r.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            reviewRequest.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(r => r.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            reviewRequest.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(r => r.RequesterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            reviewRequest.HasOne(r => r.SpendEntry)
+                .WithMany()
+                .HasForeignKey(r => r.SpendEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One credit spend creates exactly one request, so the database rejects
+            // a second request even if application code tries to create it.
+            reviewRequest.HasIndex(r => r.SpendEntryId).IsUnique();
         });
     }
 }
