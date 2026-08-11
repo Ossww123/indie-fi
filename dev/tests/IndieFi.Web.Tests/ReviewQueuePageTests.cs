@@ -1,7 +1,9 @@
 using System.Net;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -101,6 +103,63 @@ public sealed class ReviewQueuePageTests
         Assert.True(firstPosition >= 0, $"Expected to find '{firstGameTitle}' in the response.");
         Assert.True(secondPosition >= 0, $"Expected to find '{secondGameTitle}' in the response.");
         Assert.True(firstPosition < secondPosition, "Expected the older request to appear first.");
+    }
+
+    [Fact]
+    public async Task SubmitPage_WhenTheAssignmentBelongsToSomeoneElse_RedirectsToTheList()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        long reviewerId;
+        long requestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 1);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            requestId = (await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+        }
+
+        long assignmentId;
+        await using (var claimDb = _fixture.NewDbContext())
+        {
+            var claimResult = await new ReviewClaimService(
+                claimDb,
+                NullLogger<ReviewClaimService>.Instance).ClaimNextAsync(reviewerId);
+            assignmentId = await claimDb.ReviewAssignments
+                .Where(assignment => assignment.RequestId == requestId)
+                .Select(assignment => assignment.Id)
+                .SingleAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(ReviewClaimOutcome.Claimed, claimResult.Outcome);
+            Assert.Equal(requestId, claimResult.RequestId);
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var response = await client.GetAsync(
+            $"/Reviews/Submit/{assignmentId}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        var reviewsPath = location.IsAbsoluteUri
+            ? location.AbsolutePath
+            : location.OriginalString.Split('?')[0];
+        Assert.Equal("/Reviews", reviewsPath);
     }
 
     private async Task<long> FindUserIdAsync(string email)

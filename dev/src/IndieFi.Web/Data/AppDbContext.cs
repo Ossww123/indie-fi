@@ -29,6 +29,8 @@ public class AppDbContext : DbContext
 
     public DbSet<ReviewAssignment> ReviewAssignments => Set<ReviewAssignment>();
 
+    public DbSet<FeedbackSubmission> FeedbackSubmissions => Set<FeedbackSubmission>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -372,6 +374,37 @@ public class AppDbContext : DbContext
             reviewAssignment.HasIndex(a => new { a.ReviewerId, a.GameId })
                 .IsUnique()
                 .HasFilter("status <> 'Expired'");
+        });
+
+        modelBuilder.Entity<FeedbackSubmission>(feedbackSubmission =>
+        {
+            feedbackSubmission.ToTable("feedback_submissions");
+
+            feedbackSubmission.HasKey(s => s.Id);
+            feedbackSubmission.Property(s => s.Id).HasColumnName("id");
+
+            feedbackSubmission.Property(s => s.AssignmentId)
+                .HasColumnName("assignment_id")
+                .IsRequired();
+
+            feedbackSubmission.Property(s => s.Body)
+                .HasColumnName("body")
+                .HasMaxLength(4000)
+                .IsRequired();
+
+            feedbackSubmission.Property(s => s.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            feedbackSubmission.HasOne<ReviewAssignment>()
+                .WithMany()
+                .HasForeignKey(s => s.AssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One assignment produces at most one submission, so a second submit cannot create a
+            // second row even if the conditional update above is somehow bypassed.
+            feedbackSubmission.HasIndex(s => s.AssignmentId).IsUnique();
         });
     }
 }

@@ -37,6 +37,31 @@ public class IndexModel : PageModel
             false),
     ];
 
+    public sealed record SubmitNotice(
+        FeedbackSubmissionOutcome Outcome,
+        string Code,
+        string Message,
+        bool IsSuccess);
+
+    private static readonly SubmitNotice[] SubmitNotices =
+    [
+        new(
+            FeedbackSubmissionOutcome.Submitted,
+            "submitted",
+            "피드백을 제출했습니다.",
+            true),
+        new(
+            FeedbackSubmissionOutcome.LeaseExpired,
+            "expired",
+            "마감시각이 지나 제출할 수 없습니다.",
+            false),
+        new(
+            FeedbackSubmissionOutcome.NotSubmittable,
+            "cannot",
+            "제출할 수 없는 작업입니다.",
+            false),
+    ];
+
     private readonly AppDbContext _db;
     private readonly ReviewClaimService _reviewClaimService;
 
@@ -49,12 +74,15 @@ public class IndexModel : PageModel
     public IReadOnlyList<ReviewListItem> Items { get; private set; } = [];
     public IReadOnlyList<ReviewAssignmentListItem> MyAssignments { get; private set; } = [];
     public ClaimNotice? ClaimMessage { get; private set; }
+    public SubmitNotice? SubmitMessage { get; private set; }
 
-    public async Task OnGetAsync(string? claim)
+    public async Task OnGetAsync(string? claim, string? submit)
     {
         // Query strings are user-controlled, so only known codes may select displayed text.
         ClaimMessage = ClaimNotices
             .FirstOrDefault(notice => notice.Code == claim);
+        SubmitMessage = SubmitNotices
+            .FirstOrDefault(notice => notice.Code == submit);
 
         var userId = User.GetUserId();
 
@@ -66,6 +94,7 @@ public class IndexModel : PageModel
             where assignment.Status == ReviewAssignmentStatus.Active
             orderby assignment.LeasedUntil
             select new ReviewAssignmentListItem(
+                assignment.Id,
                 game.Title,
                 assignment.LeasedUntil))
             .ToListAsync();
@@ -108,6 +137,7 @@ public class IndexModel : PageModel
         DateTimeOffset RequestedAt);
 
     public sealed record ReviewAssignmentListItem(
+        long AssignmentId,
         string GameTitle,
         DateTimeOffset LeasedUntil);
 }

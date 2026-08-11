@@ -13,6 +13,13 @@
     </div>
 }
 
+@if (Model.SubmitMessage is { } submitMessage)
+{
+    <div class="alert @(submitMessage.IsSuccess ? "alert-success" : "alert-warning")">
+        @submitMessage.Message
+    </div>
+}
+
 @if (Model.MyAssignments.Count > 0)
 {
     <section class="mb-4">
@@ -25,6 +32,17 @@
                     <div class="text-muted">
                         마감시각 @assignment.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                     </div>
+                    @if (assignment.LeasedUntil <= DateTimeOffset.UtcNow)
+                    {
+                        <div class="text-muted">마감 지남</div>
+                    }
+                    else
+                    {
+                        <div>
+                            <a asp-page="Submit"
+                               asp-route-assignmentId="@assignment.AssignmentId">피드백 쓰기</a>
+                        </div>
+                    }
                 </div>
             }
         </div>

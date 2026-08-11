@@ -1,0 +1,25 @@
+@page "{assignmentId:long}"
+@model SubmitModel
+@{
+    ViewData["Title"] = "피드백 쓰기";
+}
+
+<h1 class="h3 mb-4">피드백 쓰기</h1>
+
+<div class="mb-4">
+    <div class="fw-bold">@Model.GameTitle</div>
+    <div class="text-muted">
+        마감시각 @Model.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+    </div>
+</div>
+
+<form method="post" class="col-md-5">
+    <div class="mb-3">
+        <label asp-for="Body" class="form-label">피드백</label>
+        <textarea asp-for="Body" class="form-control" rows="8"></textarea>
+        <span asp-validation-for="Body" class="text-danger small"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">제출</button>
+    <a asp-page="Index" class="btn btn-link">목록으로 돌아가기</a>
+</form>
