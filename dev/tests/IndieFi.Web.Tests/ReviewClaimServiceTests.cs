@@ -3,6 +3,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -10,6 +11,9 @@ namespace IndieFi.Web.Tests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ReviewClaimServiceTests
 {
+    private const string UniqueViolation = "23505";
+    private const string ForeignKeyViolation = "23503";
+
     private readonly PostgreSqlFixture _fixture;
 
     public ReviewClaimServiceTests(PostgreSqlFixture fixture)
@@ -293,6 +297,275 @@ public sealed class ReviewClaimServiceTests
         // the second request is handed out while the first is still contended.
         Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
         Assert.Equal(secondRequestId, result.RequestId);
+    }
+
+    [Fact]
+    public async Task ClaimNextAsync_WhenTheReviewerAlreadyHasThatGame_SkipsToADifferentGame()
+    {
+        long reviewerId;
+        long firstGameRequestId;
+        long secondGameRequestId;
+        long skippedRequestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 3);
+            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var firstGame = await CreateGameAsync(arrangeDb, requester.Id);
+            var secondGame = await CreateGameAsync(arrangeDb, requester.Id);
+            firstGameRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                firstGame.Id)).Id;
+            skippedRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                firstGame.Id)).Id;
+            secondGameRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                secondGame.Id)).Id;
+        }
+
+        ReviewClaimResult firstResult;
+        await using (var firstServiceDb = _fixture.NewDbContext())
+        {
+            firstResult = await NewService(firstServiceDb).ClaimNextAsync(reviewerId);
+        }
+
+        ReviewClaimResult secondResult;
+        await using (var secondServiceDb = _fixture.NewDbContext())
+        {
+            secondResult = await NewService(secondServiceDb).ClaimNextAsync(reviewerId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var assignedGameIds = await verificationDb.ReviewAssignments
+            .Where(assignment => assignment.ReviewerId == reviewerId)
+            .Select(assignment => assignment.GameId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        var skippedRequestStatus = await verificationDb.ReviewRequests
+            .Where(request => request.Id == skippedRequestId)
+            .Select(request => request.Status)
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(ReviewClaimOutcome.Claimed, firstResult.Outcome);
+        Assert.Equal(firstGameRequestId, firstResult.RequestId);
+        Assert.Equal(ReviewClaimOutcome.Claimed, secondResult.Outcome);
+        Assert.Equal(secondGameRequestId, secondResult.RequestId);
+        Assert.Equal(2, assignedGameIds.Count);
+        Assert.Equal(2, assignedGameIds.Distinct().Count());
+        Assert.Equal(ReviewRequestStatus.Queued, skippedRequestStatus);
+    }
+
+    [Fact]
+    public async Task ClaimNextAsync_WhenEveryQueuedRequestIsForAGameTheReviewerAlreadyHas_ReturnsNoneAvailable()
+    {
+        long reviewerId;
+        long firstRequestId;
+        long secondRequestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+            secondRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+        }
+
+        ReviewClaimResult firstResult;
+        await using (var firstServiceDb = _fixture.NewDbContext())
+        {
+            firstResult = await NewService(firstServiceDb).ClaimNextAsync(reviewerId);
+        }
+
+        ReviewClaimResult secondResult;
+        await using (var secondServiceDb = _fixture.NewDbContext())
+        {
+            secondResult = await NewService(secondServiceDb).ClaimNextAsync(reviewerId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var secondRequestStatus = await verificationDb.ReviewRequests
+            .Where(request => request.Id == secondRequestId)
+            .Select(request => request.Status)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var assignmentCount = await verificationDb.ReviewAssignments.CountAsync(
+            assignment => assignment.ReviewerId == reviewerId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ReviewClaimOutcome.Claimed, firstResult.Outcome);
+        Assert.Equal(firstRequestId, firstResult.RequestId);
+        Assert.Equal(ReviewClaimOutcome.NoneAvailable, secondResult.Outcome);
+        Assert.Null(secondResult.RequestId);
+        Assert.Equal(ReviewRequestStatus.Queued, secondRequestStatus);
+        Assert.Equal(1, assignmentCount);
+    }
+
+    [Fact]
+    public async Task ClaimNextAsync_AfterTheReviewersAssignmentExpired_HandsOutThatGameAgain()
+    {
+        long reviewerId;
+        long firstRequestId;
+        long secondRequestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+            secondRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+        }
+
+        ReviewClaimResult firstResult;
+        await using (var firstServiceDb = _fixture.NewDbContext())
+        {
+            firstResult = await NewService(firstServiceDb).ClaimNextAsync(reviewerId);
+        }
+
+        await using (var expirationDb = _fixture.NewDbContext())
+        {
+            var assignment = await expirationDb.ReviewAssignments.SingleAsync(
+                item => item.ReviewerId == reviewerId,
+                TestContext.Current.CancellationToken);
+            assignment.Status = ReviewAssignmentStatus.Expired;
+            await expirationDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        ReviewClaimResult secondResult;
+        await using (var secondServiceDb = _fixture.NewDbContext())
+        {
+            secondResult = await NewService(secondServiceDb).ClaimNextAsync(reviewerId);
+        }
+
+        Assert.Equal(ReviewClaimOutcome.Claimed, firstResult.Outcome);
+        Assert.Equal(firstRequestId, firstResult.RequestId);
+        Assert.Equal(ReviewClaimOutcome.Claimed, secondResult.Outcome);
+        Assert.Equal(secondRequestId, secondResult.RequestId);
+    }
+
+    [Fact]
+    public async Task AssigningOneReviewerTheSameGameTwice_IsRefusedByTheDatabase()
+    {
+        long reviewerId;
+        long gameId;
+        long firstRequestId;
+        long secondRequestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await CreateGameAsync(arrangeDb, requester.Id);
+            gameId = game.Id;
+            firstRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                gameId)).Id;
+            secondRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                gameId)).Id;
+        }
+
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var result = await NewService(serviceDb).ClaimNextAsync(reviewerId);
+            Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
+            Assert.Equal(firstRequestId, result.RequestId);
+        }
+
+        await using (var attemptDb = _fixture.NewDbContext())
+        {
+            var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
+                await attemptDb.Database.ExecuteSqlRawAsync(
+                    """
+                    INSERT INTO review_assignments
+                        (request_id, game_id, reviewer_id, status, leased_until)
+                    VALUES ({0}, {1}, {2}, 'Active', now() + INTERVAL '30 minutes')
+                    """,
+                    new object[] { secondRequestId, gameId, reviewerId },
+                    TestContext.Current.CancellationToken));
+
+            Assert.Equal(UniqueViolation, exception.SqlState);
+        }
+    }
+
+    [Fact]
+    public async Task AssigningAGameThatDoesNotMatchItsRequest_IsRefusedByTheDatabase()
+    {
+        long reviewerId;
+        long firstGameId;
+        long secondGameId;
+        long requestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 1);
+            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var firstGame = await CreateGameAsync(arrangeDb, requester.Id);
+            var secondGame = await CreateGameAsync(arrangeDb, requester.Id);
+            firstGameId = firstGame.Id;
+            secondGameId = secondGame.Id;
+            requestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                firstGameId)).Id;
+        }
+
+        await using (var attemptDb = _fixture.NewDbContext())
+        {
+            var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
+                await attemptDb.Database.ExecuteSqlRawAsync(
+                    """
+                    INSERT INTO review_assignments
+                        (request_id, game_id, reviewer_id, status, leased_until)
+                    VALUES ({0}, {1}, {2}, 'Active', now() + INTERVAL '30 minutes')
+                    """,
+                    new object[] { requestId, secondGameId, reviewerId },
+                    TestContext.Current.CancellationToken));
+
+            Assert.Equal(ForeignKeyViolation, exception.SqlState);
+        }
     }
 
     // The service only uses its logger for outcome records; these tests assert database state.

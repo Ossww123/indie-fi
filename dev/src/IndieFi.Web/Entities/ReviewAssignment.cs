@@ -6,6 +6,8 @@ public class ReviewAssignment
 
     public long RequestId { get; set; }
 
+    public long GameId { get; set; }
+
     public long ReviewerId { get; set; }
 
     public ReviewAssignmentStatus Status { get; set; }

@@ -188,6 +188,10 @@ namespace IndieFi.Web.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<long>("GameId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("game_id");
+
                     b.Property<DateTimeOffset>("LeasedUntil")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("leased_until");
@@ -211,7 +215,11 @@ namespace IndieFi.Web.Migrations
                         .IsUnique()
                         .HasFilter("status <> 'Expired'");
 
-                    b.HasIndex("ReviewerId");
+                    b.HasIndex("RequestId", "GameId");
+
+                    b.HasIndex("ReviewerId", "GameId")
+                        .IsUnique()
+                        .HasFilter("status <> 'Expired'");
 
                     b.ToTable("review_assignments", (string)null);
                 });
@@ -398,15 +406,16 @@ namespace IndieFi.Web.Migrations
 
             modelBuilder.Entity("IndieFi.Web.Entities.ReviewAssignment", b =>
                 {
-                    b.HasOne("IndieFi.Web.Entities.ReviewRequest", null)
-                        .WithMany()
-                        .HasForeignKey("RequestId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("IndieFi.Web.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.ReviewRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId", "GameId")
+                        .HasPrincipalKey("Id", "GameId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
