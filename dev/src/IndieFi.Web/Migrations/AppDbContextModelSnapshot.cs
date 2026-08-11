@@ -87,7 +87,10 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("AssignmentId")
                         .IsUnique();
 
-                    b.ToTable("feedback_submissions", (string)null);
+                    b.ToTable("feedback_submissions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_feedback_submissions_body_long_enough", "length(btrim(body)) >= 30");
+                        });
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.Game", b =>

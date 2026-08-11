@@ -16,10 +16,11 @@ public record FeedbackSubmissionResult(FeedbackSubmissionOutcome Outcome);
 
 public class FeedbackSubmissionService
 {
-    // Completing the assignment, storing the feedback, and completing the request share one
-    // statement so no other transaction can interleave and no explicit transaction is needed.
+    // Completing the assignment, storing the feedback, earning credit, and completing the request
+    // share one statement so no other transaction can interleave and no explicit transaction is needed.
     // PostgreSQL executes a data-changing CTE exactly once even when no later query references it,
-    // so finished is intentionally unreferenced. EF Core requires the Value alias for a scalar.
+    // so earned and finished are intentionally unreferenced. EF Core requires the Value alias for a scalar.
+    // The ledger trigger maintains users.credit_balance, which the application cannot update.
     private const string SubmitSql = """
         WITH completed AS (
             UPDATE review_assignments
@@ -35,6 +36,12 @@ public class FeedbackSubmissionService
             SELECT completed.id, @body
               FROM completed
             RETURNING assignment_id
+        ),
+        earned AS (
+            INSERT INTO credit_ledger_entries (user_id, kind, delta)
+            SELECT @reviewerId, 'Earn', 1
+              FROM completed
+            RETURNING id
         ),
         finished AS (
             UPDATE review_requests

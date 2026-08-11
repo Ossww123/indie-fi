@@ -16,6 +16,7 @@
 <form method="post" class="col-md-5">
     <div class="mb-3">
         <label asp-for="Body" class="form-label">피드백</label>
+        <span class="text-muted small">30자 이상</span>
         <textarea asp-for="Body" class="form-control" rows="8"></textarea>
         <span asp-validation-for="Body" class="text-danger small"></span>
     </div>

@@ -29,7 +29,7 @@ public class SubmitModel : PageModel
 
     [BindProperty]
     [Required(ErrorMessage = "피드백을 입력해 주세요.")]
-    [StringLength(4000, ErrorMessage = "피드백은 4000자 이하여야 합니다.")]
+    [StringLength(4000, MinimumLength = 30, ErrorMessage = "피드백은 30자 이상 써 주세요.")]
     public string Body { get; set; } = string.Empty;
 
     public Task<IActionResult> OnGetAsync(long assignmentId)

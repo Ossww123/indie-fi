@@ -378,7 +378,14 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<FeedbackSubmission>(feedbackSubmission =>
         {
-            feedbackSubmission.ToTable("feedback_submissions");
+            feedbackSubmission.ToTable("feedback_submissions", table =>
+            {
+                // Credit is earned per submission, so an empty-ish submission would buy a credit.
+                // The database refuses it regardless of which code path inserts the row.
+                table.HasCheckConstraint(
+                    "CK_feedback_submissions_body_long_enough",
+                    "length(btrim(body)) >= 30");
+            });
 
             feedbackSubmission.HasKey(s => s.Id);
             feedbackSubmission.Property(s => s.Id).HasColumnName("id");
