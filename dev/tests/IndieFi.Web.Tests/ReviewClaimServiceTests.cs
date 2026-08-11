@@ -244,6 +244,173 @@ public sealed class ReviewClaimServiceTests
     }
 
     [Fact]
+    public async Task ClaimNextAsync_WhenTheSameReviewerClaimsThatGameConcurrently_ReportsAlreadyHasThatGame()
+    {
+        long reviewerId;
+        long firstRequestId;
+        long secondRequestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+            secondRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+        }
+
+        // Keeping A's transaction open makes its assignment invisible to B's snapshot while
+        // preserving the reviewer-game conflict at the unique-index backstop.
+        await using var firstServiceDb = _fixture.NewDbContext();
+        await firstServiceDb.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
+        await using var firstTransaction = await firstServiceDb.Database.BeginTransactionAsync(
+            TestContext.Current.CancellationToken);
+        var firstResult = await NewService(firstServiceDb).ClaimNextAsync(reviewerId);
+
+        await using var secondServiceDb = _fixture.NewDbContext();
+        await secondServiceDb.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
+
+        // A broken concurrency path must fail this test instead of waiting forever on A.
+        await secondServiceDb.Database.ExecuteSqlRawAsync(
+            "SET lock_timeout = '5s'",
+            TestContext.Current.CancellationToken);
+
+        var secondBackendId = ((NpgsqlConnection)secondServiceDb.Database.GetDbConnection()).ProcessID;
+        var secondClaimTask = NewService(secondServiceDb).ClaimNextAsync(reviewerId);
+
+        // Observing B's lock wait prevents A from committing before B has taken the conflicting
+        // snapshot, which removes scheduler timing from the race.
+        await using (var observerDb = _fixture.NewDbContext())
+        {
+            var waitDeadline = DateTimeOffset.UtcNow.AddSeconds(6);
+
+            while (true)
+            {
+                var secondClaimIsWaiting = await observerDb.Database
+                    .SqlQueryRaw<bool>(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                              FROM pg_stat_activity
+                             WHERE pid = @backendId
+                               AND wait_event_type = 'Lock'
+                        ) AS "Value"
+                        """,
+                        new NpgsqlParameter("backendId", secondBackendId))
+                    .SingleAsync(TestContext.Current.CancellationToken);
+
+                if (secondClaimIsWaiting)
+                {
+                    break;
+                }
+
+                if (secondClaimTask.IsCompleted)
+                {
+                    var prematureResult = await secondClaimTask;
+                    Assert.Fail(
+                        $"The second claim completed before reaching the forced conflict: " +
+                        $"{prematureResult.Outcome}.");
+                }
+
+                Assert.True(
+                    DateTimeOffset.UtcNow < waitDeadline,
+                    "The second claim did not reach a PostgreSQL lock wait within six seconds.");
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(10),
+                    TestContext.Current.CancellationToken);
+            }
+        }
+
+        await firstTransaction.CommitAsync(TestContext.Current.CancellationToken);
+        var secondResult = await secondClaimTask;
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var assignmentCount = await verificationDb.ReviewAssignments.CountAsync(
+            assignment => assignment.ReviewerId == reviewerId,
+            TestContext.Current.CancellationToken);
+        var secondRequestStatus = await verificationDb.ReviewRequests
+            .Where(request => request.Id == secondRequestId)
+            .Select(request => request.Status)
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(ReviewClaimOutcome.Claimed, firstResult.Outcome);
+        Assert.Equal(firstRequestId, firstResult.RequestId);
+        Assert.Equal(ReviewClaimOutcome.AlreadyHasThatGame, secondResult.Outcome);
+        Assert.Null(secondResult.RequestId);
+        Assert.Equal(1, assignmentCount);
+        Assert.Equal(ReviewRequestStatus.Queued, secondRequestStatus);
+    }
+
+    [Fact]
+    public async Task ClaimNextAsync_WhenAnotherUniqueRuleIsViolated_LetsTheErrorThrough()
+    {
+        long firstReviewerId;
+        long secondReviewerId;
+        long firstRequestId;
+        long secondRequestId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            // Claiming reads the whole queue, not one game, so leftovers from other tests would
+            // be handed out instead of the rows this test arranged. Assignments disappear with
+            // their requests through the cascade.
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+
+            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            firstReviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            secondReviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var firstGame = await CreateGameAsync(arrangeDb, requester.Id);
+            var secondGame = await CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                firstGame.Id)).Id;
+            secondRequestId = (await CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                secondGame.Id)).Id;
+        }
+
+        Assert.True(firstRequestId < secondRequestId);
+
+        await using (var firstClaimDb = _fixture.NewDbContext())
+        {
+            var result = await NewService(firstClaimDb).ClaimNextAsync(firstReviewerId);
+            Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
+            Assert.Equal(firstRequestId, result.RequestId);
+        }
+
+        await using (var resetDb = _fixture.NewDbContext())
+        {
+            // Requeuing only the request preserves the live assignment and creates the invalid
+            // state that an incorrect expiration flow could leave behind.
+            var request = await resetDb.ReviewRequests.SingleAsync(
+                item => item.Id == firstRequestId,
+                TestContext.Current.CancellationToken);
+            request.Status = ReviewRequestStatus.Queued;
+            await resetDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var secondClaimDb = _fixture.NewDbContext();
+        var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await NewService(secondClaimDb).ClaimNextAsync(secondReviewerId));
+
+        Assert.Equal(UniqueViolation, exception.SqlState);
+        Assert.Equal("IX_review_assignments_request_id", exception.ConstraintName);
+    }
+
+    [Fact]
     public async Task ClaimNextAsync_WhenTheOldestRequestIsHeldByAnotherClaim_SkipsToTheNextOne()
     {
         long reviewerId;

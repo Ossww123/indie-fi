@@ -9,6 +9,7 @@ public enum ReviewClaimOutcome
 {
     Claimed,
     NoneAvailable,
+    AlreadyHasThatGame,
 }
 
 public record ReviewClaimResult(ReviewClaimOutcome Outcome, long? RequestId);
@@ -17,6 +18,8 @@ public class ReviewClaimService
 {
     /// <summary>How long a reviewer holds a claimed request before it returns to the queue.</summary>
     private const int LeaseMinutes = 30;
+    private const string UniqueViolation = "23505";
+    private const string ReviewerGameIndex = "IX_review_assignments_reviewer_id_game_id";
 
     // SKIP LOCKED lets concurrent reviewers bypass rows another claim is already locking,
     // avoiding waits between claims. Ordering by ID keeps the oldest request first, gives
@@ -71,12 +74,26 @@ public class ReviewClaimService
 
     public async Task<ReviewClaimResult> ClaimNextAsync(long reviewerId)
     {
-        var claimedRequestIds = await _db.Database
-            .SqlQueryRaw<long>(
-                ClaimSql,
-                new NpgsqlParameter("reviewerId", reviewerId),
-                new NpgsqlParameter("leaseMinutes", LeaseMinutes))
-            .ToListAsync();
+        List<long> claimedRequestIds;
+
+        try
+        {
+            claimedRequestIds = await _db.Database
+                .SqlQueryRaw<long>(
+                    ClaimSql,
+                    new NpgsqlParameter("reviewerId", reviewerId),
+                    new NpgsqlParameter("leaseMinutes", LeaseMinutes))
+                .ToListAsync();
+        }
+        // The prefilter sees only its own snapshot, so two claims from one reviewer can both
+        // pass and lock different request rows that SKIP LOCKED cannot coordinate; only that
+        // reviewer-game backstop is an expected race here.
+        catch (PostgresException exception)
+            when (exception.SqlState == UniqueViolation
+                && exception.ConstraintName == ReviewerGameIndex)
+        {
+            return Result(ReviewClaimOutcome.AlreadyHasThatGame, reviewerId, null);
+        }
 
         if (claimedRequestIds.Count == 0)
         {
