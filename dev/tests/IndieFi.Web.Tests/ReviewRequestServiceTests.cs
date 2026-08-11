@@ -196,7 +196,6 @@ public sealed class ReviewRequestServiceTests
         {
             Email = $"{Guid.NewGuid():N}@example.test",
             PasswordHash = "test-password-hash",
-            CreditBalance = balance,
         };
 
         db.Users.Add(user);
@@ -211,8 +210,8 @@ public sealed class ReviewRequestServiceTests
             });
         }
 
-        // CreditPageTests sweeps every user and compares balance with ledger sum. Saving
-        // both sides together keeps this test data valid regardless of test execution order.
+        // CreditPageTests sweeps every user and compares balance with ledger sum. Writing
+        // only the ledger lets the database trigger derive valid test data in every order.
         await db.SaveChangesAsync();
         return user;
     }
