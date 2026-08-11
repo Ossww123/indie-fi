@@ -27,6 +27,8 @@ public class AppDbContext : DbContext
 
     public DbSet<ReviewRequest> ReviewRequests => Set<ReviewRequest>();
 
+    public DbSet<ReviewAssignment> ReviewAssignments => Set<ReviewAssignment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -264,10 +266,21 @@ public class AppDbContext : DbContext
                 .HasColumnName("spend_entry_id")
                 .IsRequired();
 
+            reviewRequest.Property(r => r.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .IsRequired()
+                .HasDefaultValue(ReviewRequestStatus.Queued);
+
             reviewRequest.Property(r => r.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
                 .ValueGeneratedOnAdd();
+
+            // A composite foreign key can only point at a unique column pair, so the assignment
+            // table needs this declared before it can reference the request and its game together.
+            // The pair is already unique because id alone is, but SQL still requires the constraint.
+            reviewRequest.HasAlternateKey(r => new { r.Id, r.GameId });
 
             reviewRequest.HasOne<Game>()
                 .WithMany()
@@ -287,6 +300,78 @@ public class AppDbContext : DbContext
             // One credit spend creates exactly one request, so the database rejects
             // a second request even if application code tries to create it.
             reviewRequest.HasIndex(r => r.SpendEntryId).IsUnique();
+
+            // Claiming reads the oldest waiting request. Holding only those rows keeps
+            // assigned and completed history from being walked past on every claim,
+            // which a filter on the primary key index could not avoid. Expressing the
+            // same condition without this column is impossible: a partial index cannot
+            // look at another table to ask whether an assignment exists.
+            reviewRequest.HasIndex(r => r.Id)
+                .HasFilter("status = 'Queued'")
+                .HasDatabaseName("IX_review_requests_queued");
+        });
+
+        modelBuilder.Entity<ReviewAssignment>(reviewAssignment =>
+        {
+            reviewAssignment.ToTable("review_assignments");
+
+            reviewAssignment.HasKey(a => a.Id);
+            reviewAssignment.Property(a => a.Id).HasColumnName("id");
+
+            reviewAssignment.Property(a => a.RequestId)
+                .HasColumnName("request_id")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.ReviewerId)
+                .HasColumnName("reviewer_id")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.LeasedUntil)
+                .HasColumnName("leased_until")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            // The game number now lives in two tables, so the database has to guarantee the copies
+            // cannot drift. Pointing the foreign key at the (id, game_id) pair means an assignment
+            // whose game does not match its own request is rejected, not merely unlikely.
+            reviewAssignment.HasOne<ReviewRequest>()
+                .WithMany()
+                .HasForeignKey(a => new { a.RequestId, a.GameId })
+                .HasPrincipalKey(r => new { r.Id, r.GameId })
+                .OnDelete(DeleteBehavior.Cascade);
+
+            reviewAssignment.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(a => a.ReviewerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One request may have at most one assignment that is still alive, so a second
+            // reviewer cannot be handed work that someone else already holds. Expired
+            // assignments are excluded because expiry returns the request to the queue.
+            reviewAssignment.HasIndex(a => a.RequestId)
+                .IsUnique()
+                .HasFilter("status <> 'Expired'");
+
+            // A reviewer may hold at most one assignment per game, so the same game cannot be
+            // reviewed twice for credit by one person. Expired assignments are excluded so someone
+            // who ran out of time is not shut out of that game forever, matching the filter the
+            // request-level unique index already uses.
+            reviewAssignment.HasIndex(a => new { a.ReviewerId, a.GameId })
+                .IsUnique()
+                .HasFilter("status <> 'Expired'");
         });
     }
 }

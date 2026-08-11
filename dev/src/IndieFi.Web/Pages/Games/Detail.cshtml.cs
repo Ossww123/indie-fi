@@ -68,7 +68,9 @@ public class DetailModel : PageModel
         IsOwner = User.TryGetUserId(out var ownerId) && game.OwnerId == ownerId;
 
         PendingRequestCount = await _db.ReviewRequests
-            .CountAsync(reviewRequest => reviewRequest.GameId == game.Id);
+            .CountAsync(reviewRequest =>
+                reviewRequest.GameId == game.Id
+                && reviewRequest.Status == ReviewRequestStatus.Queued);
 
         Drops = await _db.KeyDrops
             .Where(drop => drop.GameId == game.Id)

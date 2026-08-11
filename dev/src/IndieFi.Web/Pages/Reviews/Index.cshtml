@@ -1,0 +1,59 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "리뷰 작업";
+}
+
+<h1 class="h3 mb-4">리뷰 작업</h1>
+
+@if (Model.ClaimMessage is { } claimMessage)
+{
+    <div class="alert @(claimMessage.IsSuccess ? "alert-success" : "alert-warning")">
+        @claimMessage.Message
+    </div>
+}
+
+@if (Model.MyAssignments.Count > 0)
+{
+    <section class="mb-4">
+        <h2 class="h4">내가 받은 작업 @(Model.MyAssignments.Count)개</h2>
+        <div class="list-group">
+            @foreach (var assignment in Model.MyAssignments)
+            {
+                <div class="list-group-item">
+                    <div class="fw-bold">@assignment.GameTitle</div>
+                    <div class="text-muted">
+                        마감시각 @assignment.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+<form method="post" asp-page-handler="Claim" class="mb-4">
+    <button type="submit" class="btn btn-primary">리뷰 작업 받기</button>
+</form>
+
+<section>
+    <h2 class="h4">피드백을 기다리는 게임 @(Model.Items.Count)개</h2>
+
+    @if (Model.Items.Count == 0)
+    {
+        <div class="alert alert-secondary">지금은 기다리는 요청이 없습니다.</div>
+    }
+    else
+    {
+        <div class="list-group">
+            @foreach (var item in Model.Items)
+            {
+                <div class="list-group-item">
+                    <div class="fw-bold">@item.GameTitle</div>
+                    <div class="text-muted">
+                        @item.RequesterEmail · @item.RequestedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>

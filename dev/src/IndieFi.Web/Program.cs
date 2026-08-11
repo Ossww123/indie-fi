@@ -15,6 +15,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<KeyClaimService>();
 builder.Services.AddScoped<ReviewRequestService>();
+builder.Services.AddScoped<ReviewClaimService>();
 
 // Hashes passwords with PBKDF2. Used on its own, without the rest of Identity.
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
