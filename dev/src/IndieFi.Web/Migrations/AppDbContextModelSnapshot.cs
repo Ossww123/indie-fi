@@ -173,6 +173,49 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("key_grants", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.ReviewAssignment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset>("LeasedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("leased_until");
+
+                    b.Property<long>("RequestId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("request_id");
+
+                    b.Property<long>("ReviewerId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reviewer_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique()
+                        .HasFilter("status <> 'Expired'");
+
+                    b.HasIndex("ReviewerId");
+
+                    b.ToTable("review_assignments", (string)null);
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.ReviewRequest", b =>
                 {
                     b.Property<long>("Id")
@@ -200,9 +243,20 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("spend_entry_id");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Queued")
+                        .HasColumnName("status");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GameId");
+
+                    b.HasIndex("Id")
+                        .HasDatabaseName("IX_review_requests_queued")
+                        .HasFilter("status = 'Queued'");
 
                     b.HasIndex("RequesterId");
 
@@ -338,6 +392,21 @@ namespace IndieFi.Web.Migrations
                     b.HasOne("IndieFi.Web.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.ReviewAssignment", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.ReviewRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

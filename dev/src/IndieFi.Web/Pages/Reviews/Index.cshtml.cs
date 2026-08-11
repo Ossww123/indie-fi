@@ -1,6 +1,9 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Entities;
 using IndieFi.Web.Extensions;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,23 +12,64 @@ namespace IndieFi.Web.Pages.Reviews;
 [Authorize]
 public class IndexModel : PageModel
 {
-    private readonly AppDbContext _db;
+    public sealed record ClaimNotice(
+        ReviewClaimOutcome Outcome,
+        string Code,
+        string Message,
+        bool IsSuccess);
 
-    public IndexModel(AppDbContext db)
+    private static readonly ClaimNotice[] ClaimNotices =
+    [
+        new(
+            ReviewClaimOutcome.Claimed,
+            "claimed",
+            "리뷰 작업을 받았습니다. 마감시각까지 피드백을 제출해 주세요.",
+            true),
+        new(
+            ReviewClaimOutcome.NoneAvailable,
+            "none",
+            "지금은 받을 수 있는 리뷰 작업이 없습니다.",
+            false),
+    ];
+
+    private readonly AppDbContext _db;
+    private readonly ReviewClaimService _reviewClaimService;
+
+    public IndexModel(AppDbContext db, ReviewClaimService reviewClaimService)
     {
         _db = db;
+        _reviewClaimService = reviewClaimService;
     }
 
     public IReadOnlyList<ReviewListItem> Items { get; private set; } = [];
+    public IReadOnlyList<ReviewAssignmentListItem> MyAssignments { get; private set; } = [];
+    public ClaimNotice? ClaimMessage { get; private set; }
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(string? claim)
     {
+        // Query strings are user-controlled, so only known codes may select displayed text.
+        ClaimMessage = ClaimNotices
+            .FirstOrDefault(notice => notice.Code == claim);
+
         var userId = User.GetUserId();
+
+        MyAssignments = await (
+            from assignment in _db.ReviewAssignments
+            join reviewRequest in _db.ReviewRequests on assignment.RequestId equals reviewRequest.Id
+            join game in _db.Games on reviewRequest.GameId equals game.Id
+            where assignment.ReviewerId == userId
+            where assignment.Status == ReviewAssignmentStatus.Active
+            orderby assignment.LeasedUntil
+            select new ReviewAssignmentListItem(
+                game.Title,
+                assignment.LeasedUntil))
+            .ToListAsync();
 
         Items = await (
             from reviewRequest in _db.ReviewRequests
             join game in _db.Games on reviewRequest.GameId equals game.Id
             join requester in _db.Users on reviewRequest.RequesterId equals requester.Id
+            where reviewRequest.Status == ReviewRequestStatus.Queued
             // A developer cannot review their own game, so their requests are hidden.
             where reviewRequest.RequesterId != userId
             // Ordering by id rather than created_at settles requests that share a
@@ -38,8 +82,27 @@ public class IndexModel : PageModel
             .ToListAsync();
     }
 
+    public async Task<IActionResult> OnPostClaimAsync()
+    {
+        var userId = User.GetUserId();
+        var result = await _reviewClaimService.ClaimNextAsync(userId);
+        var claimNotice = ClaimNotices
+            .FirstOrDefault(notice => notice.Outcome == result.Outcome);
+
+        if (claimNotice is not null)
+        {
+            return RedirectToPage(new { claim = claimNotice.Code });
+        }
+
+        return RedirectToPage();
+    }
+
     public sealed record ReviewListItem(
         string GameTitle,
         string RequesterEmail,
         DateTimeOffset RequestedAt);
+
+    public sealed record ReviewAssignmentListItem(
+        string GameTitle,
+        DateTimeOffset LeasedUntil);
 }

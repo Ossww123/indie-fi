@@ -27,6 +27,8 @@ public class AppDbContext : DbContext
 
     public DbSet<ReviewRequest> ReviewRequests => Set<ReviewRequest>();
 
+    public DbSet<ReviewAssignment> ReviewAssignments => Set<ReviewAssignment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
@@ -264,6 +266,12 @@ public class AppDbContext : DbContext
                 .HasColumnName("spend_entry_id")
                 .IsRequired();
 
+            reviewRequest.Property(r => r.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .IsRequired()
+                .HasDefaultValue(ReviewRequestStatus.Queued);
+
             reviewRequest.Property(r => r.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
@@ -287,6 +295,62 @@ public class AppDbContext : DbContext
             // One credit spend creates exactly one request, so the database rejects
             // a second request even if application code tries to create it.
             reviewRequest.HasIndex(r => r.SpendEntryId).IsUnique();
+
+            // Claiming reads the oldest waiting request. Holding only those rows keeps
+            // assigned and completed history from being walked past on every claim,
+            // which a filter on the primary key index could not avoid. Expressing the
+            // same condition without this column is impossible: a partial index cannot
+            // look at another table to ask whether an assignment exists.
+            reviewRequest.HasIndex(r => r.Id)
+                .HasFilter("status = 'Queued'")
+                .HasDatabaseName("IX_review_requests_queued");
+        });
+
+        modelBuilder.Entity<ReviewAssignment>(reviewAssignment =>
+        {
+            reviewAssignment.ToTable("review_assignments");
+
+            reviewAssignment.HasKey(a => a.Id);
+            reviewAssignment.Property(a => a.Id).HasColumnName("id");
+
+            reviewAssignment.Property(a => a.RequestId)
+                .HasColumnName("request_id")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.ReviewerId)
+                .HasColumnName("reviewer_id")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.LeasedUntil)
+                .HasColumnName("leased_until")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            reviewAssignment.HasOne<ReviewRequest>()
+                .WithMany()
+                .HasForeignKey(a => a.RequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            reviewAssignment.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(a => a.ReviewerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One request may have at most one assignment that is still alive, so a second
+            // reviewer cannot be handed work that someone else already holds. Expired
+            // assignments are excluded because expiry returns the request to the queue.
+            reviewAssignment.HasIndex(a => a.RequestId)
+                .IsUnique()
+                .HasFilter("status <> 'Expired'");
         });
     }
 }

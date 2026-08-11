@@ -1,7 +1,7 @@
 namespace IndieFi.Web.Entities;
 
 /// <summary>
-/// A request for feedback on a game. Status is omitted because every request is pending until assignment exists.
+/// A request for feedback on a game.
 /// </summary>
 public class ReviewRequest
 {
@@ -17,6 +17,8 @@ public class ReviewRequest
     /// Lets EF fill SpendEntryId after inserting the ledger entry when both rows use one SaveChanges.
     /// </summary>
     public CreditLedgerEntry SpendEntry { get; set; } = null!;
+
+    public ReviewRequestStatus Status { get; set; } = ReviewRequestStatus.Queued;
 
     /// <summary>
     /// Set by the database (<c>now()</c>), never by the application.
