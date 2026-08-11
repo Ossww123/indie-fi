@@ -30,6 +30,11 @@ public class IndexModel : PageModel
             "none",
             "지금은 받을 수 있는 리뷰 작업이 없습니다.",
             false),
+        new(
+            ReviewClaimOutcome.AlreadyHasThatGame,
+            "duplicate",
+            "이미 받은 게임입니다. 받은 작업을 먼저 마쳐 주세요.",
+            false),
     ];
 
     private readonly AppDbContext _db;
