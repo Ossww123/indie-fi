@@ -33,7 +33,7 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
         }
 
         ReviewClaimResult result;
@@ -67,13 +67,13 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 3);
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 3);
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
 
             for (var index = 0; index < 3; index++)
             {
-                requestIds.Add((await CreateQueuedRequestAsync(
+                requestIds.Add((await ReviewTestData.CreateQueuedRequestAsync(
                     arrangeDb,
                     requester.Id,
                     game.Id)).Id);
@@ -110,10 +110,10 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var reviewer = await CreateUserWithCreditAsync(arrangeDb, balance: 1);
+            var reviewer = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 1);
             reviewerId = reviewer.Id;
-            var game = await CreateGameAsync(arrangeDb, reviewerId);
-            requestId = (await CreateQueuedRequestAsync(arrangeDb, reviewerId, game.Id)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, reviewerId);
+            requestId = (await ReviewTestData.CreateQueuedRequestAsync(arrangeDb, reviewerId, game.Id)).Id;
         }
 
         ReviewClaimResult result;
@@ -150,10 +150,10 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 1);
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
-            requestId = (await CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 1);
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            requestId = (await ReviewTestData.CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
         }
 
         var claimStartedAt = DateTimeOffset.UtcNow;
@@ -200,13 +200,13 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 1);
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
-            requestId = (await CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 1);
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            requestId = (await ReviewTestData.CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
 
             for (var index = 0; index < ReviewerCount; index++)
             {
-                reviewerIds.Add((await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id);
+                reviewerIds.Add((await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id);
             }
         }
 
@@ -257,14 +257,14 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
-            firstRequestId = (await CreateQueuedRequestAsync(
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 game.Id)).Id;
-            secondRequestId = (await CreateQueuedRequestAsync(
+            secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 game.Id)).Id;
@@ -367,16 +367,16 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
-            firstReviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            secondReviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var firstGame = await CreateGameAsync(arrangeDb, requester.Id);
-            var secondGame = await CreateGameAsync(arrangeDb, requester.Id);
-            firstRequestId = (await CreateQueuedRequestAsync(
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            firstReviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            secondReviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var firstGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            var secondGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 firstGame.Id)).Id;
-            secondRequestId = (await CreateQueuedRequestAsync(
+            secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 secondGame.Id)).Id;
@@ -424,11 +424,11 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
-            firstRequestId = (await CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
-            secondRequestId = (await CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
+            secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(arrangeDb, requester.Id, game.Id)).Id;
         }
 
         // Firing concurrent claims does not reliably make them overlap: each one finishes in
@@ -481,19 +481,19 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 3);
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var firstGame = await CreateGameAsync(arrangeDb, requester.Id);
-            var secondGame = await CreateGameAsync(arrangeDb, requester.Id);
-            firstGameRequestId = (await CreateQueuedRequestAsync(
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 3);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var firstGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            var secondGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            firstGameRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 firstGame.Id)).Id;
-            skippedRequestId = (await CreateQueuedRequestAsync(
+            skippedRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 firstGame.Id)).Id;
-            secondGameRequestId = (await CreateQueuedRequestAsync(
+            secondGameRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 secondGame.Id)).Id;
@@ -544,14 +544,14 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
-            firstRequestId = (await CreateQueuedRequestAsync(
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 game.Id)).Id;
-            secondRequestId = (await CreateQueuedRequestAsync(
+            secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 game.Id)).Id;
@@ -600,14 +600,14 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
-            firstRequestId = (await CreateQueuedRequestAsync(
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 game.Id)).Id;
-            secondRequestId = (await CreateQueuedRequestAsync(
+            secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 game.Id)).Id;
@@ -655,15 +655,15 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var game = await CreateGameAsync(arrangeDb, requester.Id);
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
             gameId = game.Id;
-            firstRequestId = (await CreateQueuedRequestAsync(
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 gameId)).Id;
-            secondRequestId = (await CreateQueuedRequestAsync(
+            secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 gameId)).Id;
@@ -707,13 +707,13 @@ public sealed class ReviewClaimServiceTests
             // their requests through the cascade.
             await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
 
-            var requester = await CreateUserWithCreditAsync(arrangeDb, balance: 1);
-            reviewerId = (await CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
-            var firstGame = await CreateGameAsync(arrangeDb, requester.Id);
-            var secondGame = await CreateGameAsync(arrangeDb, requester.Id);
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 1);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0)).Id;
+            var firstGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            var secondGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
             firstGameId = firstGame.Id;
             secondGameId = secondGame.Id;
-            requestId = (await CreateQueuedRequestAsync(
+            requestId = (await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 requester.Id,
                 firstGameId)).Id;
@@ -738,67 +738,4 @@ public sealed class ReviewClaimServiceTests
     // The service only uses its logger for outcome records; these tests assert database state.
     private static ReviewClaimService NewService(AppDbContext db) =>
         new(db, NullLogger<ReviewClaimService>.Instance);
-
-    private static async Task<User> CreateUserWithCreditAsync(AppDbContext db, int balance)
-    {
-        var user = new User
-        {
-            Email = $"{Guid.NewGuid():N}@example.test",
-            PasswordHash = "test-password-hash",
-        };
-
-        db.Users.Add(user);
-
-        if (balance > 0)
-        {
-            db.CreditLedgerEntries.Add(new CreditLedgerEntry
-            {
-                User = user,
-                Kind = CreditEntryKind.Grant,
-                Delta = balance,
-            });
-        }
-
-        // Credit balance is derived by a database trigger, so ledger-only setup preserves the
-        // invariant for tests that reconcile every user's cached balance with ledger history.
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        return user;
-    }
-
-    private static async Task<Game> CreateGameAsync(AppDbContext db, long ownerId)
-    {
-        var game = new Game
-        {
-            OwnerId = ownerId,
-            Title = $"Test Game {Guid.NewGuid():N}",
-        };
-
-        db.Games.Add(game);
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        return game;
-    }
-
-    private static async Task<ReviewRequest> CreateQueuedRequestAsync(
-        AppDbContext db,
-        long requesterId,
-        long gameId)
-    {
-        var spendEntry = new CreditLedgerEntry
-        {
-            UserId = requesterId,
-            Kind = CreditEntryKind.Spend,
-            Delta = -1,
-        };
-        var request = new ReviewRequest
-        {
-            GameId = gameId,
-            RequesterId = requesterId,
-            SpendEntry = spendEntry,
-        };
-
-        db.CreditLedgerEntries.Add(spendEntry);
-        db.ReviewRequests.Add(request);
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        return request;
-    }
 }

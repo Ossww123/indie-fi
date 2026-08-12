@@ -57,6 +57,42 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("credit_ledger_entries", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.FeedbackSubmission", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AssignmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("assignment_id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId")
+                        .IsUnique();
+
+                    b.ToTable("feedback_submissions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_feedback_submissions_body_long_enough", "length(btrim(body)) >= 30");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.Game", b =>
                 {
                     b.Property<long>("Id")
@@ -357,6 +393,15 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.FeedbackSubmission", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.ReviewAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.Game", b =>
