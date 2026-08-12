@@ -1,0 +1,29 @@
+@page "{id:long}"
+@model FeedbackModel
+@{
+    ViewData["Title"] = $"{Model.GameTitle} - 받은 피드백";
+}
+
+<h1 class="h3 mb-4">@Model.GameTitle</h1>
+
+<h2 class="h5">받은 피드백</h2>
+@if (Model.Items.Count == 0)
+{
+    <div class="alert alert-secondary">아직 받은 피드백이 없습니다.</div>
+}
+else
+{
+    <div class="list-group mb-3">
+        @foreach (var item in Model.Items)
+        {
+            <div class="list-group-item">
+                <div class="text-muted">
+                    @item.ReviewerEmail · @item.SubmittedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                </div>
+                <div class="mt-2">@item.Body</div>
+            </div>
+        }
+    </div>
+}
+
+<a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="btn btn-link px-0">게임 상세로 돌아가기</a>
