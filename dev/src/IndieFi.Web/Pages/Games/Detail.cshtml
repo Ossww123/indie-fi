@@ -46,10 +46,42 @@ else
     <p class="text-muted">(소개 없음)</p>
 }
 
-<p class="text-muted">대기 중인 피드백 요청 @(Model.PendingRequestCount)개</p>
 @if (Model.IsOwner)
 {
+    <h2 class="h5 mt-4">피드백 요청</h2>
+    @if (Model.Requests.Count == 0)
+    {
+        <div class="alert alert-secondary">등록한 피드백 요청 없음</div>
+    }
+    else
+    {
+        <div class="list-group mb-3">
+            @foreach (var request in Model.Requests)
+            {
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>
+                        @request.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        · @request.StatusText
+                    </span>
+                    @* Hiding this button is only UX; the service enforces ownership and status. *@
+                    @if (request.IsCancellable)
+                    {
+                        <form method="post"
+                              asp-page-handler="CancelRequest"
+                              asp-route-id="@Model.Game.Id"
+                              asp-route-requestId="@request.Id">
+                            <button type="submit" class="btn btn-outline-danger btn-sm">취소</button>
+                        </form>
+                    }
+                </div>
+            }
+        </div>
+    }
     <p><a asp-page="/Games/Feedback" asp-route-id="@Model.Game.Id">받은 피드백 보기</a></p>
+}
+else
+{
+    <p class="text-muted">대기 중인 피드백 요청 @(Model.PendingRequestCount)개</p>
 }
 
 <h2 class="h5 mt-4">예약된 드롭</h2>

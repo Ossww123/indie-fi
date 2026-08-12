@@ -18,6 +18,10 @@ public class ReviewRequest
     /// </summary>
     public CreditLedgerEntry SpendEntry { get; set; } = null!;
 
+    public long? RefundEntryId { get; set; }
+
+    public CreditLedgerEntry? RefundEntry { get; set; }
+
     public ReviewRequestStatus Status { get; set; } = ReviewRequestStatus.Queued;
 
     /// <summary>

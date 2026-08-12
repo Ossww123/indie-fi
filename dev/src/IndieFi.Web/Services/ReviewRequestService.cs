@@ -12,6 +12,8 @@ public enum ReviewRequestOutcome
     InsufficientCredit,
     GameNotFound,
     NotOwner,
+    Cancelled,
+    NotCancellable,
 }
 
 public record ReviewRequestResult(ReviewRequestOutcome Outcome);
@@ -22,6 +24,33 @@ public class ReviewRequestService
     private const string CheckViolation = "23514";
 
     private const int RequestCost = 1;
+
+    // FOR UPDATE is the cancellation linearization point: a competing claim must finish before
+    // the status predicate is rechecked. The refund depends on the locked row, and the final
+    // update depends on that refund, so every rejected cancellation leaves both tables untouched.
+    // The request is updated only once in this statement because data-changing CTEs share the
+    // statement's original snapshot. The ledger trigger maintains users.credit_balance.
+    private const string CancelSql = """
+        WITH locked AS (
+            SELECT id, requester_id
+              FROM review_requests
+             WHERE id = @requestId
+               AND requester_id = @userId
+               AND status = 'Queued'
+             FOR UPDATE
+        ),
+        refunded AS (
+            INSERT INTO credit_ledger_entries (user_id, kind, delta)
+            SELECT requester_id, 'Refund', 1
+              FROM locked
+            RETURNING id
+        )
+        UPDATE review_requests
+           SET status = 'Cancelled', refund_entry_id = refunded.id
+          FROM refunded
+         WHERE review_requests.id = @requestId
+        RETURNING review_requests.id AS "Value"
+        """;
 
     private readonly AppDbContext _db;
     private readonly ILogger<ReviewRequestService> _logger;
@@ -81,6 +110,25 @@ public class ReviewRequestService
         }
 
         return Result(ReviewRequestOutcome.Queued, gameId, requesterId);
+    }
+
+    public async Task<ReviewRequestResult> CancelAsync(long requestId, long userId)
+    {
+        var cancelledRequestIds = await _db.Database
+            .SqlQueryRaw<long>(
+                CancelSql,
+                new NpgsqlParameter("requestId", requestId),
+                new NpgsqlParameter("userId", userId))
+            .ToListAsync();
+
+        var outcome = cancelledRequestIds.Count == 0
+            ? ReviewRequestOutcome.NotCancellable
+            : ReviewRequestOutcome.Cancelled;
+
+        _logger.LogInformation(
+            "ReviewRequest cancellation outcome={Outcome} request={RequestId} user={UserId}",
+            outcome, requestId, userId);
+        return new ReviewRequestResult(outcome);
     }
 
     private ReviewRequestResult Result(

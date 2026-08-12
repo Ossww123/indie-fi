@@ -268,6 +268,9 @@ public class AppDbContext : DbContext
                 .HasColumnName("spend_entry_id")
                 .IsRequired();
 
+            reviewRequest.Property(r => r.RefundEntryId)
+                .HasColumnName("refund_entry_id");
+
             reviewRequest.Property(r => r.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
@@ -299,9 +302,17 @@ public class AppDbContext : DbContext
                 .HasForeignKey(r => r.SpendEntryId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            reviewRequest.HasOne(r => r.RefundEntry)
+                .WithMany()
+                .HasForeignKey(r => r.RefundEntryId);
+
             // One credit spend creates exactly one request, so the database rejects
             // a second request even if application code tries to create it.
             reviewRequest.HasIndex(r => r.SpendEntryId).IsUnique();
+
+            // One refund ledger row can settle only one request, so the database rejects
+            // accidental reuse even if a future write path bypasses the cancellation service.
+            reviewRequest.HasIndex(r => r.RefundEntryId).IsUnique();
 
             // Claiming reads the oldest waiting request. Holding only those rows keeps
             // assigned and completed history from being walked past on every claim,
