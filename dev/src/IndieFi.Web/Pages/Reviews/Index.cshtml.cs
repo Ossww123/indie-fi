@@ -62,27 +62,49 @@ public class IndexModel : PageModel
             false),
     ];
 
+    public sealed record SweepNotice(string Message, bool IsSuccess);
+
+    private const string SweptCode = "swept";
+
     private readonly AppDbContext _db;
     private readonly ReviewClaimService _reviewClaimService;
+    private readonly ReviewLeaseSweepService _reviewLeaseSweepService;
 
-    public IndexModel(AppDbContext db, ReviewClaimService reviewClaimService)
+    public IndexModel(
+        AppDbContext db,
+        ReviewClaimService reviewClaimService,
+        ReviewLeaseSweepService reviewLeaseSweepService)
     {
         _db = db;
         _reviewClaimService = reviewClaimService;
+        _reviewLeaseSweepService = reviewLeaseSweepService;
     }
 
     public IReadOnlyList<ReviewListItem> Items { get; private set; } = [];
     public IReadOnlyList<ReviewAssignmentListItem> MyAssignments { get; private set; } = [];
     public ClaimNotice? ClaimMessage { get; private set; }
     public SubmitNotice? SubmitMessage { get; private set; }
+    public SweepNotice? SweepMessage { get; private set; }
 
-    public async Task OnGetAsync(string? claim, string? submit)
+    public async Task OnGetAsync(
+        string? claim,
+        string? submit,
+        string? sweep,
+        int? count)
     {
         // Query strings are user-controlled, so only known codes may select displayed text.
         ClaimMessage = ClaimNotices
             .FirstOrDefault(notice => notice.Code == claim);
         SubmitMessage = SubmitNotices
             .FirstOrDefault(notice => notice.Code == submit);
+        // The swept count reaches the page as an int and is rendered as a number, so unlike
+        // the codes above it cannot select or inject displayed text.
+        if (sweep == SweptCode && count is int expiredCount and >= 0)
+        {
+            SweepMessage = expiredCount > 0
+                ? new SweepNotice($"만료된 작업 {expiredCount}개를 큐로 되돌렸습니다.", true)
+                : new SweepNotice("정리할 만료 작업이 없습니다.", false);
+        }
 
         var userId = User.GetUserId();
 
@@ -129,6 +151,13 @@ public class IndexModel : PageModel
         }
 
         return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostSweepAsync()
+    {
+        var result = await _reviewLeaseSweepService.SweepAsync();
+
+        return RedirectToPage(new { sweep = SweptCode, count = result.ExpiredCount });
     }
 
     public sealed record ReviewListItem(
