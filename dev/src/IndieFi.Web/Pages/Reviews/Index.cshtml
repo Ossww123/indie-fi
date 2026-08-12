@@ -20,6 +20,13 @@
     </div>
 }
 
+@if (Model.SweepMessage is { } sweepMessage)
+{
+    <div class="alert @(sweepMessage.IsSuccess ? "alert-success" : "alert-secondary")">
+        @sweepMessage.Message
+    </div>
+}
+
 @if (Model.MyAssignments.Count > 0)
 {
     <section class="mb-4">
@@ -49,8 +56,12 @@
     </section>
 }
 
-<form method="post" asp-page-handler="Claim" class="mb-4">
+<form method="post" asp-page-handler="Claim" class="mb-2">
     <button type="submit" class="btn btn-primary">리뷰 작업 받기</button>
+</form>
+
+<form method="post" asp-page-handler="Sweep" class="mb-4">
+    <button type="submit" class="btn btn-secondary">마감 지난 작업 정리</button>
 </form>
 
 <section>

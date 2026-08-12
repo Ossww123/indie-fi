@@ -25,7 +25,7 @@ public sealed class FeedbackSubmissionServiceTests
     public async Task SubmitAsync_WhenTheReviewerOwnsALiveAssignment_CompletesTheAssignmentAndTheRequest()
     {
         const string Body = "The controls feel responsive and predictable.";
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
 
         FeedbackSubmissionResult result;
         await using (var serviceDb = _fixture.NewDbContext())
@@ -60,7 +60,7 @@ public sealed class FeedbackSubmissionServiceTests
     public async Task SubmitAsync_WhenTheSubmissionSucceeds_EarnsExactlyOneCredit()
     {
         const string Body = "The difficulty curve feels fair and rewarding.";
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
         int balanceBefore;
 
         await using (var beforeDb = _fixture.NewDbContext())
@@ -99,7 +99,7 @@ public sealed class FeedbackSubmissionServiceTests
     [Fact]
     public async Task SubmitAsync_WhenTheAssignmentBelongsToSomeoneElse_ReportsNotSubmittable()
     {
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
         long otherReviewerId;
 
         await using (var arrangeDb = _fixture.NewDbContext())
@@ -140,7 +140,7 @@ public sealed class FeedbackSubmissionServiceTests
     [Fact]
     public async Task SubmitAsync_WhenTheSubmissionIsRefused_EarnsNothing()
     {
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
         long otherReviewerId;
         int balanceBefore;
 
@@ -185,7 +185,7 @@ public sealed class FeedbackSubmissionServiceTests
     [Fact]
     public async Task SubmitAsync_WhenTheLeaseHasExpired_ReportsLeaseExpired()
     {
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
 
         await using (var expirationDb = _fixture.NewDbContext())
         {
@@ -223,7 +223,7 @@ public sealed class FeedbackSubmissionServiceTests
     public async Task SubmitAsync_WhenCalledTwice_TheSecondIsRefusedAndTheFirstFeedbackStays()
     {
         const string FirstBody = "Keep the first submission exactly as it was.";
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
 
         FeedbackSubmissionResult firstResult;
         FeedbackSubmissionResult secondResult;
@@ -254,7 +254,7 @@ public sealed class FeedbackSubmissionServiceTests
     [Fact]
     public async Task SubmittingTwiceForOneAssignment_IsRefusedByTheDatabase()
     {
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
 
         await using (var serviceDb = _fixture.NewDbContext())
         {
@@ -285,7 +285,7 @@ public sealed class FeedbackSubmissionServiceTests
     [Fact]
     public async Task SubmittingFeedbackShorterThanTheMinimum_IsRefusedByTheDatabase()
     {
-        var assignment = await CreateLiveAssignmentAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
         await using var attemptDb = _fixture.NewDbContext();
 
         var shortBodyException = await Assert.ThrowsAsync<PostgresException>(async () =>
@@ -319,45 +319,6 @@ public sealed class FeedbackSubmissionServiceTests
         Assert.Equal(CheckViolation, whitespaceBodyException.SqlState);
     }
 
-    private async Task<LiveAssignment> CreateLiveAssignmentAsync()
-    {
-        long reviewerId;
-        long requestId;
-
-        await using (var arrangeDb = _fixture.NewDbContext())
-        {
-            // Claiming reads the whole queue, not one game, so leftovers from other tests would
-            // be handed out instead of the rows this test arranged. Assignments disappear with
-            // their requests through the cascade.
-            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
-
-            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 1);
-            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(
-                arrangeDb,
-                balance: 0)).Id;
-            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
-            requestId = (await ReviewTestData.CreateQueuedRequestAsync(
-                arrangeDb,
-                requester.Id,
-                game.Id)).Id;
-        }
-
-        await using var claimDb = _fixture.NewDbContext();
-        var claimResult = await new ReviewClaimService(
-            claimDb,
-            NullLogger<ReviewClaimService>.Instance).ClaimNextAsync(reviewerId);
-        var assignmentId = await claimDb.ReviewAssignments
-            .Where(item => item.RequestId == requestId)
-            .Select(item => item.Id)
-            .SingleAsync(TestContext.Current.CancellationToken);
-
-        Assert.Equal(ReviewClaimOutcome.Claimed, claimResult.Outcome);
-        Assert.Equal(requestId, claimResult.RequestId);
-        return new LiveAssignment(assignmentId, requestId, reviewerId);
-    }
-
     private static FeedbackSubmissionService NewSubmissionService(AppDbContext db) =>
         new(db, NullLogger<FeedbackSubmissionService>.Instance);
-
-    private sealed record LiveAssignment(long AssignmentId, long RequestId, long ReviewerId);
 }
