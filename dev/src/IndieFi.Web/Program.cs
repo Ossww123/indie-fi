@@ -18,6 +18,14 @@ builder.Services.AddScoped<ReviewRequestService>();
 builder.Services.AddScoped<ReviewClaimService>();
 builder.Services.AddScoped<FeedbackSubmissionService>();
 builder.Services.AddScoped<ReviewLeaseSweepService>();
+// The sweep runs on its own so a missed deadline frees the request even if nobody
+// presses the button on the review page.
+builder.Services.AddHostedService(provider => new ReviewLeaseSweepWorker(
+    // A hosted service lives as long as the app, so it takes the scope factory rather than
+    // the sweep service: resolving that scoped service here is refused by the container.
+    provider.GetRequiredService<IServiceScopeFactory>(),
+    provider.GetRequiredService<ILogger<ReviewLeaseSweepWorker>>(),
+    TimeSpan.FromMinutes(1)));
 
 // Hashes passwords with PBKDF2. Used on its own, without the rest of Identity.
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
