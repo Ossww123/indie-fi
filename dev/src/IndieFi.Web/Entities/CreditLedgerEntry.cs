@@ -30,4 +30,5 @@ public enum CreditEntryKind
     Grant,
     Spend,
     Earn,
+    Refund,
 }

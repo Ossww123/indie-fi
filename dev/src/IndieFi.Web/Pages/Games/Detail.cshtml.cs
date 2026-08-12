@@ -30,6 +30,16 @@ public class DetailModel : PageModel
             "nocredit",
             "크레딧이 부족합니다. 다른 개발자의 게임에 피드백을 주면 크레딧을 벌 수 있습니다.",
             false),
+        new(
+            ReviewRequestOutcome.Cancelled,
+            "cancelled",
+            "피드백 요청을 취소했습니다. 크레딧 1을 돌려받았습니다.",
+            true),
+        new(
+            ReviewRequestOutcome.NotCancellable,
+            "notcancellable",
+            "이미 다른 개발자가 받아 갔거나 취소된 요청입니다.",
+            false),
     ];
 
     private readonly AppDbContext _db;
@@ -45,6 +55,7 @@ public class DetailModel : PageModel
     public bool IsOwner { get; private set; }
     public List<DropListItem> Drops { get; private set; } = [];
     public int PendingRequestCount { get; private set; }
+    public List<RequestListItem> Requests { get; private set; } = [];
     public RequestNotice? RequestMessage { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(long id, string? request)
@@ -67,10 +78,26 @@ public class DetailModel : PageModel
         Game = game;
         IsOwner = User.TryGetUserId(out var ownerId) && game.OwnerId == ownerId;
 
-        PendingRequestCount = await _db.ReviewRequests
-            .CountAsync(reviewRequest =>
-                reviewRequest.GameId == game.Id
-                && reviewRequest.Status == ReviewRequestStatus.Queued);
+        if (IsOwner)
+        {
+            Requests = await _db.ReviewRequests
+                .Where(reviewRequest =>
+                    reviewRequest.GameId == game.Id
+                    && reviewRequest.Status != ReviewRequestStatus.Cancelled)
+                .OrderByDescending(reviewRequest => reviewRequest.Id)
+                .Select(reviewRequest => new RequestListItem(
+                    reviewRequest.Id,
+                    reviewRequest.CreatedAt,
+                    reviewRequest.Status))
+                .ToListAsync();
+        }
+        else
+        {
+            PendingRequestCount = await _db.ReviewRequests
+                .CountAsync(reviewRequest =>
+                    reviewRequest.GameId == game.Id
+                    && reviewRequest.Status == ReviewRequestStatus.Queued);
+        }
 
         Drops = await _db.KeyDrops
             .Where(drop => drop.GameId == game.Id)
@@ -112,6 +139,38 @@ public class DetailModel : PageModel
         }
 
         return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostCancelRequestAsync(long id, long requestId)
+    {
+        // The page itself stays public, so cancellation is guarded here instead.
+        // [Authorize] cannot do it: Razor Pages ignores the attribute on a handler.
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Challenge();
+        }
+
+        var result = await _reviewRequestService.CancelAsync(requestId, User.GetUserId());
+        var requestNotice = RequestNotices
+            .Single(notice => notice.Outcome == result.Outcome);
+
+        return RedirectToPage(new { id, request = requestNotice.Code });
+    }
+
+    public sealed record RequestListItem(
+        long Id,
+        DateTimeOffset CreatedAt,
+        ReviewRequestStatus Status)
+    {
+        public bool IsCancellable => Status == ReviewRequestStatus.Queued;
+
+        public string StatusText => Status switch
+        {
+            ReviewRequestStatus.Queued => "대기 중",
+            ReviewRequestStatus.Assigned => "배정됨",
+            ReviewRequestStatus.Completed => "완료",
+            _ => Status.ToString(),
+        };
     }
 
     public sealed record DropListItem(long Id, DateTimeOffset OpensAt)

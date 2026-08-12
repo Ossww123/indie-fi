@@ -279,6 +279,10 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("game_id");
 
+                    b.Property<long?>("RefundEntryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("refund_entry_id");
+
                     b.Property<long>("RequesterId")
                         .HasColumnType("bigint")
                         .HasColumnName("requester_id");
@@ -301,6 +305,9 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("Id")
                         .HasDatabaseName("IX_review_requests_queued")
                         .HasFilter("status = 'Queued'");
+
+                    b.HasIndex("RefundEntryId")
+                        .IsUnique();
 
                     b.HasIndex("RequesterId");
 
@@ -473,6 +480,10 @@ namespace IndieFi.Web.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("IndieFi.Web.Entities.CreditLedgerEntry", "RefundEntry")
+                        .WithMany()
+                        .HasForeignKey("RefundEntryId");
+
                     b.HasOne("IndieFi.Web.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("RequesterId")
@@ -484,6 +495,8 @@ namespace IndieFi.Web.Migrations
                         .HasForeignKey("SpendEntryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("RefundEntry");
 
                     b.Navigation("SpendEntry");
                 });
