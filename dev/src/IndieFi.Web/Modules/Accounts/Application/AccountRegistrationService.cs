@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
+using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
-using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;

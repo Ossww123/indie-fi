@@ -1,7 +1,7 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.KeyDistributions.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;

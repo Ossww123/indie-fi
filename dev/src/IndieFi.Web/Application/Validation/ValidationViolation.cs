@@ -1,4 +1,4 @@
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Application.Validation;
 
 /// <summary>
 /// A single broken input rule. Services return every violation they find so a caller
