@@ -14,25 +14,17 @@ public class SignupModel : PageModel
         _accountRegistrationService = accountRegistrationService;
     }
 
+    // No validation annotations here — see Games/New for why the service owns the rules.
+    // [DataType] stays because it only tells the browser to mask the field.
     [BindProperty]
-    [Required(ErrorMessage = "이메일을 입력해 주세요.")]
-    [EmailAddress(ErrorMessage = "이메일 형식이 아닙니다.")]
-    [StringLength(320, ErrorMessage = "이메일이 너무 깁니다.")]
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "비밀번호를 입력해 주세요.")]
-    [StringLength(128, MinimumLength = 8, ErrorMessage = "비밀번호는 8자 이상이어야 합니다.")]
     [DataType(DataType.Password)]
-    public string Password { get; set; } = string.Empty;
+    public string? Password { get; set; }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (!ModelState.IsValid)
-        {
-            return Page();
-        }
-
         var result = await _accountRegistrationService.RegisterAsync(Email, Password);
 
         if (result.Outcome == AccountRegistrationOutcome.EmailAlreadyRegistered)

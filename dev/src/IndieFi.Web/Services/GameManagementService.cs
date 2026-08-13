@@ -45,7 +45,7 @@ public sealed class GameManagementService
 
     public async Task<CreateGameResult> CreateAsync(
         long ownerId,
-        string title,
+        string? title,
         string? description)
     {
         var violations = Validate(title, description);
@@ -57,7 +57,7 @@ public sealed class GameManagementService
         var game = new Game
         {
             OwnerId = ownerId,
-            Title = title.Trim(),
+            Title = title!.Trim(),
             Description = NormalizeDescription(description),
         };
 
@@ -74,7 +74,7 @@ public sealed class GameManagementService
     public async Task<UpdateGameResult> UpdateAsync(
         long gameId,
         long ownerId,
-        string title,
+        string? title,
         string? description)
     {
         var game = await _db.Games.FindAsync(gameId);
@@ -92,7 +92,7 @@ public sealed class GameManagementService
             return new UpdateGameResult(UpdateGameOutcome.Invalid, violations);
         }
 
-        game.Title = title.Trim();
+        game.Title = title!.Trim();
         game.Description = NormalizeDescription(description);
         await _db.SaveChangesAsync();
 
@@ -104,7 +104,7 @@ public sealed class GameManagementService
     /// declares them as form annotations for immediate feedback, but the database
     /// only rejects a null title, so a blank one would otherwise be stored.
     /// </summary>
-    private static List<ValidationViolation> Validate(string title, string? description)
+    private static List<ValidationViolation> Validate(string? title, string? description)
     {
         var violations = new List<ValidationViolation>();
 

@@ -50,8 +50,8 @@ public sealed class AccountRegistrationService
     }
 
     public async Task<AccountRegistrationResult> RegisterAsync(
-        string email,
-        string password)
+        string? email,
+        string? password)
     {
         var violations = Validate(email, password);
         if (violations.Count > 0)
@@ -61,8 +61,8 @@ public sealed class AccountRegistrationService
                 violations);
         }
 
-        var user = new User { Email = email };
-        user.PasswordHash = _passwordHasher.HashPassword(user, password);
+        var user = new User { Email = email! };
+        user.PasswordHash = _passwordHasher.HashPassword(user, password!);
 
         // The database trigger derives the balance from the ledger. Because application
         // code writes only the ledger, there is no code path that can make them diverge.
@@ -102,7 +102,7 @@ public sealed class AccountRegistrationService
     /// as form annotations for immediate feedback, but nothing below this method checks
     /// the password length or the shape of the address.
     /// </summary>
-    private static List<ValidationViolation> Validate(string email, string password)
+    private static List<ValidationViolation> Validate(string? email, string? password)
     {
         var violations = new List<ValidationViolation>();
 

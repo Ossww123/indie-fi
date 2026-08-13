@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Services;
@@ -25,13 +24,11 @@ public class EditModel : PageModel
         _gameManagementService = gameManagementService;
     }
 
+    // No validation annotations here — see Games/New for why the service owns the rules.
     [BindProperty]
-    [Required(ErrorMessage = "게임 제목을 입력해 주세요.")]
-    [StringLength(200, ErrorMessage = "제목이 너무 깁니다.")]
-    public string Title { get; set; } = string.Empty;
+    public string? Title { get; set; }
 
     [BindProperty]
-    [StringLength(2000, ErrorMessage = "소개가 너무 깁니다.")]
     public string? Description { get; set; }
 
     public async Task<IActionResult> OnGetAsync(long id)
@@ -54,11 +51,6 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnPostAsync(long id)
     {
-        if (!ModelState.IsValid)
-        {
-            return Page();
-        }
-
         var ownerId = _currentUser.GetRequiredUserId();
         var result = await _gameManagementService.UpdateAsync(
             id,

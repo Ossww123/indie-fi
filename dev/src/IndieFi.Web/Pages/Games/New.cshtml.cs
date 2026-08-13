@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -21,22 +20,17 @@ public class NewModel : PageModel
         _gameManagementService = gameManagementService;
     }
 
+    // No validation annotations here: the service decides whether the input is usable.
+    // Duplicating a rule as an annotation would fail model binding first and return
+    // before the service ever runs, hiding every other problem with the form.
     [BindProperty]
-    [Required(ErrorMessage = "게임 제목을 입력해 주세요.")]
-    [StringLength(200, ErrorMessage = "제목이 너무 깁니다.")]
-    public string Title { get; set; } = string.Empty;
+    public string? Title { get; set; }
 
     [BindProperty]
-    [StringLength(2000, ErrorMessage = "소개가 너무 깁니다.")]
     public string? Description { get; set; }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (!ModelState.IsValid)
-        {
-            return Page();
-        }
-
         // The owner is taken from the signed cookie, never from the form;
         // otherwise anyone could register a game under someone else's id.
         var ownerId = _currentUser.GetRequiredUserId();
