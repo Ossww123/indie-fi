@@ -3,7 +3,7 @@ using IndieFi.Web.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.Accounts.Application;
 
 public enum AccountAuthenticationOutcome
 {

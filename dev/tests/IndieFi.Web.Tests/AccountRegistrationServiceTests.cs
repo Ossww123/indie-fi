@@ -1,5 +1,5 @@
 using IndieFi.Web.Entities;
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Xunit;

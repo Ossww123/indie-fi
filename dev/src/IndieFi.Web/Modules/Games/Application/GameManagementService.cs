@@ -1,7 +1,8 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Services;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.Games.Application;
 
 public enum CreateGameOutcome
 {

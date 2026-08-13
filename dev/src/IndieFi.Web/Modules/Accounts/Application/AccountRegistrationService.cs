@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.Accounts.Application;
 
 public enum AccountRegistrationOutcome
 {
