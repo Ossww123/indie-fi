@@ -9,17 +9,22 @@ public enum ScheduleKeyDropOutcome
     Scheduled,
     GameNotFound,
     NotOwner,
-    NoKeys,
-    OpenTimeNotFuture,
+    Invalid,
 }
 
 public sealed record ScheduleKeyDropResult(
     ScheduleKeyDropOutcome Outcome,
+    IReadOnlyList<ValidationViolation> Violations,
     long? KeyDropId = null,
     int KeyCount = 0);
 
 public sealed class KeyDropSchedulingService
 {
+    public const string OpensAtField = "OpensAt";
+    public const string KeysField = "KeysText";
+
+    private static readonly IReadOnlyList<ValidationViolation> NoViolations = [];
+
     private readonly AppDbContext _db;
 
     public KeyDropSchedulingService(AppDbContext db)
@@ -40,23 +45,41 @@ public sealed class KeyDropSchedulingService
 
         if (gameOwnerId is null)
         {
-            return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.GameNotFound);
+            return new ScheduleKeyDropResult(
+                ScheduleKeyDropOutcome.GameNotFound,
+                NoViolations);
         }
 
         if (gameOwnerId != ownerId)
         {
-            return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.NotOwner);
+            return new ScheduleKeyDropResult(
+                ScheduleKeyDropOutcome.NotOwner,
+                NoViolations);
         }
 
         var keys = ParseKeys(keysText);
+
+        // Both rules are checked before returning so a form with two mistakes reports
+        // both at once rather than one per submission.
+        var violations = new List<ValidationViolation>();
+
         if (keys.Count == 0)
         {
-            return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.NoKeys);
+            violations.Add(new ValidationViolation(
+                KeysField,
+                "키를 한 개 이상 입력해 주세요."));
         }
 
         if (opensAt <= DateTimeOffset.Now)
         {
-            return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.OpenTimeNotFuture);
+            violations.Add(new ValidationViolation(
+                OpensAtField,
+                "오픈 시각은 현재보다 미래여야 합니다."));
+        }
+
+        if (violations.Count > 0)
+        {
+            return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.Invalid, violations);
         }
 
         var keyDrop = new KeyDrop
@@ -79,6 +102,7 @@ public sealed class KeyDropSchedulingService
 
         return new ScheduleKeyDropResult(
             ScheduleKeyDropOutcome.Scheduled,
+            NoViolations,
             keyDrop.Id,
             keys.Count);
     }

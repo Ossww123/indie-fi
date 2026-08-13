@@ -72,7 +72,10 @@ public sealed class KeyDropSchedulingServiceTests
             drop => drop.GameId == gameId,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(ScheduleKeyDropOutcome.NoKeys, result.Outcome);
+        Assert.Equal(ScheduleKeyDropOutcome.Invalid, result.Outcome);
+        Assert.Equal(
+            [KeyDropSchedulingService.KeysField],
+            result.Violations.Select(violation => violation.Field));
         Assert.Equal(0, dropCount);
     }
 
@@ -96,7 +99,37 @@ public sealed class KeyDropSchedulingServiceTests
             drop => drop.GameId == gameId,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(ScheduleKeyDropOutcome.OpenTimeNotFuture, result.Outcome);
+        Assert.Equal(ScheduleKeyDropOutcome.Invalid, result.Outcome);
+        Assert.Equal(
+            [KeyDropSchedulingService.OpensAtField],
+            result.Violations.Select(violation => violation.Field));
+        Assert.Equal(0, dropCount);
+    }
+
+    [Fact]
+    public async Task ScheduleAsync_WhenKeysAndOpenTimeAreBothWrong_ReportsBothAtOnce()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+
+        ScheduleKeyDropResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await new KeyDropSchedulingService(serviceDb).ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddMinutes(-1),
+                "   ");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var dropCount = await verificationDb.KeyDrops.CountAsync(
+            drop => drop.GameId == gameId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ScheduleKeyDropOutcome.Invalid, result.Outcome);
+        Assert.Equal(
+            [KeyDropSchedulingService.KeysField, KeyDropSchedulingService.OpensAtField],
+            result.Violations.Select(violation => violation.Field));
         Assert.Equal(0, dropCount);
     }
 

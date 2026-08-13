@@ -64,14 +64,9 @@ public class NewModel : PageModel
             return NotFound();
         }
 
-        if (result.Outcome == ScheduleKeyDropOutcome.NoKeys)
+        foreach (var violation in result.Violations)
         {
-            ModelState.AddModelError(nameof(KeysText), "키를 한 개 이상 입력해 주세요.");
-        }
-
-        if (result.Outcome == ScheduleKeyDropOutcome.OpenTimeNotFuture)
-        {
-            ModelState.AddModelError(nameof(OpensAt), "오픈 시각은 현재보다 미래여야 합니다.");
+            ModelState.AddModelError(violation.Field, violation.Message);
         }
 
         if (!ModelState.IsValid)
