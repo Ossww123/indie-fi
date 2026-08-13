@@ -16,6 +16,7 @@ _archive/
 [Oo]bj/
 [Oo]ut/
 node_modules/
+dev/src/IndieFi.Web/wwwroot/js/dist/
 [Dd]ebug/
 [Rr]elease/
 x64/

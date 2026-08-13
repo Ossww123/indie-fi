@@ -2,7 +2,11 @@
   "name": "indiefi-web",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "build": "npm run typecheck && node scripts/build-client.mjs --minify",
+    "build:development": "npm run typecheck && node scripts/build-client.mjs",
+    "watch:client": "node scripts/build-client.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch"
   },
   "devDependencies": {
     "esbuild": "0.28.1",
