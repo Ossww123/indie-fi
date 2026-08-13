@@ -1,8 +1,9 @@
+using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.KeyDistributions.Application;
 
 public enum ScheduleKeyDropOutcome
 {

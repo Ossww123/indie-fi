@@ -1,4 +1,6 @@
-namespace IndieFi.Web.Entities;
+using IndieFi.Web.Entities;
+
+namespace IndieFi.Web.Modules.Credits.Domain;
 
 /// <summary>
 /// A credit movement recorded for a user. One row per movement.

@@ -1,4 +1,5 @@
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 

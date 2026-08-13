@@ -1,7 +1,8 @@
+using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.Games.Application;
 
 public enum CreateGameOutcome
 {

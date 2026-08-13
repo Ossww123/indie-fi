@@ -1,6 +1,6 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;

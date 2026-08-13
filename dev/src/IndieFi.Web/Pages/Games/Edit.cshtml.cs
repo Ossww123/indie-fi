@@ -1,6 +1,6 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.Games.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;

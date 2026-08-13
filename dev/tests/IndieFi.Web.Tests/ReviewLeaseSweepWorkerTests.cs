@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.Feedback.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

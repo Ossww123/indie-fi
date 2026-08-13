@@ -1,7 +1,8 @@
 using System.Net;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.Credits.Domain;
+using IndieFi.Web.Modules.Feedback.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

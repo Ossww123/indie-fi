@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 

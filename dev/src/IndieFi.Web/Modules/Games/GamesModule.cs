@@ -1,0 +1,12 @@
+using IndieFi.Web.Modules.Games.Application;
+
+namespace IndieFi.Web.Modules.Games;
+
+public static class GamesModule
+{
+    public static IServiceCollection AddGamesModule(this IServiceCollection services)
+    {
+        services.AddScoped<GameManagementService>();
+        return services;
+    }
+}

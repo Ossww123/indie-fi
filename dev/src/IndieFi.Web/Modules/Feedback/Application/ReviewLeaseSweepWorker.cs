@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.Feedback.Application;
 
 public sealed class ReviewLeaseSweepWorker : BackgroundService
 {

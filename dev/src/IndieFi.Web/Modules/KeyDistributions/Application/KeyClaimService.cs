@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.KeyDistributions.Application;
 
 public enum ClaimOutcome
 {

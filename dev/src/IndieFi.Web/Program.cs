@@ -1,10 +1,12 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
 using IndieFi.Web.Infrastructure.Authentication;
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.Accounts;
+using IndieFi.Web.Modules.Credits;
+using IndieFi.Web.Modules.Feedback;
+using IndieFi.Web.Modules.Games;
+using IndieFi.Web.Modules.KeyDistributions;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,26 +19,11 @@ builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
 
-builder.Services.AddScoped<KeyClaimService>();
-builder.Services.AddScoped<KeyDropSchedulingService>();
-builder.Services.AddScoped<GameManagementService>();
-builder.Services.AddScoped<AccountRegistrationService>();
-builder.Services.AddScoped<AccountAuthenticationService>();
-builder.Services.AddScoped<ReviewRequestService>();
-builder.Services.AddScoped<ReviewClaimService>();
-builder.Services.AddScoped<FeedbackSubmissionService>();
-builder.Services.AddScoped<ReviewLeaseSweepService>();
-// The sweep runs on its own so a missed deadline frees the request even if nobody
-// presses the button on the review page.
-builder.Services.AddHostedService(provider => new ReviewLeaseSweepWorker(
-    // A hosted service lives as long as the app, so it takes the scope factory rather than
-    // the sweep service: resolving that scoped service here is refused by the container.
-    provider.GetRequiredService<IServiceScopeFactory>(),
-    provider.GetRequiredService<ILogger<ReviewLeaseSweepWorker>>(),
-    TimeSpan.FromMinutes(1)));
-
-// Hashes passwords with PBKDF2. Used on its own, without the rest of Identity.
-builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddAccountsModule();
+builder.Services.AddGamesModule();
+builder.Services.AddCreditsModule();
+builder.Services.AddFeedbackModule();
+builder.Services.AddKeyDistributionsModule();
 
 // Signing in writes an encrypted cookie; the browser sends it back on every request.
 builder.Services
