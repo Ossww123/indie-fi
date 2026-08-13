@@ -1,30 +1,17 @@
 using System.ComponentModel.DataAnnotations;
-using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
-using Microsoft.AspNetCore.Identity;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace IndieFi.Web.Pages;
 
 public class SignupModel : PageModel
 {
-    /// <summary>PostgreSQL SQLSTATE for a unique constraint violation.</summary>
-    private const string UniqueViolation = "23505";
+    private readonly AccountRegistrationService _accountRegistrationService;
 
-    // Users earn credits by giving feedback on other users' requests, but no one
-    // can create a request while everyone has zero credits, so this grant starts the cycle.
-    private const int SignupGrant = 3;
-
-    private readonly AppDbContext _db;
-    private readonly IPasswordHasher<User> _passwordHasher;
-
-    public SignupModel(AppDbContext db, IPasswordHasher<User> passwordHasher)
+    public SignupModel(AccountRegistrationService accountRegistrationService)
     {
-        _db = db;
-        _passwordHasher = passwordHasher;
+        _accountRegistrationService = accountRegistrationService;
     }
 
     [BindProperty]
@@ -46,37 +33,16 @@ public class SignupModel : PageModel
             return Page();
         }
 
-        var user = new User { Email = Email };
-        user.PasswordHash = _passwordHasher.HashPassword(user, Password);
+        var result = await _accountRegistrationService.RegisterAsync(Email, Password);
 
-        // The database trigger derives the balance from the ledger. Because application
-        // code writes only the ledger, there is no code path that can make them diverge.
-        _db.Users.Add(user);
-        _db.CreditLedgerEntries.Add(new CreditLedgerEntry
+        if (result.Outcome == AccountRegistrationOutcome.EmailAlreadyRegistered)
         {
-            User = user,
-            Kind = CreditEntryKind.Grant,
-            Delta = SignupGrant,
-        });
-
-        try
-        {
-            // Saving both rows together prevents an intermediate state where the
-            // account exists but its signup grant does not.
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException { SqlState: UniqueViolation })
-        {
-            // The database is the only place that can settle this: two requests can
-            // both pass an application-side "is this email taken?" check and still
-            // race. The unique index on users.email is what actually decides.
             ModelState.AddModelError(string.Empty, "이미 가입된 이메일입니다.");
             return Page();
         }
 
         // Redirect after a successful POST so refreshing the page does not resubmit.
-        TempData["SignupMessage"] = $"{user.Email} 가입 완료";
+        TempData["SignupMessage"] = $"{result.Email} 가입 완료";
         return RedirectToPage("/Index");
     }
 }
