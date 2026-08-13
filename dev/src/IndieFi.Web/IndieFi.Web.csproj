@@ -8,9 +8,10 @@
     <ClientBuildEnabled Condition="'$(ClientBuildEnabled)' == ''">true</ClientBuildEnabled>
   </PropertyGroup>
 
-  <!-- Generated client bundles are added after npm runs so clean builds include them. -->
+  <!-- Generated client assets are added after npm runs so clean builds include them. -->
   <ItemGroup>
     <Content Remove="wwwroot/js/dist/**/*" />
+    <Content Remove="wwwroot/css/dist/**/*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,6 +39,9 @@
 
     <ItemGroup>
       <Content Include="wwwroot/js/dist/**/*"
+               CopyToOutputDirectory="PreserveNewest"
+               CopyToPublishDirectory="PreserveNewest" />
+      <Content Include="wwwroot/css/dist/**/*"
                CopyToOutputDirectory="PreserveNewest"
                CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
