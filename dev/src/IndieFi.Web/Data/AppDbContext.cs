@@ -55,6 +55,11 @@ public class AppDbContext : DbContext
                 .HasMaxLength(320)
                 .IsRequired();
 
+            user.Property(u => u.NormalizedEmail)
+                .HasColumnName("normalized_email")
+                .HasMaxLength(320)
+                .IsRequired();
+
             user.Property(u => u.PasswordHash)
                 .HasColumnName("password_hash")
                 .IsRequired();
@@ -69,8 +74,9 @@ public class AppDbContext : DbContext
                 .HasDefaultValueSql("now()")
                 .ValueGeneratedOnAdd();
 
-            // No two accounts may share an email address.
-            user.HasIndex(u => u.Email).IsUnique();
+            // Display casing may differ, but no two accounts may share the same
+            // case-insensitive lookup key.
+            user.HasIndex(u => u.NormalizedEmail).IsUnique();
         });
 
         modelBuilder.Entity<Game>(game =>

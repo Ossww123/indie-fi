@@ -75,6 +75,53 @@ public sealed class AccountRegistrationServiceTests
     }
 
     [Fact]
+    public async Task RegisterAsync_TrimsEmailAndStoresCaseInsensitiveLookupValue()
+    {
+        var localPart = Guid.NewGuid().ToString("N");
+        var input = $"  {localPart}@Example.Test  ";
+        var displayEmail = $"{localPart}@Example.Test";
+
+        AccountRegistrationResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await new AccountRegistrationService(
+                    serviceDb,
+                    new PasswordHasher<User>())
+                .RegisterAsync(input, "Known-Test-Password-123!");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var user = await verificationDb.Users.SingleAsync(
+            item => item.Id == result.UserId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(AccountRegistrationOutcome.Registered, result.Outcome);
+        Assert.Equal(displayEmail, result.Email);
+        Assert.Equal(displayEmail, user.Email);
+        Assert.Equal(displayEmail.ToUpperInvariant(), user.NormalizedEmail);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WithDomainThatHasNoDot_ReturnsInvalidAndWritesNothing()
+    {
+        var email = $"{Guid.NewGuid():N}@invalid";
+
+        await using var db = _fixture.NewDbContext();
+        var result = await new AccountRegistrationService(
+                db,
+                new PasswordHasher<User>())
+            .RegisterAsync(email, "Known-Test-Password-123!");
+
+        Assert.Equal(AccountRegistrationOutcome.Invalid, result.Outcome);
+        Assert.Contains(
+            result.Violations,
+            violation => violation.Field == AccountRegistrationService.EmailField);
+        Assert.False(await db.Users.AnyAsync(
+            item => item.Email == email,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task RegisterAsync_WhenEmailAlreadyExists_ReturnsDuplicateAndWritesNothing()
     {
         var email = $"{Guid.NewGuid():N}@example.test";
@@ -93,7 +140,7 @@ public sealed class AccountRegistrationServiceTests
         await using (var duplicateDb = _fixture.NewDbContext())
         {
             duplicateResult = await new AccountRegistrationService(duplicateDb, passwordHasher)
-                .RegisterAsync(email, secondPassword);
+                .RegisterAsync(email.ToUpperInvariant(), secondPassword);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -126,8 +173,8 @@ public sealed class AccountRegistrationServiceTests
         var passwordHasher = new PasswordHasher<User>();
 
         var results = await Task.WhenAll(
-            RegisterAsync("First-Known-Password-123!"),
-            RegisterAsync("Second-Known-Password-456!"));
+            RegisterAsync(email, "First-Known-Password-123!"),
+            RegisterAsync(email.ToUpperInvariant(), "Second-Known-Password-456!"));
 
         await using var verificationDb = _fixture.NewDbContext();
         var user = await verificationDb.Users.SingleAsync(
@@ -149,11 +196,13 @@ public sealed class AccountRegistrationServiceTests
         Assert.Equal(3, entry.Delta);
         Assert.Equal(3, user.CreditBalance);
 
-        async Task<AccountRegistrationResult> RegisterAsync(string password)
+        async Task<AccountRegistrationResult> RegisterAsync(
+            string candidateEmail,
+            string password)
         {
             await using var db = _fixture.NewDbContext();
             return await new AccountRegistrationService(db, passwordHasher)
-                .RegisterAsync(email, password);
+                .RegisterAsync(candidateEmail, password);
         }
     }
 }

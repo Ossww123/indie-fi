@@ -45,21 +45,31 @@ internal static class Program
             .Select(LoadTestEmail)
             .ToArray();
 
+        var normalizedEmails = emails
+            .Select(email => email.ToUpperInvariant())
+            .ToArray();
         var existingEmails = await db.Users
-            .Where(user => emails.Contains(user.Email))
-            .Select(user => user.Email)
+            .Where(user => normalizedEmails.Contains(user.NormalizedEmail))
+            .Select(user => user.NormalizedEmail)
             .ToHashSetAsync();
 
-        foreach (var email in emails.Where(email => !existingEmails.Contains(email)))
+        foreach (var email in emails.Where(
+                     email => !existingEmails.Contains(email.ToUpperInvariant())))
         {
-            var user = new User { Email = email };
+            var user = new User
+            {
+                Email = email,
+                NormalizedEmail = email.ToUpperInvariant(),
+            };
             user.PasswordHash = passwordHasher.HashPassword(user, Password);
             db.Users.Add(user);
         }
 
         await db.SaveChangesAsync();
 
-        var owner = await db.Users.SingleAsync(user => user.Email == emails[0]);
+        var ownerEmail = emails[0].ToUpperInvariant();
+        var owner = await db.Users.SingleAsync(
+            user => user.NormalizedEmail == ownerEmail);
         var game = await db.Games
             .Where(candidate =>
                 candidate.OwnerId == owner.Id &&

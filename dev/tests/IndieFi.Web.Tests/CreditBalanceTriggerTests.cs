@@ -27,6 +27,7 @@ public sealed class CreditBalanceTriggerTests
                 Email = $"{Guid.NewGuid():N}@example.test",
                 PasswordHash = "test-password-hash",
             };
+            user.NormalizedEmail = user.Email.ToUpperInvariant();
 
             arrangeDb.Users.Add(user);
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);

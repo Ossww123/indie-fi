@@ -9,6 +9,11 @@ public class User
 
     public string Email { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Case-insensitive lookup key derived from <see cref="Email"/>.
+    /// </summary>
+    public string NormalizedEmail { get; set; } = string.Empty;
+
     public string PasswordHash { get; set; } = string.Empty;
 
     /// <summary>

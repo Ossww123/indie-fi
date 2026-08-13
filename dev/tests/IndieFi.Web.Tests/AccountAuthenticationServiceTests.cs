@@ -38,7 +38,7 @@ public sealed class AccountAuthenticationServiceTests
             result = await new AccountAuthenticationService(
                     authenticationDb,
                     passwordHasher)
-                .AuthenticateAsync(email, password);
+                .AuthenticateAsync($"  {email.ToUpperInvariant()}  ", password);
         }
 
         Assert.Equal(AccountAuthenticationOutcome.Authenticated, result.Outcome);

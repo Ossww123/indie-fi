@@ -136,6 +136,7 @@ public sealed class CreditWritePermissionTests
             Email = $"{Guid.NewGuid():N}@example.test",
             PasswordHash = "test-password-hash",
         };
+        user.NormalizedEmail = user.Email.ToUpperInvariant();
         var ledgerEntry = new CreditLedgerEntry
         {
             User = user,

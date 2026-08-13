@@ -689,6 +689,7 @@ public sealed class ReviewRequestServiceTests
             Email = $"{Guid.NewGuid():N}@example.test",
             PasswordHash = "test-password-hash",
         };
+        user.NormalizedEmail = user.Email.ToUpperInvariant();
 
         db.Users.Add(user);
 

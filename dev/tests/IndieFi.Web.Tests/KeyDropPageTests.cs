@@ -208,6 +208,7 @@ public sealed class KeyDropPageTests
             Email = $"{Guid.NewGuid():N}@example.test",
             PasswordHash = "test-password-hash"
         };
+        owner.NormalizedEmail = owner.Email.ToUpperInvariant();
 
         db.Users.Add(owner);
         await db.SaveChangesAsync(cancellationToken);

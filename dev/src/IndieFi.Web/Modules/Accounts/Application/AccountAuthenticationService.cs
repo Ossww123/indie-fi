@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -33,7 +34,14 @@ public sealed class AccountAuthenticationService
         string email,
         string password)
     {
-        var user = await _db.Users.SingleOrDefaultAsync(item => item.Email == email);
+        if (!AccountEmailAddressPolicy.TryCreate(email, out var accountEmail, out _))
+        {
+            return new AccountAuthenticationResult(
+                AccountAuthenticationOutcome.InvalidCredentials);
+        }
+
+        var user = await _db.Users.SingleOrDefaultAsync(
+            item => item.NormalizedEmail == accountEmail!.NormalizedValue);
 
         var verified = user is not null
             && _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password)

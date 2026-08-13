@@ -19,7 +19,7 @@ public class LoginModel : PageModel
 
     [BindProperty]
     [Required(ErrorMessage = "이메일을 입력해 주세요.")]
-    [EmailAddress(ErrorMessage = "이메일 형식이 아닙니다.")]
+    [DataType(DataType.EmailAddress)]
     public string Email { get; set; } = string.Empty;
 
     [BindProperty]

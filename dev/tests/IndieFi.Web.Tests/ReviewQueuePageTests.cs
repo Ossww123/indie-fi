@@ -230,6 +230,7 @@ public sealed class ReviewQueuePageTests
             Email = $"{Guid.NewGuid():N}@example.test",
             PasswordHash = "test-password-hash",
         };
+        requester.NormalizedEmail = requester.Email.ToUpperInvariant();
 
         db.Users.Add(requester);
 
