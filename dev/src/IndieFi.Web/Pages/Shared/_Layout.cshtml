@@ -6,70 +6,53 @@
     <title>@ViewData["Title"] - Indie-Fi</title>
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/IndieFi.Web.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/dist/site.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">Indie-Fi</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
+<body class="flex min-h-screen flex-col">
+    <header class="border-b border-slate-200 bg-white shadow-sm">
+        <nav class="site-container" aria-label="주 메뉴">
+            <div class="flex min-h-16 flex-wrap items-center justify-between py-3 sm:flex-nowrap sm:py-0">
+                <a class="text-xl font-bold tracking-tight text-slate-950" asp-area="" asp-page="/Index">Indie-Fi</a>
+                <button type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-slate-300 p-2 text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:hidden"
+                        data-navigation-toggle
+                        aria-controls="site-navigation"
+                        aria-expanded="false">
+                    <span class="sr-only">메뉴 열기</span>
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">홈</a>
-                        </li>
-                    </ul>
-                    <ul class="navbar-nav">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Games/Index">내 게임</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Games/New">게임 등록</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Credits/Index">내 크레딧</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>
-                            </li>
-                            <li class="nav-item">
-                                <span class="nav-link text-dark">@User.Identity.Name 님</span>
-                            </li>
-                            <li class="nav-item">
-                                <form method="post" asp-page="/Logout">
-                                    <button type="submit" class="btn btn-link nav-link text-dark">로그아웃</button>
-                                </form>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Login">로그인</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Signup">가입</a>
-                            </li>
-                        }
-                    </ul>
+                <div id="site-navigation"
+                     class="hidden w-full flex-col gap-1 border-t border-slate-200 pt-3 sm:flex sm:w-auto sm:flex-row sm:items-center sm:border-0 sm:pt-0"
+                     data-navigation-menu>
+                    <a class="site-nav-link" asp-area="" asp-page="/Index">홈</a>
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <a class="site-nav-link" asp-area="" asp-page="/Games/Index">내 게임</a>
+                        <a class="site-nav-link" asp-area="" asp-page="/Games/New">게임 등록</a>
+                        <a class="site-nav-link" asp-area="" asp-page="/Credits/Index">내 크레딧</a>
+                        <a class="site-nav-link" asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>
+                        <span class="px-3 py-2 text-sm text-slate-500">@User.Identity.Name 님</span>
+                        <form method="post" asp-page="/Logout">
+                            <button type="submit" class="site-nav-link w-full text-left">로그아웃</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <a class="site-nav-link" asp-area="" asp-page="/Login">로그인</a>
+                        <a class="site-nav-link" asp-area="" asp-page="/Signup">가입</a>
+                    }
                 </div>
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
+    <main role="main" class="site-container flex-1 py-8 sm:py-10">
+        @RenderBody()
+    </main>
 
-    <footer class="border-top footer text-muted">
-        <div class="container d-flex justify-content-between">
+    <footer class="border-t border-slate-200 bg-white py-5 text-sm text-slate-500">
+        <div class="site-container flex flex-col justify-between gap-2 sm:flex-row">
             <span>&copy; 2026 - Indie-Fi</span>
             <span>build @BuildInfo.Revision</span>
         </div>
@@ -77,6 +60,7 @@
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="~/js/dist/layout/navigation.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>
