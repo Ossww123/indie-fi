@@ -41,6 +41,16 @@ public class SignupModel : PageModel
             return Page();
         }
 
+        if (result.Outcome == AccountRegistrationOutcome.Invalid)
+        {
+            foreach (var violation in result.Violations)
+            {
+                ModelState.AddModelError(violation.Field, violation.Message);
+            }
+
+            return Page();
+        }
+
         // Redirect after a successful POST so refreshing the page does not resubmit.
         TempData["SignupMessage"] = $"{result.Email} 가입 완료";
         return RedirectToPage("/Index");

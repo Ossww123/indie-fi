@@ -51,6 +51,29 @@ public sealed class AccountRegistrationServiceTests
     }
 
     [Fact]
+    public async Task RegisterAsync_WhenEmailAndPasswordAreBothInvalid_ReportsBothAndWritesNothing()
+    {
+        AccountRegistrationResult result;
+        long userCount;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await new AccountRegistrationService(serviceDb, new PasswordHasher<User>())
+                .RegisterAsync("not-an-email", "short");
+
+            userCount = await serviceDb.Users.CountAsync(
+                item => item.Email == "not-an-email",
+                TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(AccountRegistrationOutcome.Invalid, result.Outcome);
+        Assert.Equal(
+            [AccountRegistrationService.EmailField, AccountRegistrationService.PasswordField],
+            result.Violations.Select(violation => violation.Field));
+        Assert.Null(result.UserId);
+        Assert.Equal(0, userCount);
+    }
+
+    [Fact]
     public async Task RegisterAsync_WhenEmailAlreadyExists_ReturnsDuplicateAndWritesNothing()
     {
         var email = $"{Guid.NewGuid():N}@example.test";
