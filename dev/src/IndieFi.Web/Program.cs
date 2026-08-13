@@ -18,6 +18,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
 
 builder.Services.AddScoped<KeyClaimService>();
+builder.Services.AddScoped<KeyDropSchedulingService>();
 builder.Services.AddScoped<GameManagementService>();
 builder.Services.AddScoped<ReviewRequestService>();
 builder.Services.AddScoped<ReviewClaimService>();
