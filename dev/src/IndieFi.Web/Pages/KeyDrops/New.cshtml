@@ -9,6 +9,7 @@
 
 <form method="post"
       asp-route-gameId="@Model.Game.Id"
+      data-key-drop-form
       class="col-md-5">
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
@@ -32,3 +33,9 @@
        asp-route-id="@Model.Game.Id"
        class="btn btn-link">취소</a>
 </form>
+
+@section Scripts {
+    <script type="module"
+            src="~/js/dist/key-distributions/new.js"
+            asp-append-version="true"></script>
+}

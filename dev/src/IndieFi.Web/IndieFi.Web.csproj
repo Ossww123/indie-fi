@@ -5,7 +5,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>3b7739ac-c867-4dfa-a631-4d4ec84ccf87</UserSecretsId>
+    <ClientBuildEnabled Condition="'$(ClientBuildEnabled)' == ''">true</ClientBuildEnabled>
   </PropertyGroup>
+
+  <!-- Generated client bundles are added after npm runs so clean builds include them. -->
+  <ItemGroup>
+    <Content Remove="wwwroot/js/dist/**/*" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
@@ -14,5 +20,27 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
+
+  <Target Name="RestoreClientDependencies"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(ClientBuildEnabled)' == 'true'"
+          Inputs="$(MSBuildProjectDirectory)/package-lock.json"
+          Outputs="$(MSBuildProjectDirectory)/node_modules/.package-lock.json">
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
+          Command="npm ci" />
+  </Target>
+
+  <Target Name="BuildClientAssets"
+          BeforeTargets="PrepareForBuild;ComputeFilesToPublish"
+          DependsOnTargets="RestoreClientDependencies"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(ClientBuildEnabled)' == 'true'">
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
+          Command="npm run build" />
+
+    <ItemGroup>
+      <Content Include="wwwroot/js/dist/**/*"
+               CopyToOutputDirectory="PreserveNewest"
+               CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 
 </Project>
