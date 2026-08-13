@@ -1,6 +1,6 @@
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -20,11 +20,16 @@ public class DetailModel : PageModel
     ];
 
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
     private readonly KeyClaimService _keyClaimService;
 
-    public DetailModel(AppDbContext db, KeyClaimService keyClaimService)
+    public DetailModel(
+        AppDbContext db,
+        ICurrentUser currentUser,
+        KeyClaimService keyClaimService)
     {
         _db = db;
+        _currentUser = currentUser;
         _keyClaimService = keyClaimService;
     }
 
@@ -68,9 +73,9 @@ public class DetailModel : PageModel
                 key.DropId == id &&
                 !_db.KeyGrants.Any(grant => grant.KeyId == key.Id));
 
-        if (User.Identity?.IsAuthenticated == true)
+        if (_currentUser.IsAuthenticated)
         {
-            var userId = User.GetUserId();
+            var userId = _currentUser.GetRequiredUserId();
 
             ClaimedKey = await _db.KeyGrants
                 .Where(grant => grant.DropId == id && grant.UserId == userId)
@@ -89,12 +94,12 @@ public class DetailModel : PageModel
     {
         // The page itself stays public, so claiming is guarded here instead.
         // [Authorize] cannot do it: Razor Pages ignores the attribute on a handler.
-        if (User.Identity?.IsAuthenticated != true)
+        if (!_currentUser.IsAuthenticated)
         {
             return Challenge();
         }
 
-        var userId = User.GetUserId();
+        var userId = _currentUser.GetRequiredUserId();
         var result = await _keyClaimService.ClaimAsync(id, userId);
 
         if (result.Outcome == ClaimOutcome.DropNotFound)
