@@ -1,5 +1,6 @@
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Data;
@@ -15,6 +16,10 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserEmailLookup> UserEmailLookups => Set<UserEmailLookup>();
+    public DbSet<EmailConfirmationToken> EmailConfirmationTokens => Set<EmailConfirmationToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
     public DbSet<Game> Games => Set<Game>();
 
@@ -45,6 +50,17 @@ public class AppDbContext : DbContext
                 table.HasCheckConstraint(
                     "CK_users_credit_balance_not_negative",
                     "credit_balance >= 0");
+                table.HasCheckConstraint(
+                    "CK_users_session_version_positive",
+                    "session_version >= 1");
+                table.HasCheckConstraint(
+                    "CK_users_email_protection_complete",
+                    "(email_ciphertext IS NULL AND email_nonce IS NULL AND email_authentication_tag IS NULL AND email_encryption_key_id IS NULL) OR " +
+                    "(email_ciphertext IS NOT NULL AND octet_length(email_nonce) = 12 AND octet_length(email_authentication_tag) = 16 AND email_encryption_key_id IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "CK_users_suspension_shape",
+                    "(account_status = 'TemporarilySuspended' AND suspended_until IS NOT NULL) OR " +
+                    "(account_status IN ('Active', 'IndefinitelySuspended') AND suspended_until IS NULL)");
             });
 
             user.HasKey(u => u.Id);
@@ -60,9 +76,27 @@ public class AppDbContext : DbContext
                 .HasMaxLength(320)
                 .IsRequired();
 
+            user.Property(u => u.EmailCiphertext).HasColumnName("email_ciphertext");
+            user.Property(u => u.EmailNonce).HasColumnName("email_nonce");
+            user.Property(u => u.EmailAuthenticationTag).HasColumnName("email_authentication_tag");
+            user.Property(u => u.EmailEncryptionKeyId)
+                .HasColumnName("email_encryption_key_id")
+                .HasMaxLength(100);
+
             user.Property(u => u.PasswordHash)
                 .HasColumnName("password_hash")
-                .IsRequired();
+                .IsRequired(false);
+
+            user.Property(u => u.EmailConfirmedAt).HasColumnName("email_confirmed_at");
+            user.Property(u => u.AccountStatus)
+                .HasColumnName("account_status")
+                .HasConversion<string>()
+                .HasMaxLength(32)
+                .HasDefaultValue(AccountStatus.Active);
+            user.Property(u => u.SuspendedUntil).HasColumnName("suspended_until");
+            user.Property(u => u.SessionVersion)
+                .HasColumnName("session_version")
+                .HasDefaultValue(1L);
 
             user.Property(u => u.CreditBalance)
                 .HasColumnName("credit_balance")
@@ -77,6 +111,74 @@ public class AppDbContext : DbContext
             // Display casing may differ, but no two accounts may share the same
             // case-insensitive lookup key.
             user.HasIndex(u => u.NormalizedEmail).IsUnique();
+        });
+
+        modelBuilder.Entity<UserEmailLookup>(lookup =>
+        {
+            lookup.ToTable("user_email_lookups", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_user_email_lookups_value_length",
+                    "octet_length(value) = 32");
+            });
+            lookup.HasKey(item => new { item.UserId, item.KeyId });
+            lookup.Property(item => item.UserId).HasColumnName("user_id");
+            lookup.Property(item => item.KeyId).HasColumnName("key_id").HasMaxLength(100);
+            lookup.Property(item => item.Value).HasColumnName("value");
+            lookup.HasIndex(item => new { item.KeyId, item.Value }).IsUnique();
+            lookup.HasOne(item => item.User).WithMany().HasForeignKey(item => item.UserId);
+        });
+
+        modelBuilder.Entity<EmailConfirmationToken>(token =>
+        {
+            token.ToTable("email_confirmation_tokens", table =>
+                table.HasCheckConstraint(
+                    "CK_email_confirmation_tokens_hash_length",
+                    "octet_length(token_hash) = 32"));
+            token.HasKey(item => item.Id);
+            token.Property(item => item.Id).HasColumnName("id");
+            token.Property(item => item.UserId).HasColumnName("user_id");
+            token.Property(item => item.TokenHash).HasColumnName("token_hash");
+            token.Property(item => item.CreatedAt).HasColumnName("created_at");
+            token.Property(item => item.ExpiresAt).HasColumnName("expires_at");
+            token.Property(item => item.UsedAt).HasColumnName("used_at");
+            token.Property(item => item.RevokedAt).HasColumnName("revoked_at");
+            token.HasIndex(item => item.TokenHash).IsUnique();
+            token.HasIndex(item => item.UserId);
+            token.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(token =>
+        {
+            token.ToTable("password_reset_tokens", table =>
+                table.HasCheckConstraint(
+                    "CK_password_reset_tokens_hash_length",
+                    "octet_length(token_hash) = 32"));
+            token.HasKey(item => item.Id);
+            token.Property(item => item.Id).HasColumnName("id");
+            token.Property(item => item.UserId).HasColumnName("user_id");
+            token.Property(item => item.TokenHash).HasColumnName("token_hash");
+            token.Property(item => item.CreatedAt).HasColumnName("created_at");
+            token.Property(item => item.ExpiresAt).HasColumnName("expires_at");
+            token.Property(item => item.UsedAt).HasColumnName("used_at");
+            token.Property(item => item.RevokedAt).HasColumnName("revoked_at");
+            token.HasIndex(item => item.TokenHash).IsUnique();
+            token.HasIndex(item => item.UserId);
+            token.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
+        });
+
+        modelBuilder.Entity<ExternalLogin>(login =>
+        {
+            login.ToTable("external_logins");
+            login.HasKey(item => item.Id);
+            login.Property(item => item.Id).HasColumnName("id");
+            login.Property(item => item.UserId).HasColumnName("user_id");
+            login.Property(item => item.Provider).HasColumnName("provider").HasMaxLength(32);
+            login.Property(item => item.ProviderUserId).HasColumnName("provider_user_id").HasMaxLength(255);
+            login.Property(item => item.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
+            login.HasIndex(item => new { item.Provider, item.ProviderUserId }).IsUnique();
+            login.HasIndex(item => new { item.UserId, item.Provider }).IsUnique();
+            login.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
         });
 
         modelBuilder.Entity<Game>(game =>

@@ -42,7 +42,7 @@ public sealed class AccountAuthenticationService
         var user = await _db.Users.SingleOrDefaultAsync(
             item => item.NormalizedEmail == accountEmail!.NormalizedValue);
 
-        var verified = user is not null
+        var verified = user?.PasswordHash is not null
             && _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password)
                 != PasswordVerificationResult.Failed;
 

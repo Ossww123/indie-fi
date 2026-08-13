@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 
 namespace IndieFi.Web.Tests;
 
@@ -15,6 +16,9 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Database", _connectionString);
+        builder.ConfigureAppConfiguration(configuration =>
+            configuration.AddInMemoryCollection(
+                TestAccountProtection.ConfigurationValues()));
     }
 
     public new HttpClient CreateClient()

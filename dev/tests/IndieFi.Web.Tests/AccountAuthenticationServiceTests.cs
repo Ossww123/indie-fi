@@ -27,7 +27,8 @@ public sealed class AccountAuthenticationServiceTests
         {
             var registration = await new AccountRegistrationService(
                     registrationDb,
-                    passwordHasher)
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
                 .RegisterAsync(email, password);
             userId = registration.UserId!.Value;
         }
@@ -54,7 +55,7 @@ public sealed class AccountAuthenticationServiceTests
 
         await using (var registrationDb = _fixture.NewDbContext())
         {
-            await new AccountRegistrationService(registrationDb, passwordHasher)
+            await new AccountRegistrationService(registrationDb, passwordHasher, TestAccountProtection.CreateService())
                 .RegisterAsync(email, password);
         }
 

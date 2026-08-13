@@ -1,5 +1,6 @@
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -23,11 +24,12 @@ public sealed class AccountRegistrationServiceTests
         var email = $"{Guid.NewGuid():N}@example.test";
         const string password = "Known-Test-Password-123!";
         var passwordHasher = new PasswordHasher<User>();
+        var emailProtection = TestAccountProtection.CreateService();
 
         AccountRegistrationResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new AccountRegistrationService(serviceDb, passwordHasher)
+            result = await new AccountRegistrationService(serviceDb, passwordHasher, emailProtection)
                 .RegisterAsync(email, password);
         }
 
@@ -38,16 +40,34 @@ public sealed class AccountRegistrationServiceTests
         var entry = await verificationDb.CreditLedgerEntries.SingleAsync(
             item => item.UserId == user.Id,
             TestContext.Current.CancellationToken);
+        var lookup = await verificationDb.UserEmailLookups.SingleAsync(
+            item => item.UserId == user.Id,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(AccountRegistrationOutcome.Registered, result.Outcome);
         Assert.Equal(user.Id, result.UserId);
         Assert.NotEqual(password, user.PasswordHash);
         Assert.NotEqual(
             PasswordVerificationResult.Failed,
-            passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password));
+            passwordHasher.VerifyHashedPassword(user, user.PasswordHash!, password));
         Assert.Equal(3, user.CreditBalance);
         Assert.Equal(CreditEntryKind.Grant, entry.Kind);
         Assert.Equal(3, entry.Delta);
+        Assert.NotNull(user.EmailCiphertext);
+        Assert.Equal(EmailProtectionService.NonceSize, user.EmailNonce?.Length);
+        Assert.Equal(
+            EmailProtectionService.AuthenticationTagSize,
+            user.EmailAuthenticationTag?.Length);
+        Assert.Equal("email-test-v1", user.EmailEncryptionKeyId);
+        Assert.Equal(
+            email,
+            emailProtection.Unprotect(new ProtectedEmailAddress(
+                user.EmailCiphertext!,
+                user.EmailNonce!,
+                user.EmailAuthenticationTag!,
+                user.EmailEncryptionKeyId!)));
+        Assert.Equal("lookup-test-v1", lookup.KeyId);
+        Assert.Equal(EmailProtectionService.LookupValueSize, lookup.Value.Length);
     }
 
     [Fact]
@@ -57,7 +77,7 @@ public sealed class AccountRegistrationServiceTests
         long userCount;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new AccountRegistrationService(serviceDb, new PasswordHasher<User>())
+            result = await new AccountRegistrationService(serviceDb, new PasswordHasher<User>(), TestAccountProtection.CreateService())
                 .RegisterAsync("not-an-email", "short");
 
             userCount = await serviceDb.Users.CountAsync(
@@ -85,7 +105,8 @@ public sealed class AccountRegistrationServiceTests
         {
             result = await new AccountRegistrationService(
                     serviceDb,
-                    new PasswordHasher<User>())
+                    new PasswordHasher<User>(),
+                    TestAccountProtection.CreateService())
                 .RegisterAsync(input, "Known-Test-Password-123!");
         }
 
@@ -107,7 +128,8 @@ public sealed class AccountRegistrationServiceTests
         await using var db = _fixture.NewDbContext();
         var result = await new AccountRegistrationService(
                 db,
-                new PasswordHasher<User>())
+                new PasswordHasher<User>(),
+                TestAccountProtection.CreateService())
             .RegisterAsync(email, "Known-Test-Password-123!");
 
         Assert.Equal(AccountRegistrationOutcome.Invalid, result.Outcome);
@@ -129,7 +151,7 @@ public sealed class AccountRegistrationServiceTests
 
         await using (var firstDb = _fixture.NewDbContext())
         {
-            var firstResult = await new AccountRegistrationService(firstDb, passwordHasher)
+            var firstResult = await new AccountRegistrationService(firstDb, passwordHasher, TestAccountProtection.CreateService())
                 .RegisterAsync(email, firstPassword);
             Assert.Equal(AccountRegistrationOutcome.Registered, firstResult.Outcome);
         }
@@ -137,7 +159,7 @@ public sealed class AccountRegistrationServiceTests
         AccountRegistrationResult duplicateResult;
         await using (var duplicateDb = _fixture.NewDbContext())
         {
-            duplicateResult = await new AccountRegistrationService(duplicateDb, passwordHasher)
+            duplicateResult = await new AccountRegistrationService(duplicateDb, passwordHasher, TestAccountProtection.CreateService())
                 .RegisterAsync(email.ToUpperInvariant(), secondPassword);
         }
 
@@ -155,10 +177,10 @@ public sealed class AccountRegistrationServiceTests
             duplicateResult.Outcome);
         Assert.NotEqual(
             PasswordVerificationResult.Failed,
-            passwordHasher.VerifyHashedPassword(user, user.PasswordHash, firstPassword));
+            passwordHasher.VerifyHashedPassword(user, user.PasswordHash!, firstPassword));
         Assert.Equal(
             PasswordVerificationResult.Failed,
-            passwordHasher.VerifyHashedPassword(user, user.PasswordHash, secondPassword));
+            passwordHasher.VerifyHashedPassword(user, user.PasswordHash!, secondPassword));
         var entry = Assert.Single(entries);
         Assert.Equal(3, entry.Delta);
         Assert.Equal(3, user.CreditBalance);
@@ -199,7 +221,7 @@ public sealed class AccountRegistrationServiceTests
             string password)
         {
             await using var db = _fixture.NewDbContext();
-            return await new AccountRegistrationService(db, passwordHasher)
+            return await new AccountRegistrationService(db, passwordHasher, TestAccountProtection.CreateService())
                 .RegisterAsync(candidateEmail, password);
         }
     }

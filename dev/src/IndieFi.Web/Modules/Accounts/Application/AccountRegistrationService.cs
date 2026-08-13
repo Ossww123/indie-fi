@@ -40,13 +40,16 @@ public sealed class AccountRegistrationService
 
     private readonly AppDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly EmailProtectionService _emailProtection;
 
     public AccountRegistrationService(
         AppDbContext db,
-        IPasswordHasher<User> passwordHasher)
+        IPasswordHasher<User> passwordHasher,
+        EmailProtectionService emailProtection)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _emailProtection = emailProtection;
     }
 
     public async Task<AccountRegistrationResult> RegisterAsync(
@@ -61,12 +64,28 @@ public sealed class AccountRegistrationService
                 violations);
         }
 
+        var validEmail = accountEmail!;
+        var protectedEmail = _emailProtection.Protect(validEmail);
         var user = new User
         {
-            Email = accountEmail!.DisplayValue,
-            NormalizedEmail = accountEmail.NormalizedValue,
+            Email = validEmail.DisplayValue,
+            NormalizedEmail = validEmail.NormalizedValue,
+            EmailCiphertext = protectedEmail.Ciphertext,
+            EmailNonce = protectedEmail.Nonce,
+            EmailAuthenticationTag = protectedEmail.AuthenticationTag,
+            EmailEncryptionKeyId = protectedEmail.KeyId,
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, password!);
+
+        foreach (var lookup in _emailProtection.CreateWritableLookupValues(validEmail))
+        {
+            _db.UserEmailLookups.Add(new UserEmailLookup
+            {
+                User = user,
+                KeyId = lookup.KeyId,
+                Value = lookup.Value,
+            });
+        }
 
         // The database trigger derives the balance from the ledger. Because application
         // code writes only the ledger, there is no code path that can make them diverge.
