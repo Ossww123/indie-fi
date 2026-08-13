@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Indie-Fi</title>
     <script type="importmap"></script>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/dist/site.css" asp-append-version="true" />
 </head>
 <body class="flex min-h-screen flex-col">
@@ -18,7 +17,7 @@
                         data-navigation-toggle
                         aria-controls="site-navigation"
                         aria-expanded="false">
-                    <span class="sr-only">메뉴 열기</span>
+                    <span class="sr-only" data-navigation-label>메뉴 열기</span>
                     <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
@@ -58,8 +57,6 @@
         </div>
     </footer>
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="~/js/dist/layout/navigation.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
