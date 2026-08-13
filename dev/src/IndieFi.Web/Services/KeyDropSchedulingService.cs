@@ -35,8 +35,8 @@ public sealed class KeyDropSchedulingService
     public async Task<ScheduleKeyDropResult> ScheduleAsync(
         long gameId,
         long ownerId,
-        DateTimeOffset opensAt,
-        string keysText)
+        DateTimeOffset? opensAt,
+        string? keysText)
     {
         var gameOwnerId = await _db.Games
             .Where(game => game.Id == gameId)
@@ -70,7 +70,13 @@ public sealed class KeyDropSchedulingService
                 "키를 한 개 이상 입력해 주세요."));
         }
 
-        if (opensAt <= DateTimeOffset.Now)
+        if (opensAt is null)
+        {
+            violations.Add(new ValidationViolation(
+                OpensAtField,
+                "오픈 시각을 입력해 주세요."));
+        }
+        else if (opensAt <= DateTimeOffset.Now)
         {
             violations.Add(new ValidationViolation(
                 OpensAtField,
@@ -86,7 +92,7 @@ public sealed class KeyDropSchedulingService
         {
             GameId = gameId,
             OwnerId = ownerId,
-            OpensAt = opensAt.ToUniversalTime(),
+            OpensAt = opensAt!.Value.ToUniversalTime(),
             TotalKeys = keys.Count,
         };
 
@@ -107,9 +113,9 @@ public sealed class KeyDropSchedulingService
             keys.Count);
     }
 
-    private static List<string> ParseKeys(string keysText)
+    private static List<string> ParseKeys(string? keysText)
     {
-        return keysText
+        return (keysText ?? string.Empty)
             .Split('\n')
             .Select(key => key.Trim())
             .Where(key => key.Length > 0)

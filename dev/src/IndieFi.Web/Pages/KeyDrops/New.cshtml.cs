@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
@@ -28,13 +27,14 @@ public class NewModel : PageModel
 
     public Game Game { get; private set; } = null!;
 
+    // No [Required] here: the service decides whether the input is usable. Duplicating
+    // the rule as an annotation would fail model binding first and return before the
+    // service ever runs, hiding every other problem with the form.
     [BindProperty]
-    [Required(ErrorMessage = "오픈 시각을 입력해 주세요.")]
     public DateTimeOffset? OpensAt { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "키를 한 개 이상 입력해 주세요.")]
-    public string KeysText { get; set; } = string.Empty;
+    public string? KeysText { get; set; }
 
     public async Task<IActionResult> OnGetAsync(long gameId)
     {
@@ -46,6 +46,8 @@ public class NewModel : PageModel
     {
         var ownerId = _currentUser.GetRequiredUserId();
 
+        // Only binding failures are handled here — for example a date the browser could
+        // not parse. Everything the service can judge is left to the service.
         if (!ModelState.IsValid)
         {
             return await LoadPageAsync(gameId, ownerId);
@@ -54,7 +56,7 @@ public class NewModel : PageModel
         var result = await _keyDropSchedulingService.ScheduleAsync(
             gameId,
             ownerId,
-            OpensAt!.Value,
+            OpensAt,
             KeysText);
 
         if (result.Outcome is
