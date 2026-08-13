@@ -22,7 +22,7 @@ namespace IndieFi.Web.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("IndieFi.Web.Entities.CreditLedgerEntry", b =>
+            modelBuilder.Entity("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -391,7 +391,7 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
-            modelBuilder.Entity("IndieFi.Web.Entities.CreditLedgerEntry", b =>
+            modelBuilder.Entity("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", b =>
                 {
                     b.HasOne("IndieFi.Web.Entities.User", "User")
                         .WithMany()
@@ -480,7 +480,7 @@ namespace IndieFi.Web.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("IndieFi.Web.Entities.CreditLedgerEntry", "RefundEntry")
+                    b.HasOne("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", "RefundEntry")
                         .WithMany()
                         .HasForeignKey("RefundEntryId");
 
@@ -490,7 +490,7 @@ namespace IndieFi.Web.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("IndieFi.Web.Entities.CreditLedgerEntry", "SpendEntry")
+                    b.HasOne("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", "SpendEntry")
                         .WithMany()
                         .HasForeignKey("SpendEntryId")
                         .OnDelete(DeleteBehavior.Cascade)

@@ -2,7 +2,7 @@ using IndieFi.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.Feedback.Application;
 
 public record ReviewLeaseSweepResult(int ExpiredCount);
 

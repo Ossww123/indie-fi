@@ -1,3 +1,5 @@
+using IndieFi.Web.Modules.Credits.Domain;
+
 namespace IndieFi.Web.Entities;
 
 /// <summary>

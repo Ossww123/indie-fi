@@ -1,10 +1,11 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
-namespace IndieFi.Web.Services;
+namespace IndieFi.Web.Modules.Feedback.Application;
 
 public enum ReviewRequestOutcome
 {

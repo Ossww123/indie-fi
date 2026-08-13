@@ -1,4 +1,4 @@
-using IndieFi.Web.Services;
+using IndieFi.Web.Modules.Feedback.Application;
 
 namespace IndieFi.Web.Modules.Feedback;
 
