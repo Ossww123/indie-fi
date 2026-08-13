@@ -4,34 +4,36 @@
     ViewData["Title"] = "드롭 예약";
 }
 
-<h1 class="h3 mb-1">드롭 예약</h1>
-<p class="text-muted mb-4">@Model.Game.Title</p>
+<h1 class="page-title">드롭 예약</h1>
+<p class="mb-6 text-slate-500">@Model.Game.Title</p>
 
 <form method="post"
       asp-route-gameId="@Model.Game.Id"
       data-key-drop-form
-      class="col-md-5">
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+      class="form-stack">
+    <div asp-validation-summary="ModelOnly"></div>
 
-    <div class="mb-3">
-        <label asp-for="OpensAt" class="form-label">오픈 시각</label>
-        <input asp-for="OpensAt" type="datetime-local" class="form-control" />
-        <span asp-validation-for="OpensAt" class="text-danger small"></span>
+    <div class="field-group">
+        <label asp-for="OpensAt" class="field-label">오픈 시각</label>
+        <input asp-for="OpensAt" type="datetime-local" class="field-input" />
+        <span asp-validation-for="OpensAt" class="field-error"></span>
     </div>
 
-    <div class="mb-3">
-        <label asp-for="KeysText" class="form-label">스팀 키</label>
+    <div class="field-group">
+        <label asp-for="KeysText" class="field-label">스팀 키</label>
         <textarea asp-for="KeysText"
-                  class="form-control"
+                  class="field-input"
                   rows="8"
                   placeholder="한 줄에 키 하나"></textarea>
-        <span asp-validation-for="KeysText" class="text-danger small"></span>
+        <span asp-validation-for="KeysText" class="field-error"></span>
     </div>
 
-    <button type="submit" class="btn btn-primary">드롭 예약</button>
-    <a asp-page="/Games/Detail"
-       asp-route-id="@Model.Game.Id"
-       class="btn btn-link">취소</a>
+    <div class="flex flex-wrap gap-2">
+        <button type="submit" class="button-primary">드롭 예약</button>
+        <a asp-page="/Games/Detail"
+           asp-route-id="@Model.Game.Id"
+           class="button-link">취소</a>
+    </div>
 </form>
 
 @section Scripts {
