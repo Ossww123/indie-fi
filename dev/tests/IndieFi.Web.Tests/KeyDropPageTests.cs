@@ -103,6 +103,35 @@ public sealed class KeyDropPageTests
         Assert.DoesNotContain("alert-warning", html);
     }
 
+    [Fact]
+    public async Task Get_NewDropPage_LoadsOnlyItsTypeScriptModule()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var gameId = await CreateGameOwnedByAsync(email);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var response = await client.GetAsync(
+            $"/KeyDrops/New?gameId={gameId}",
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("data-key-drop-form", html);
+        Assert.Contains("type=\"module\"", html);
+        Assert.Contains("/js/dist/key-distributions/new", html);
+        Assert.DoesNotContain("/js/site.js", html);
+
+        using var moduleResponse = await client.GetAsync(
+            "/js/dist/key-distributions/new.js",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, moduleResponse.StatusCode);
+    }
+
     // Service-level tests cannot see this: an annotation on the page can fail model
     // binding and return before the service runs, so only one message ever reaches
     // the screen. This drives the real form to prove both problems are reported.

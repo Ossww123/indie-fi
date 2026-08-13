@@ -7,6 +7,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const entryRoot = path.join(projectRoot, "ClientApp", "entries");
 const outputParent = path.join(projectRoot, "wwwroot", "js");
 const outputRoot = path.join(outputParent, "dist");
+const minify = process.argv.includes("--minify");
 
 if (path.dirname(outputRoot) !== outputParent) {
   throw new Error(`Refusing to clean unexpected output directory: ${outputRoot}`);
@@ -30,8 +31,8 @@ const options = {
   format: "esm",
   platform: "browser",
   target: "es2022",
-  sourcemap: true,
-  minify: process.argv.includes("--minify"),
+  sourcemap: !minify,
+  minify,
   charset: "utf8",
   logLevel: "info",
 };
