@@ -42,6 +42,16 @@ public class NewModel : PageModel
         var ownerId = _currentUser.GetRequiredUserId();
         var result = await _gameManagementService.CreateAsync(ownerId, Title, Description);
 
+        if (result.Outcome == CreateGameOutcome.Invalid)
+        {
+            foreach (var violation in result.Violations)
+            {
+                ModelState.AddModelError(violation.Field, violation.Message);
+            }
+
+            return Page();
+        }
+
         // Redirect after a successful POST so refreshing the page does not resubmit.
         TempData["GameMessage"] = $"'{result.Title}' 등록 완료";
         return RedirectToPage("/Games/Index");

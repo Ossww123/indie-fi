@@ -71,6 +71,16 @@ public class EditModel : PageModel
             return NotFound();
         }
 
+        if (result.Outcome == UpdateGameOutcome.Invalid)
+        {
+            foreach (var violation in result.Violations)
+            {
+                ModelState.AddModelError(violation.Field, violation.Message);
+            }
+
+            return Page();
+        }
+
         TempData["GameMessage"] = "수정되었습니다";
         return RedirectToPage("/Games/Detail", new { id });
     }
