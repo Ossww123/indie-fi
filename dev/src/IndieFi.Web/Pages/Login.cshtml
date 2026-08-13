@@ -4,23 +4,23 @@
     ViewData["Title"] = "로그인";
 }
 
-<h1 class="h3 mb-4">로그인</h1>
+<h1 class="page-title mb-6">로그인</h1>
 
-<form method="post" class="col-md-5">
+<form method="post" class="form-stack">
     <input type="hidden" asp-for="ReturnUrl" />
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div asp-validation-summary="ModelOnly"></div>
 
-    <div class="mb-3">
-        <label asp-for="Email" class="form-label">이메일</label>
-        <input asp-for="Email" class="form-control" autocomplete="email" />
-        <span asp-validation-for="Email" class="text-danger small"></span>
+    <div class="field-group">
+        <label asp-for="Email" class="field-label">이메일</label>
+        <input asp-for="Email" class="field-input" autocomplete="email" />
+        <span asp-validation-for="Email" class="field-error"></span>
     </div>
 
-    <div class="mb-3">
-        <label asp-for="Password" class="form-label">비밀번호</label>
-        <input asp-for="Password" class="form-control" autocomplete="current-password" />
-        <span asp-validation-for="Password" class="text-danger small"></span>
+    <div class="field-group">
+        <label asp-for="Password" class="field-label">비밀번호</label>
+        <input asp-for="Password" class="field-input" autocomplete="current-password" />
+        <span asp-validation-for="Password" class="field-error"></span>
     </div>
 
-    <button type="submit" class="btn btn-primary">로그인</button>
+    <button type="submit" class="button-primary">로그인</button>
 </form>

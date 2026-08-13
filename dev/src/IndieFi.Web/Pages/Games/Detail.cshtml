@@ -6,59 +6,59 @@
 
 @if (TempData["GameMessage"] is string gameMessage)
 {
-    <div class="alert alert-success">@gameMessage</div>
+    <div class="alert-success">@gameMessage</div>
 }
 
 @if (Model.RequestMessage is { } requestMessage)
 {
-    <div class="alert @(requestMessage.IsSuccess ? "alert-success" : "alert-warning")">
+    <div class="@(requestMessage.IsSuccess ? "alert-success" : "alert-warning")">
         @requestMessage.Message
     </div>
 }
 
-<div class="d-flex align-items-center gap-2">
-    <h1 class="h3 mb-1">@Model.Game.Title</h1>
+<div class="flex flex-wrap items-center gap-2">
+    <h1 class="page-title mr-2">@Model.Game.Title</h1>
     @* Hiding this link is only UX; the Edit endpoint enforces ownership. *@
     @if (Model.IsOwner)
     {
         <a asp-page="/Games/Edit"
            asp-route-id="@Model.Game.Id"
-           class="btn btn-outline-secondary btn-sm">수정</a>
+           class="button-outline px-3 py-1.5">수정</a>
         <a asp-page="/KeyDrops/New"
            asp-route-gameId="@Model.Game.Id"
-           class="btn btn-outline-secondary btn-sm">드롭 예약</a>
+           class="button-outline px-3 py-1.5">드롭 예약</a>
         @* Hiding this button is only UX; the handler enforces ownership. *@
         <form method="post"
               asp-page-handler="RequestFeedback"
               asp-route-id="@Model.Game.Id">
-            <button type="submit" class="btn btn-outline-secondary btn-sm">피드백 요청</button>
+            <button type="submit" class="button-outline px-3 py-1.5">피드백 요청</button>
         </form>
     }
 </div>
-<p class="text-muted small">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
+<p class="mt-2 text-meta">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
 
 @if (Model.Game.Description is not null)
 {
-    <p>@Model.Game.Description</p>
+    <p class="mt-6 max-w-3xl leading-7 text-slate-700">@Model.Game.Description</p>
 }
 else
 {
-    <p class="text-muted">(소개 없음)</p>
+    <p class="mt-6 text-slate-500">(소개 없음)</p>
 }
 
 @if (Model.IsOwner)
 {
-    <h2 class="h5 mt-4">피드백 요청</h2>
+    <h2 class="subsection-title mt-8">피드백 요청</h2>
     @if (Model.Requests.Count == 0)
     {
-        <div class="alert alert-secondary">등록한 피드백 요청 없음</div>
+        <div class="alert-neutral">등록한 피드백 요청 없음</div>
     }
     else
     {
-        <div class="list-group mb-3">
+        <div class="surface-list mb-4">
             @foreach (var request in Model.Requests)
             {
-                <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div class="surface-item flex items-center justify-between gap-4">
                     <span>
                         @request.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                         · @request.StatusText
@@ -70,42 +70,42 @@ else
                               asp-page-handler="CancelRequest"
                               asp-route-id="@Model.Game.Id"
                               asp-route-requestId="@request.Id">
-                            <button type="submit" class="btn btn-outline-danger btn-sm">취소</button>
+                            <button type="submit" class="button-danger px-3 py-1.5">취소</button>
                         </form>
                     }
                 </div>
             }
         </div>
     }
-    <p><a asp-page="/Games/Feedback" asp-route-id="@Model.Game.Id">받은 피드백 보기</a></p>
+    <p><a asp-page="/Games/Feedback" asp-route-id="@Model.Game.Id" class="text-link">받은 피드백 보기</a></p>
 }
 else
 {
-    <p class="text-muted">대기 중인 피드백 요청 @(Model.PendingRequestCount)개</p>
+    <p class="mt-6 text-slate-500">대기 중인 피드백 요청 @(Model.PendingRequestCount)개</p>
 }
 
-<h2 class="h5 mt-4">예약된 드롭</h2>
+<h2 class="subsection-title mt-8">예약된 드롭</h2>
 @if (Model.Drops.Count == 0)
 {
-    <div class="alert alert-secondary">예약된 드롭 없음</div>
+    <div class="alert-neutral">예약된 드롭 없음</div>
 }
 else
 {
-    <div class="list-group">
+    <div class="surface-list">
         @foreach (var drop in Model.Drops)
         {
             <a asp-page="/KeyDrops/Detail"
                asp-route-id="@drop.Id"
-               class="list-group-item list-group-item-action">
-                <div class="d-flex justify-content-between align-items-center">
+               class="surface-item surface-link">
+                <div class="flex items-center justify-between gap-4">
                     <span>@drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
                     @if (drop.IsOpen)
                     {
-                        <span class="badge bg-success">진행 중</span>
+                        <span class="badge-success">진행 중</span>
                     }
                     else
                     {
-                        <span class="badge bg-secondary">오픈 예정</span>
+                        <span class="badge-neutral">오픈 예정</span>
                     }
                 </div>
             </a>
@@ -113,4 +113,4 @@ else
     </div>
 }
 
-<a asp-page="/Games/Index" class="btn btn-link px-0">← 목록으로</a>
+<a asp-page="/Games/Index" class="text-link mt-6 inline-block">← 목록으로</a>

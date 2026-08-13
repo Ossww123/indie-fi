@@ -6,28 +6,28 @@
 
 @if (TempData["SignupMessage"] is string signupMessage)
 {
-    <div class="alert alert-success">@signupMessage</div>
+    <div class="alert-success">@signupMessage</div>
 }
 
-<div class="text-center mb-4">
-    <h1 class="display-4">Indie-Fi</h1>
-    <p class="text-muted">인디 게임 피드백 플랫폼</p>
+<div class="mb-10 py-6 text-center">
+    <h1 class="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Indie-Fi</h1>
+    <p class="mt-2 text-slate-500">인디 게임 피드백 플랫폼</p>
 </div>
 
-<h2 class="h4 mb-3">게임 둘러보기</h2>
+<h2 class="section-title">게임 둘러보기</h2>
 @if (Model.Games.Count == 0)
 {
-    <div class="alert alert-secondary">아직 등록된 게임이 없습니다.</div>
+    <div class="alert-neutral">아직 등록된 게임이 없습니다.</div>
 }
 else
 {
-    <div class="list-group">
+    <div class="surface-list">
         @foreach (var game in Model.Games)
         {
-            <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="list-group-item list-group-item-action">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="fw-bold">@game.Title</span>
-                    <span class="text-muted">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+            <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="surface-item surface-link">
+                <div class="flex items-center justify-between gap-4">
+                    <span class="font-semibold">@game.Title</span>
+                    <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
                 </div>
                 @if (game.Description is not null)
                 {
@@ -35,7 +35,7 @@ else
                 }
                 else
                 {
-                    <div class="text-muted">(소개 없음)</div>
+                    <div class="text-slate-500">(소개 없음)</div>
                 }
             </a>
         }

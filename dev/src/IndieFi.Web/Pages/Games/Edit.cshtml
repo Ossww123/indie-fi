@@ -5,23 +5,25 @@
     var id = RouteData.Values["id"];
 }
 
-<h1 class="h3 mb-4">게임 수정</h1>
+<h1 class="page-title mb-6">게임 수정</h1>
 
-<form method="post" class="col-md-5">
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+<form method="post" class="form-stack">
+    <div asp-validation-summary="ModelOnly"></div>
 
-    <div class="mb-3">
-        <label asp-for="Title" class="form-label">게임 제목</label>
-        <input asp-for="Title" class="form-control" />
-        <span asp-validation-for="Title" class="text-danger small"></span>
+    <div class="field-group">
+        <label asp-for="Title" class="field-label">게임 제목</label>
+        <input asp-for="Title" class="field-input" />
+        <span asp-validation-for="Title" class="field-error"></span>
     </div>
 
-    <div class="mb-3">
-        <label asp-for="Description" class="form-label">소개</label>
-        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
-        <span asp-validation-for="Description" class="text-danger small"></span>
+    <div class="field-group">
+        <label asp-for="Description" class="field-label">소개</label>
+        <textarea asp-for="Description" class="field-input" rows="4"></textarea>
+        <span asp-validation-for="Description" class="field-error"></span>
     </div>
 
-    <button type="submit" class="btn btn-primary">저장</button>
-    <a asp-page="/Games/Detail" asp-route-id="@id" class="btn btn-link">취소</a>
+    <div class="flex flex-wrap gap-2">
+        <button type="submit" class="button-primary">저장</button>
+        <a asp-page="/Games/Detail" asp-route-id="@id" class="button-link">취소</a>
+    </div>
 </form>

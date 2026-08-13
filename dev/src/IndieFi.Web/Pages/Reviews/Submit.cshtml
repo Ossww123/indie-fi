@@ -4,23 +4,27 @@
     ViewData["Title"] = "피드백 쓰기";
 }
 
-<h1 class="h3 mb-4">피드백 쓰기</h1>
+<h1 class="page-title mb-6">피드백 쓰기</h1>
 
-<div class="mb-4">
-    <div class="fw-bold">@Model.GameTitle</div>
-    <div class="text-muted">
+<div class="mb-6">
+    <div class="font-semibold">@Model.GameTitle</div>
+    <div class="text-meta">
         마감시각 @Model.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
     </div>
 </div>
 
-<form method="post" class="col-md-5">
-    <div class="mb-3">
-        <label asp-for="Body" class="form-label">피드백</label>
-        <span class="text-muted small">30자 이상</span>
-        <textarea asp-for="Body" class="form-control" rows="8"></textarea>
-        <span asp-validation-for="Body" class="text-danger small"></span>
+<form method="post" class="form-stack">
+    <div class="field-group">
+        <div class="flex items-baseline justify-between gap-3">
+            <label asp-for="Body" class="field-label">피드백</label>
+            <span class="field-hint">30자 이상</span>
+        </div>
+        <textarea asp-for="Body" class="field-input" rows="8"></textarea>
+        <span asp-validation-for="Body" class="field-error"></span>
     </div>
 
-    <button type="submit" class="btn btn-primary">제출</button>
-    <a asp-page="Index" class="btn btn-link">목록으로 돌아가기</a>
+    <div class="flex flex-wrap gap-2">
+        <button type="submit" class="button-primary">제출</button>
+        <a asp-page="Index" class="button-link">목록으로 돌아가기</a>
+    </div>
 </form>

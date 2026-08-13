@@ -5,34 +5,36 @@
     ViewData["Title"] = "내 크레딧";
 }
 
-<h1 class="h3 mb-4">내 크레딧</h1>
+<h1 class="page-title mb-6">내 크레딧</h1>
 
-<div class="display-6 mb-4">현재 @Model.Balance 크레딧</div>
+<div class="mb-6 rounded-xl border border-indigo-100 bg-indigo-50 p-5 text-2xl font-semibold text-indigo-950">
+    현재 @Model.Balance 크레딧
+</div>
 
 @if (Model.Entries.Count == 0)
 {
-    <div class="alert alert-secondary">크레딧 내역이 없습니다.</div>
+    <div class="alert-neutral">크레딧 내역이 없습니다.</div>
 }
 else
 {
-    <div class="list-group">
+    <div class="surface-list">
         @foreach (var entry in Model.Entries)
         {
             var deltaClass = entry.Delta > 0
-                ? "text-success"
+                ? "text-emerald-700"
                 : entry.Delta < 0
-                    ? "text-danger"
-                    : "text-muted";
+                    ? "text-red-700"
+                    : "text-slate-500";
             var description = entry.Kind switch
             {
                 CreditEntryKind.Grant => "가입 축하 지급",
                 _ => entry.Kind.ToString(),
             };
 
-            <div class="list-group-item">
-                <div class="d-flex align-items-center gap-3">
-                    <span class="text-muted">@entry.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
-                    <span class="fw-bold @deltaClass">@entry.Delta.ToString("+0;-0;0")</span>
+            <div class="surface-item">
+                <div class="flex flex-wrap items-center gap-3">
+                    <span class="text-meta">@entry.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                    <span class="font-semibold @deltaClass">@entry.Delta.ToString("+0;-0;0")</span>
                     <span>@description</span>
                 </div>
             </div>
