@@ -1,6 +1,6 @@
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -11,17 +11,19 @@ namespace IndieFi.Web.Pages.Games;
 public class IndexModel : PageModel
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
 
-    public IndexModel(AppDbContext db)
+    public IndexModel(AppDbContext db, ICurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public IReadOnlyList<Game> Games { get; private set; } = [];
 
     public async Task OnGetAsync()
     {
-        var ownerId = User.GetUserId();
+        var ownerId = _currentUser.GetRequiredUserId();
 
         // Only the signed-in user's own games; the owner id comes from the cookie,
         // same as when a game is registered.

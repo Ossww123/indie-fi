@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Http;
 using Xunit;
@@ -48,6 +49,18 @@ public class HttpCurrentUserTests
 
         Assert.True(currentUser.IsAuthenticated);
         Assert.Null(currentUser.UserId);
+    }
+
+    [Fact]
+    public void Required_user_id_fails_loudly_when_identifier_is_missing()
+    {
+        var identity = new ClaimsIdentity(authenticationType: "Test");
+        var currentUser = CreateCurrentUser(new ClaimsPrincipal(identity));
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => currentUser.GetRequiredUserId());
+
+        Assert.Contains("valid name identifier claim", exception.Message);
     }
 
     private static HttpCurrentUser CreateCurrentUser(ClaimsPrincipal principal)
