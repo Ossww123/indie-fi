@@ -14,9 +14,10 @@ public class SignupModel : PageModel
         _accountRegistrationService = accountRegistrationService;
     }
 
-    // No validation annotations here — see Games/New for why the service owns the rules.
-    // [DataType] stays because it only tells the browser to mask the field.
+    // The service owns validation. [DataType] only controls how the browser renders
+    // each field, so it does not duplicate any validation rule.
     [BindProperty]
+    [DataType(DataType.EmailAddress)]
     public string? Email { get; set; }
 
     [BindProperty]

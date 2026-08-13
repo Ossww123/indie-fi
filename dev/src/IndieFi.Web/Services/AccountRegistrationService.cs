@@ -98,9 +98,8 @@ public sealed class AccountRegistrationService
     }
 
     /// <summary>
-    /// Enforces the account rules for every caller. The signup page also declares them
-    /// as form annotations for immediate feedback, but nothing below this method checks
-    /// the password length or the shape of the address.
+    /// Enforces the account rules for every caller because nothing below this method
+    /// checks the password length or the shape of the address.
     /// </summary>
     private static List<ValidationViolation> Validate(string? email, string? password)
     {

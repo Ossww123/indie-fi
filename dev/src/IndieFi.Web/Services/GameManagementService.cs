@@ -100,9 +100,8 @@ public sealed class GameManagementService
     }
 
     /// <summary>
-    /// Enforces the title and description rules for every caller. The page also
-    /// declares them as form annotations for immediate feedback, but the database
-    /// only rejects a null title, so a blank one would otherwise be stored.
+    /// Enforces the title and description rules for every caller. The database only
+    /// rejects a null title, so a blank one would otherwise be stored.
     /// </summary>
     private static List<ValidationViolation> Validate(string? title, string? description)
     {
