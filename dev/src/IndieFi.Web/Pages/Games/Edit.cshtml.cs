@@ -1,6 +1,6 @@
-using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -12,20 +12,23 @@ public class EditModel : PageModel
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly GameManagementService _gameManagementService;
 
-    public EditModel(AppDbContext db, ICurrentUser currentUser)
+    public EditModel(
+        AppDbContext db,
+        ICurrentUser currentUser,
+        GameManagementService gameManagementService)
     {
         _db = db;
         _currentUser = currentUser;
+        _gameManagementService = gameManagementService;
     }
 
+    // No validation annotations here — see Games/New for why the service owns the rules.
     [BindProperty]
-    [Required(ErrorMessage = "게임 제목을 입력해 주세요.")]
-    [StringLength(200, ErrorMessage = "제목이 너무 깁니다.")]
-    public string Title { get; set; } = string.Empty;
+    public string? Title { get; set; }
 
     [BindProperty]
-    [StringLength(2000, ErrorMessage = "소개가 너무 깁니다.")]
     public string? Description { get; set; }
 
     public async Task<IActionResult> OnGetAsync(long id)
@@ -48,25 +51,27 @@ public class EditModel : PageModel
 
     public async Task<IActionResult> OnPostAsync(long id)
     {
-        if (!ModelState.IsValid)
-        {
-            return Page();
-        }
-
-        var game = await _db.Games.FindAsync(id);
         var ownerId = _currentUser.GetRequiredUserId();
+        var result = await _gameManagementService.UpdateAsync(
+            id,
+            ownerId,
+            Title,
+            Description);
 
-        // The ownership check must be repeated on POST: an attacker can send this
-        // POST directly without ever loading the GET page. Hiding the edit link in
-        // the UI is not a security boundary — this server check is.
-        if (game is null || game.OwnerId != ownerId)
+        if (result.Outcome == UpdateGameOutcome.NotFound)
         {
             return NotFound();
         }
 
-        game.Title = Title;
-        game.Description = string.IsNullOrWhiteSpace(Description) ? null : Description;
-        await _db.SaveChangesAsync();
+        if (result.Outcome == UpdateGameOutcome.Invalid)
+        {
+            foreach (var violation in result.Violations)
+            {
+                ModelState.AddModelError(violation.Field, violation.Message);
+            }
+
+            return Page();
+        }
 
         TempData["GameMessage"] = "수정되었습니다";
         return RedirectToPage("/Games/Detail", new { id });

@@ -1,5 +1,6 @@
 using System.Net;
 using IndieFi.Web.Entities;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -100,6 +101,66 @@ public sealed class KeyDropPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.DoesNotContain(injected, html);
         Assert.DoesNotContain("alert-warning", html);
+    }
+
+    // Service-level tests cannot see this: an annotation on the page can fail model
+    // binding and return before the service runs, so only one message ever reaches
+    // the screen. This drives the real form to prove both problems are reported.
+    [Fact]
+    public async Task Post_NewDrop_WithBlankKeysAndPastOpenTime_ShowsBothMessages()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var gameId = await CreateGameOwnedByAsync(email);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var formResponse = await client.GetAsync(
+            $"/KeyDrops/New?gameId={gameId}",
+            TestContext.Current.CancellationToken);
+        var formHtml = await formResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var antiforgeryToken = PageTestSupport.ExtractAntiforgeryToken(formHtml);
+
+        using var scheduleForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["OpensAt"] = "2020-01-01T00:00",
+            ["KeysText"] = string.Empty,
+            ["__RequestVerificationToken"] = antiforgeryToken,
+        });
+        using var scheduleResponse = await client.PostAsync(
+            $"/KeyDrops/New?gameId={gameId}",
+            scheduleForm,
+            TestContext.Current.CancellationToken);
+        var scheduleHtml = WebUtility.HtmlDecode(
+            await scheduleResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, scheduleResponse.StatusCode);
+        Assert.Contains("키를 한 개 이상 입력해 주세요.", scheduleHtml);
+        Assert.Contains("오픈 시각은 현재보다 미래여야 합니다.", scheduleHtml);
+    }
+
+    private async Task<long> CreateGameOwnedByAsync(string ownerEmail)
+    {
+        await using var db = _fixture.NewDbContext();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var owner = await db.Users.SingleAsync(
+            user => user.Email == ownerEmail,
+            cancellationToken);
+
+        var game = new Game
+        {
+            OwnerId = owner.Id,
+            Title = $"Test Game {Guid.NewGuid():N}"
+        };
+
+        db.Games.Add(game);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return game.Id;
     }
 
     private async Task LoginAsync(HttpClient client)
