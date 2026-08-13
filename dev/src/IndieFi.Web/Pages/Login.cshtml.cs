@@ -1,25 +1,20 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
-using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Pages;
 
 public class LoginModel : PageModel
 {
-    private readonly AppDbContext _db;
-    private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly AccountAuthenticationService _accountAuthenticationService;
 
-    public LoginModel(AppDbContext db, IPasswordHasher<User> passwordHasher)
+    public LoginModel(AccountAuthenticationService accountAuthenticationService)
     {
-        _db = db;
-        _passwordHasher = passwordHasher;
+        _accountAuthenticationService = accountAuthenticationService;
     }
 
     [BindProperty]
@@ -42,13 +37,9 @@ public class LoginModel : PageModel
             return Page();
         }
 
-        var user = await _db.Users.SingleOrDefaultAsync(u => u.Email == Email);
+        var result = await _accountAuthenticationService.AuthenticateAsync(Email, Password);
 
-        var verified = user is not null
-            && _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, Password)
-                != PasswordVerificationResult.Failed;
-
-        if (!verified)
+        if (result.Outcome == AccountAuthenticationOutcome.InvalidCredentials)
         {
             // Deliberately the same message either way: saying "no such account"
             // would let anyone probe which email addresses are registered.
@@ -58,8 +49,8 @@ public class LoginModel : PageModel
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, user!.Id.ToString()),
-            new(ClaimTypes.Name, user.Email),
+            new(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()),
+            new(ClaimTypes.Name, result.Email!),
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

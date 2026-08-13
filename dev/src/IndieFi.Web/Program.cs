@@ -21,6 +21,7 @@ builder.Services.AddScoped<KeyClaimService>();
 builder.Services.AddScoped<KeyDropSchedulingService>();
 builder.Services.AddScoped<GameManagementService>();
 builder.Services.AddScoped<AccountRegistrationService>();
+builder.Services.AddScoped<AccountAuthenticationService>();
 builder.Services.AddScoped<ReviewRequestService>();
 builder.Services.AddScoped<ReviewClaimService>();
 builder.Services.AddScoped<FeedbackSubmissionService>();
