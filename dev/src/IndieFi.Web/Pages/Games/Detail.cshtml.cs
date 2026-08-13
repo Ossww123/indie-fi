@@ -1,6 +1,6 @@
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -43,11 +43,16 @@ public class DetailModel : PageModel
     ];
 
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
     private readonly ReviewRequestService _reviewRequestService;
 
-    public DetailModel(AppDbContext db, ReviewRequestService reviewRequestService)
+    public DetailModel(
+        AppDbContext db,
+        ICurrentUser currentUser,
+        ReviewRequestService reviewRequestService)
     {
         _db = db;
+        _currentUser = currentUser;
         _reviewRequestService = reviewRequestService;
     }
 
@@ -76,7 +81,7 @@ public class DetailModel : PageModel
         // because feedback added later is left by other people. Ownership is only
         // enforced when editing a game.
         Game = game;
-        IsOwner = User.TryGetUserId(out var ownerId) && game.OwnerId == ownerId;
+        IsOwner = _currentUser.UserId is long ownerId && game.OwnerId == ownerId;
 
         if (IsOwner)
         {
@@ -112,12 +117,12 @@ public class DetailModel : PageModel
     {
         // The page itself stays public, so requesting feedback is guarded here instead.
         // [Authorize] cannot do it: Razor Pages ignores the attribute on a handler.
-        if (User.Identity?.IsAuthenticated != true)
+        if (!_currentUser.IsAuthenticated)
         {
             return Challenge();
         }
 
-        var userId = User.GetUserId();
+        var userId = _currentUser.GetRequiredUserId();
         var result = await _reviewRequestService.RequestAsync(id, userId);
 
         if (result.Outcome == ReviewRequestOutcome.GameNotFound)
@@ -145,12 +150,14 @@ public class DetailModel : PageModel
     {
         // The page itself stays public, so cancellation is guarded here instead.
         // [Authorize] cannot do it: Razor Pages ignores the attribute on a handler.
-        if (User.Identity?.IsAuthenticated != true)
+        if (!_currentUser.IsAuthenticated)
         {
             return Challenge();
         }
 
-        var result = await _reviewRequestService.CancelAsync(requestId, User.GetUserId());
+        var result = await _reviewRequestService.CancelAsync(
+            requestId,
+            _currentUser.GetRequiredUserId());
         var requestNotice = RequestNotices
             .Single(notice => notice.Outcome == result.Outcome);
 

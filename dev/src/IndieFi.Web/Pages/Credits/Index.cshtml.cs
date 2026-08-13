@@ -1,6 +1,6 @@
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -11,10 +11,12 @@ namespace IndieFi.Web.Pages.Credits;
 public class IndexModel : PageModel
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
 
-    public IndexModel(AppDbContext db)
+    public IndexModel(AppDbContext db, ICurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public IReadOnlyList<CreditLedgerEntry> Entries { get; private set; } = [];
@@ -23,7 +25,7 @@ public class IndexModel : PageModel
 
     public async Task OnGetAsync()
     {
-        var userId = User.GetUserId();
+        var userId = _currentUser.GetRequiredUserId();
 
         Entries = await _db.CreditLedgerEntries
             .Where(e => e.UserId == userId)

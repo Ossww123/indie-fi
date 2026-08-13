@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,13 +14,16 @@ namespace IndieFi.Web.Pages.Reviews;
 public class SubmitModel : PageModel
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
     private readonly FeedbackSubmissionService _feedbackSubmissionService;
 
     public SubmitModel(
         AppDbContext db,
+        ICurrentUser currentUser,
         FeedbackSubmissionService feedbackSubmissionService)
     {
         _db = db;
+        _currentUser = currentUser;
         _feedbackSubmissionService = feedbackSubmissionService;
     }
 
@@ -44,7 +47,7 @@ public class SubmitModel : PageModel
             return await LoadPageAsync(assignmentId);
         }
 
-        var reviewerId = User.GetUserId();
+        var reviewerId = _currentUser.GetRequiredUserId();
         var result = await _feedbackSubmissionService.SubmitAsync(
             assignmentId,
             reviewerId,
@@ -64,7 +67,7 @@ public class SubmitModel : PageModel
 
     private async Task<IActionResult> LoadPageAsync(long assignmentId)
     {
-        var reviewerId = User.GetUserId();
+        var reviewerId = _currentUser.GetRequiredUserId();
         var assignment = await (
             from reviewAssignment in _db.ReviewAssignments
             join reviewRequest in _db.ReviewRequests

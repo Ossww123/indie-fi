@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -12,10 +12,12 @@ namespace IndieFi.Web.Pages.Games;
 public class NewModel : PageModel
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
 
-    public NewModel(AppDbContext db)
+    public NewModel(AppDbContext db, ICurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     [BindProperty]
@@ -36,7 +38,7 @@ public class NewModel : PageModel
 
         // The owner is taken from the signed cookie, never from the form;
         // otherwise anyone could register a game under someone else's id.
-        var ownerId = User.GetUserId();
+        var ownerId = _currentUser.GetRequiredUserId();
         var description = string.IsNullOrWhiteSpace(Description) ? null : Description;
 
         var game = new Game

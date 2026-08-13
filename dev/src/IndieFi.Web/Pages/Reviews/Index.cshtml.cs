@@ -1,6 +1,6 @@
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -67,15 +67,18 @@ public class IndexModel : PageModel
     private const string SweptCode = "swept";
 
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
     private readonly ReviewClaimService _reviewClaimService;
     private readonly ReviewLeaseSweepService _reviewLeaseSweepService;
 
     public IndexModel(
         AppDbContext db,
+        ICurrentUser currentUser,
         ReviewClaimService reviewClaimService,
         ReviewLeaseSweepService reviewLeaseSweepService)
     {
         _db = db;
+        _currentUser = currentUser;
         _reviewClaimService = reviewClaimService;
         _reviewLeaseSweepService = reviewLeaseSweepService;
     }
@@ -106,7 +109,7 @@ public class IndexModel : PageModel
                 : new SweepNotice("정리할 만료 작업이 없습니다.", false);
         }
 
-        var userId = User.GetUserId();
+        var userId = _currentUser.GetRequiredUserId();
 
         MyAssignments = await (
             from assignment in _db.ReviewAssignments
@@ -140,7 +143,7 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostClaimAsync()
     {
-        var userId = User.GetUserId();
+        var userId = _currentUser.GetRequiredUserId();
         var result = await _reviewClaimService.ClaimNextAsync(userId);
         var claimNotice = ClaimNotices
             .FirstOrDefault(notice => notice.Outcome == result.Outcome);

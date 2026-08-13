@@ -1,5 +1,5 @@
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
-using IndieFi.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -11,10 +11,12 @@ namespace IndieFi.Web.Pages.Games;
 public class FeedbackModel : PageModel
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
 
-    public FeedbackModel(AppDbContext db)
+    public FeedbackModel(AppDbContext db, ICurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public long GameId { get; private set; }
@@ -24,7 +26,7 @@ public class FeedbackModel : PageModel
     public async Task<IActionResult> OnGetAsync(long id)
     {
         var game = await _db.Games.FindAsync(id);
-        var ownerId = User.GetUserId();
+        var ownerId = _currentUser.GetRequiredUserId();
 
         // Return 404 for both cases because 403 would confirm that the requested game exists.
         if (game is null || game.OwnerId != ownerId)

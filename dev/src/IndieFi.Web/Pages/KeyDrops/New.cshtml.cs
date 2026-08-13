@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -12,10 +12,12 @@ namespace IndieFi.Web.Pages.KeyDrops;
 public class NewModel : PageModel
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
 
-    public NewModel(AppDbContext db)
+    public NewModel(AppDbContext db, ICurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public Game Game { get; private set; } = null!;
@@ -31,7 +33,7 @@ public class NewModel : PageModel
     public async Task<IActionResult> OnGetAsync(long gameId)
     {
         var game = await _db.Games.FindAsync(gameId);
-        var ownerId = User.GetUserId();
+        var ownerId = _currentUser.GetRequiredUserId();
 
         // Return 404 (not 403) when the game is missing OR not owned by the caller —
         // a 403 would reveal that the game exists.
@@ -47,7 +49,7 @@ public class NewModel : PageModel
     public async Task<IActionResult> OnPostAsync(long gameId)
     {
         var game = await _db.Games.FindAsync(gameId);
-        var ownerId = User.GetUserId();
+        var ownerId = _currentUser.GetRequiredUserId();
 
         // The ownership check must be repeated on POST: an attacker can send this
         // POST directly without ever loading the GET page.
