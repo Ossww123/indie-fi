@@ -1,5 +1,6 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -36,25 +37,33 @@ public class FeedbackModel : PageModel
 
         GameId = game.Id;
         GameTitle = game.Title;
-        Items = await (
+        var feedbackItems = await (
             from submission in _db.FeedbackSubmissions
             join assignment in _db.ReviewAssignments on submission.AssignmentId equals assignment.Id
             join reviewRequest in _db.ReviewRequests on assignment.RequestId equals reviewRequest.Id
-            join reviewer in _db.Users on assignment.ReviewerId equals reviewer.Id
             where reviewRequest.GameId == id
             // Ordering by id rather than created_at settles submissions that share a timestamp.
             orderby submission.Id descending
-            select new FeedbackListItem(
-                reviewer.Email,
+            select new
+            {
+                assignment.ReviewerId,
                 submission.CreatedAt,
-                submission.Body))
+                submission.Body,
+            })
             .ToListAsync();
+
+        Items = feedbackItems
+            .Select(item => new FeedbackListItem(
+                UserDisplayIdentifier.Format(item.ReviewerId),
+                item.CreatedAt,
+                item.Body))
+            .ToList();
 
         return Page();
     }
 
     public sealed record FeedbackListItem(
-        string ReviewerEmail,
+        string ReviewerDisplayIdentifier,
         DateTimeOffset SubmittedAt,
         string Body);
 }

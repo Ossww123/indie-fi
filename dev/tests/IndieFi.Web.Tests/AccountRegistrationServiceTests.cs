@@ -41,7 +41,6 @@ public sealed class AccountRegistrationServiceTests
 
         Assert.Equal(AccountRegistrationOutcome.Registered, result.Outcome);
         Assert.Equal(user.Id, result.UserId);
-        Assert.Equal(email, result.Email);
         Assert.NotEqual(password, user.PasswordHash);
         Assert.NotEqual(
             PasswordVerificationResult.Failed,
@@ -96,7 +95,6 @@ public sealed class AccountRegistrationServiceTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(AccountRegistrationOutcome.Registered, result.Outcome);
-        Assert.Equal(displayEmail, result.Email);
         Assert.Equal(displayEmail, user.Email);
         Assert.Equal(displayEmail.ToUpperInvariant(), user.NormalizedEmail);
     }

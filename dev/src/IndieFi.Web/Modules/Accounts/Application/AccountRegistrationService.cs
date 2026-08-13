@@ -19,8 +19,7 @@ public enum AccountRegistrationOutcome
 public sealed record AccountRegistrationResult(
     AccountRegistrationOutcome Outcome,
     IReadOnlyList<ValidationViolation> Violations,
-    long? UserId = null,
-    string? Email = null);
+    long? UserId = null);
 
 public sealed class AccountRegistrationService
 {
@@ -98,8 +97,7 @@ public sealed class AccountRegistrationService
         return new AccountRegistrationResult(
             AccountRegistrationOutcome.Registered,
             NoViolations,
-            user.Id,
-            user.Email);
+            user.Id);
     }
 
     /// <summary>

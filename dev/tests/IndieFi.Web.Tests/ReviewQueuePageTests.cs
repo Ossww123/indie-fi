@@ -2,6 +2,7 @@ using System.Net;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
+using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Feedback.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,7 +44,7 @@ public sealed class ReviewQueuePageTests
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
         var requesterId = await FindUserIdAsync(email);
-        var (_, gameTitle) = await CreateReviewRequestAsync(requesterId, "내 게임");
+        var request = await CreateReviewRequestAsync(requesterId, "내 게임");
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
@@ -56,35 +57,14 @@ public sealed class ReviewQueuePageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.DoesNotContain(gameTitle, WebUtility.HtmlDecode(html));
+        Assert.DoesNotContain(request.GameTitle, WebUtility.HtmlDecode(html));
     }
 
     [Fact]
     public async Task Get_ReviewsPage_ShowsAnotherDevelopersRequest()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
-        var (_, gameTitle) = await CreateReviewRequestAsync(null, "다른 개발자의 게임");
-
-        await using var factory = new WebAppFactory(_fixture.ConnectionString);
-        using var client = factory.CreateClient();
-        await PageTestSupport.LoginAsync(client, email, password);
-
-        using var response = await client.GetAsync(
-            "/Reviews",
-            TestContext.Current.CancellationToken);
-        var html = await response.Content.ReadAsStringAsync(
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(gameTitle, WebUtility.HtmlDecode(html));
-    }
-
-    [Fact]
-    public async Task Get_ReviewsPage_OrdersOldestFirst()
-    {
-        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
-        var (_, firstGameTitle) = await CreateReviewRequestAsync(null, "첫 번째 게임");
-        var (_, secondGameTitle) = await CreateReviewRequestAsync(null, "두 번째 게임");
+        var request = await CreateReviewRequestAsync(null, "다른 개발자의 게임");
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
@@ -98,11 +78,41 @@ public sealed class ReviewQueuePageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var decodedHtml = WebUtility.HtmlDecode(html);
-        var firstPosition = decodedHtml.IndexOf(firstGameTitle, StringComparison.Ordinal);
-        var secondPosition = decodedHtml.IndexOf(secondGameTitle, StringComparison.Ordinal);
+        Assert.Contains(request.GameTitle, decodedHtml);
+        Assert.Contains(
+            UserDisplayIdentifier.Format(request.RequesterId),
+            decodedHtml);
+        Assert.DoesNotContain(request.RequesterEmail, decodedHtml);
+    }
 
-        Assert.True(firstPosition >= 0, $"Expected to find '{firstGameTitle}' in the response.");
-        Assert.True(secondPosition >= 0, $"Expected to find '{secondGameTitle}' in the response.");
+    [Fact]
+    public async Task Get_ReviewsPage_OrdersOldestFirst()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var firstRequest = await CreateReviewRequestAsync(null, "첫 번째 게임");
+        var secondRequest = await CreateReviewRequestAsync(null, "두 번째 게임");
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var response = await client.GetAsync(
+            "/Reviews",
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var decodedHtml = WebUtility.HtmlDecode(html);
+        var firstPosition = decodedHtml.IndexOf(firstRequest.GameTitle, StringComparison.Ordinal);
+        var secondPosition = decodedHtml.IndexOf(secondRequest.GameTitle, StringComparison.Ordinal);
+
+        Assert.True(
+            firstPosition >= 0,
+            $"Expected to find '{firstRequest.GameTitle}' in the response.");
+        Assert.True(
+            secondPosition >= 0,
+            $"Expected to find '{secondRequest.GameTitle}' in the response.");
         Assert.True(firstPosition < secondPosition, "Expected the older request to appear first.");
     }
 
@@ -172,7 +182,7 @@ public sealed class ReviewQueuePageTests
             .SingleAsync(TestContext.Current.CancellationToken);
     }
 
-    private async Task<(long RequestId, string GameTitle)> CreateReviewRequestAsync(
+    private async Task<ReviewRequestPageData> CreateReviewRequestAsync(
         long? existingRequesterId,
         string titlePrefix)
     {
@@ -218,7 +228,16 @@ public sealed class ReviewQueuePageTests
         db.ReviewRequests.Add(reviewRequest);
         await db.SaveChangesAsync(cancellationToken);
 
-        return (reviewRequest.Id, game.Title);
+        var requesterEmail = await db.Users
+            .Where(user => user.Id == requesterId)
+            .Select(user => user.Email)
+            .SingleAsync(cancellationToken);
+
+        return new ReviewRequestPageData(
+            reviewRequest.Id,
+            game.Title,
+            requesterId,
+            requesterEmail);
     }
 
     private static async Task<long> CreateRequesterAsync(
@@ -239,4 +258,10 @@ public sealed class ReviewQueuePageTests
 
         return requester.Id;
     }
+
+    private sealed record ReviewRequestPageData(
+        long RequestId,
+        string GameTitle,
+        long RequesterId,
+        string RequesterEmail);
 }

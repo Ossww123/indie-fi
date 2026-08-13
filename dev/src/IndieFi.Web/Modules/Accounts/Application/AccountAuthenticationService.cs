@@ -14,8 +14,7 @@ public enum AccountAuthenticationOutcome
 
 public sealed record AccountAuthenticationResult(
     AccountAuthenticationOutcome Outcome,
-    long? UserId = null,
-    string? Email = null);
+    long? UserId = null);
 
 public sealed class AccountAuthenticationService
 {
@@ -55,7 +54,6 @@ public sealed class AccountAuthenticationService
 
         return new AccountAuthenticationResult(
             AccountAuthenticationOutcome.Authenticated,
-            user!.Id,
-            user.Email);
+            user!.Id);
     }
 }

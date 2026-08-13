@@ -43,7 +43,6 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.Authenticated, result.Outcome);
         Assert.Equal(userId, result.UserId);
-        Assert.Equal(email, result.Email);
     }
 
     [Fact]
@@ -70,7 +69,6 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.InvalidCredentials, result.Outcome);
         Assert.Null(result.UserId);
-        Assert.Null(result.Email);
     }
 
     [Fact]
@@ -91,6 +89,5 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.InvalidCredentials, result.Outcome);
         Assert.Null(result.UserId);
-        Assert.Null(result.Email);
     }
 }
