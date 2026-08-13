@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Application.Abstractions;
-using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -11,13 +10,15 @@ namespace IndieFi.Web.Pages.Games;
 [Authorize]
 public class NewModel : PageModel
 {
-    private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly GameManagementService _gameManagementService;
 
-    public NewModel(AppDbContext db, ICurrentUser currentUser)
+    public NewModel(
+        ICurrentUser currentUser,
+        GameManagementService gameManagementService)
     {
-        _db = db;
         _currentUser = currentUser;
+        _gameManagementService = gameManagementService;
     }
 
     [BindProperty]
@@ -39,20 +40,10 @@ public class NewModel : PageModel
         // The owner is taken from the signed cookie, never from the form;
         // otherwise anyone could register a game under someone else's id.
         var ownerId = _currentUser.GetRequiredUserId();
-        var description = string.IsNullOrWhiteSpace(Description) ? null : Description;
-
-        var game = new Game
-        {
-            OwnerId = ownerId,
-            Title = Title,
-            Description = description,
-        };
-
-        _db.Games.Add(game);
-        await _db.SaveChangesAsync();
+        var result = await _gameManagementService.CreateAsync(ownerId, Title, Description);
 
         // Redirect after a successful POST so refreshing the page does not resubmit.
-        TempData["GameMessage"] = $"'{game.Title}' 등록 완료";
+        TempData["GameMessage"] = $"'{result.Title}' 등록 완료";
         return RedirectToPage("/Games/Index");
     }
 }

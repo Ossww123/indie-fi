@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
+using IndieFi.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -12,11 +13,16 @@ public class EditModel : PageModel
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly GameManagementService _gameManagementService;
 
-    public EditModel(AppDbContext db, ICurrentUser currentUser)
+    public EditModel(
+        AppDbContext db,
+        ICurrentUser currentUser,
+        GameManagementService gameManagementService)
     {
         _db = db;
         _currentUser = currentUser;
+        _gameManagementService = gameManagementService;
     }
 
     [BindProperty]
@@ -53,20 +59,17 @@ public class EditModel : PageModel
             return Page();
         }
 
-        var game = await _db.Games.FindAsync(id);
         var ownerId = _currentUser.GetRequiredUserId();
+        var result = await _gameManagementService.UpdateAsync(
+            id,
+            ownerId,
+            Title,
+            Description);
 
-        // The ownership check must be repeated on POST: an attacker can send this
-        // POST directly without ever loading the GET page. Hiding the edit link in
-        // the UI is not a security boundary — this server check is.
-        if (game is null || game.OwnerId != ownerId)
+        if (result.Outcome == UpdateGameOutcome.NotFound)
         {
             return NotFound();
         }
-
-        game.Title = Title;
-        game.Description = string.IsNullOrWhiteSpace(Description) ? null : Description;
-        await _db.SaveChangesAsync();
 
         TempData["GameMessage"] = "수정되었습니다";
         return RedirectToPage("/Games/Detail", new { id });
