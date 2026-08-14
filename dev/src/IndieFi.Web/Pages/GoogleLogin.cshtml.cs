@@ -62,15 +62,16 @@ public sealed class GoogleLoginModel : PageModel
             || !GoogleExternalIdentityClaims.TryRead(
                 externalAuthentication.Principal,
                 out var subject,
-                out _))
+                out var email))
         {
             return await FailAsync(returnUrl);
         }
 
         var result = await _googleAccounts.ResolveAsync(
             subject!,
+            email!,
             HttpContext.RequestAborted);
-        if (result.Outcome != GoogleAccountOutcome.Authenticated)
+        if (result.Outcome == GoogleAccountOutcome.ExistingEmail)
         {
             return await FailAsync(returnUrl);
         }

@@ -2,10 +2,12 @@ using System.Net;
 using System.Security.Claims;
 using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -135,21 +137,17 @@ public sealed class GoogleLoginPageTests
         Assert.Equal("/", response.Headers.Location?.OriginalString);
     }
 
-    [Theory]
-    [InlineData("unlinked-google-subject", true)]
-    [InlineData("invalid-google-claims", false)]
-    public async Task Callback_WithoutLinkedAccountOrVerifiedEmail_FailsWithoutApplicationSession(
-        string subject,
-        bool emailVerified)
+    [Fact]
+    public async Task Callback_WithoutVerifiedEmail_FailsWithoutApplicationSession()
     {
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
         using var request = CreateCallbackRequest(
             factory,
             "/GoogleLogin?handler=Callback",
-            subject,
+            "invalid-google-claims",
             email: "unlinked@example.test",
-            emailVerified);
+            emailVerified: false);
 
         using var response = await client.SendAsync(
             request,
@@ -166,6 +164,166 @@ public sealed class GoogleLoginPageTests
         Assert.DoesNotContain(
             setCookies,
             value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Callback_WithNewSubjectAndEmail_CreatesPasswordlessConfirmedAccountAndStartingCredit()
+    {
+        var subject = $"new-google-{Guid.NewGuid():N}";
+        var email = $"new-google-{Guid.NewGuid():N}@example.test";
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email,
+            emailVerified: true);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+        await using var db = _fixture.NewDbContext();
+        var user = await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken);
+        var login = await db.ExternalLogins.SingleAsync(
+            item => item.Provider == ExternalLoginPolicy.GoogleProvider
+                && item.ProviderUserId == subject,
+            TestContext.Current.CancellationToken);
+        var grant = await db.CreditLedgerEntries.SingleAsync(
+            item => item.UserId == user.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(user.PasswordHash);
+        Assert.NotNull(user.EmailConfirmedAt);
+        Assert.Equal(user.Id, login.UserId);
+        Assert.Equal(CreditEntryKind.Grant, grant.Kind);
+        Assert.Equal(CreditPolicy.NewAccountGrant, grant.Delta);
+        Assert.Equal(CreditPolicy.NewAccountGrant, user.CreditBalance);
+        Assert.False(await db.AuthenticationEmailOutboxMessages.AnyAsync(
+            item => item.UserId == user.Id,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(
+            email,
+            TestAccountProtection.CreateService().Unprotect(
+                new ProtectedEmailAddress(
+                    user.EmailCiphertext,
+                    user.EmailNonce,
+                    user.EmailAuthenticationTag,
+                    user.EmailEncryptionKeyId)));
+
+        var ticket = ReadApplicationTicket(
+            factory,
+            response.Headers.GetValues("Set-Cookie"));
+        Assert.Equal(
+            user.Id.ToString(),
+            ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier));
+    }
+
+    [Fact]
+    public async Task ConcurrentCallbacks_WithSameSubject_CreateOneAccountAndOneGrant()
+    {
+        var subject = $"concurrent-google-{Guid.NewGuid():N}";
+        var email = $"concurrent-google-{Guid.NewGuid():N}@example.test";
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var firstClient = factory.CreateClient();
+        using var secondClient = factory.CreateClient();
+        using var firstRequest = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email,
+            emailVerified: true);
+        using var secondRequest = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email,
+            emailVerified: true);
+
+        var firstTask = firstClient.SendAsync(
+            firstRequest,
+            TestContext.Current.CancellationToken);
+        var secondTask = secondClient.SendAsync(
+            secondRequest,
+            TestContext.Current.CancellationToken);
+        var responses = await Task.WhenAll(firstTask, secondTask);
+        using var firstResponse = responses[0];
+        using var secondResponse = responses[1];
+
+        Assert.All(responses, response =>
+        {
+            Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+            Assert.Equal("/", response.Headers.Location?.OriginalString);
+            Assert.Contains(
+                response.Headers.GetValues("Set-Cookie"),
+                value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+        });
+
+        await using var db = _fixture.NewDbContext();
+        var user = await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, await db.ExternalLogins.CountAsync(
+            item => item.Provider == ExternalLoginPolicy.GoogleProvider
+                && item.ProviderUserId == subject,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.CreditLedgerEntries.CountAsync(
+            item => item.UserId == user.Id
+                && item.Kind == CreditEntryKind.Grant
+                && item.Delta == CreditPolicy.NewAccountGrant,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(CreditPolicy.NewAccountGrant, user.CreditBalance);
+    }
+
+    [Fact]
+    public async Task Callback_WithExistingEmail_DoesNotCreateOrAutoLinkAccount()
+    {
+        var email = $"existing-google-{Guid.NewGuid():N}@example.test";
+        var subject = $"existing-email-subject-{Guid.NewGuid():N}";
+        long userId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var user = TestAccountProtection.AddUser(arrangeDb, email);
+            user.EmailConfirmedAt = DateTimeOffset.UtcNow;
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            userId = user.Id;
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email,
+            emailVerified: true);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Login", response.Headers.Location?.OriginalString);
+        await using var db = _fixture.NewDbContext();
+        var resolvedUser = await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(userId, resolvedUser.Id);
+        Assert.False(await db.ExternalLogins.AnyAsync(
+            item => item.Provider == ExternalLoginPolicy.GoogleProvider
+                && item.ProviderUserId == subject,
+            TestContext.Current.CancellationToken));
+        Assert.False(await db.CreditLedgerEntries.AnyAsync(
+            item => item.UserId == userId,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
