@@ -41,6 +41,9 @@ builder.Services.AddSingleton<
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
+builder.Services.AddIndieFiDataProtection(
+    builder.Configuration,
+    builder.Environment);
 
 builder.Services.AddAccountsModule();
 builder.Services.AddGamesModule();

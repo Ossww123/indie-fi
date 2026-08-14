@@ -20,6 +20,13 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Database", _connectionString);
+        builder.UseSetting(
+            "DataProtectionKeyManagement:CertificatePath",
+            TestDataProtection.CertificatePath);
+        builder.UseSetting(
+            "DataProtectionKeyManagement:PrivateKeyPath",
+            TestDataProtection.PrivateKeyPath);
+        builder.UseSetting("DataProtectionKeyManagement:KeyLifetimeDays", "90");
         if (_configureGoogle)
         {
             builder.UseSetting(
