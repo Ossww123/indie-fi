@@ -33,9 +33,6 @@ public sealed class AccountRegistrationService
     // can create a request while everyone has zero credits, so this grant starts the cycle.
     private const int SignupGrant = 3;
 
-    private const int PasswordMinLength = 8;
-    private const int PasswordMaxLength = 128;
-
     private static readonly IReadOnlyList<ValidationViolation> NoViolations = [];
 
     private readonly AppDbContext _db;
@@ -161,17 +158,16 @@ public sealed class AccountRegistrationService
                 }));
         }
 
-        if (string.IsNullOrEmpty(password))
+        if (!AccountPasswordPolicy.TryValidate(password, out var passwordError))
         {
             violations.Add(new ValidationViolation(
                 PasswordField,
-                "비밀번호를 입력해 주세요."));
-        }
-        else if (password.Length is < PasswordMinLength or > PasswordMaxLength)
-        {
-            violations.Add(new ValidationViolation(
-                PasswordField,
-                "비밀번호는 8자 이상이어야 합니다."));
+                passwordError switch
+                {
+                    AccountPasswordError.Required => "비밀번호를 입력해 주세요.",
+                    AccountPasswordError.TooLong => "비밀번호는 128자 이하여야 합니다.",
+                    _ => "비밀번호는 8자 이상이어야 합니다.",
+                }));
         }
 
         return violations;
