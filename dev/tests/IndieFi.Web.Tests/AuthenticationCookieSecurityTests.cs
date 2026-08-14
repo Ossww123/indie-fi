@@ -1,7 +1,9 @@
 using System.Net;
+using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,9 +30,15 @@ public sealed class AuthenticationCookieSecurityTests
         using var factory = baseFactory.WithWebHostBuilder(builder =>
             builder.UseEnvironment(Environments.Production));
 
-        var authentication = factory.Services
-            .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
-            .Get(CookieAuthenticationDefaults.AuthenticationScheme);
+        var cookieOptions = factory.Services
+            .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>();
+        var authentication = cookieOptions.Get(
+            CookieAuthenticationDefaults.AuthenticationScheme);
+        var temporaryExternal = cookieOptions.Get(
+            ExternalAuthenticationDefaults.TemporaryScheme);
+        var google = factory.Services
+            .GetRequiredService<IOptionsMonitor<GoogleOptions>>()
+            .Get(ExternalLoginPolicy.GoogleProvider);
         var antiforgery = factory.Services
             .GetRequiredService<IOptions<AntiforgeryOptions>>()
             .Value;
@@ -38,6 +46,11 @@ public sealed class AuthenticationCookieSecurityTests
         Assert.True(authentication.Cookie.HttpOnly);
         Assert.Equal(SameSiteMode.Lax, authentication.Cookie.SameSite);
         Assert.Equal(CookieSecurePolicy.Always, authentication.Cookie.SecurePolicy);
+        Assert.True(temporaryExternal.Cookie.HttpOnly);
+        Assert.Equal(CookieSecurePolicy.Always, temporaryExternal.Cookie.SecurePolicy);
+        Assert.True(google.CorrelationCookie.HttpOnly);
+        Assert.Equal(SameSiteMode.None, google.CorrelationCookie.SameSite);
+        Assert.Equal(CookieSecurePolicy.Always, google.CorrelationCookie.SecurePolicy);
 
         Assert.True(antiforgery.Cookie.HttpOnly);
         Assert.Equal(SameSiteMode.Strict, antiforgery.Cookie.SameSite);
@@ -51,9 +64,12 @@ public sealed class AuthenticationCookieSecurityTests
         using var factory = baseFactory.WithWebHostBuilder(builder =>
             builder.UseEnvironment(Environments.Development));
 
-        var authentication = factory.Services
-            .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
-            .Get(CookieAuthenticationDefaults.AuthenticationScheme);
+        var cookieOptions = factory.Services
+            .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>();
+        var authentication = cookieOptions.Get(
+            CookieAuthenticationDefaults.AuthenticationScheme);
+        var temporaryExternal = cookieOptions.Get(
+            ExternalAuthenticationDefaults.TemporaryScheme);
         var antiforgery = factory.Services
             .GetRequiredService<IOptions<AntiforgeryOptions>>()
             .Value;
@@ -61,6 +77,9 @@ public sealed class AuthenticationCookieSecurityTests
         Assert.Equal(
             CookieSecurePolicy.SameAsRequest,
             authentication.Cookie.SecurePolicy);
+        Assert.Equal(
+            CookieSecurePolicy.SameAsRequest,
+            temporaryExternal.Cookie.SecurePolicy);
         Assert.Equal(
             CookieSecurePolicy.SameAsRequest,
             antiforgery.Cookie.SecurePolicy);

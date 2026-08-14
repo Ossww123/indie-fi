@@ -29,10 +29,6 @@ public sealed class AccountRegistrationService
     /// <summary>PostgreSQL SQLSTATE for a unique constraint violation.</summary>
     private const string UniqueViolation = "23505";
 
-    // Users earn credits by giving feedback on other users' requests, but no one
-    // can create a request while everyone has zero credits, so this grant starts the cycle.
-    private const int SignupGrant = 3;
-
     private static readonly IReadOnlyList<ValidationViolation> NoViolations = [];
 
     private readonly AppDbContext _db;
@@ -96,7 +92,7 @@ public sealed class AccountRegistrationService
         {
             User = user,
             Kind = CreditEntryKind.Grant,
-            Delta = SignupGrant,
+            Delta = CreditPolicy.NewAccountGrant,
         });
 
         await using var transaction = await _db.Database.BeginTransactionAsync(

@@ -1,22 +1,25 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
 using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Application;
-using IndieFi.Web.Modules.Accounts.Domain;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages;
 
 public class LoginModel : PageModel
 {
     private readonly AccountAuthenticationService _accountAuthenticationService;
+    private readonly AccountSignInService _accountSignInService;
 
-    public LoginModel(AccountAuthenticationService accountAuthenticationService)
+    public LoginModel(
+        AccountAuthenticationService accountAuthenticationService,
+        AccountSignInService accountSignInService,
+        IOptions<GoogleAuthenticationSettings> googleAuthentication)
     {
         _accountAuthenticationService = accountAuthenticationService;
+        _accountSignInService = accountSignInService;
+        GoogleLoginAvailable = googleAuthentication.Value.IsConfigured;
     }
 
     [BindProperty]
@@ -34,6 +37,19 @@ public class LoginModel : PageModel
 
     [TempData]
     public string? StatusMessage { get; set; }
+
+    [TempData]
+    public string? GoogleLoginError { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? GoogleError { get; set; }
+
+    public string? GoogleErrorMessage => GoogleLoginError
+        ?? (string.Equals(GoogleError, "remote", StringComparison.Ordinal)
+            ? "Google 인증을 완료하지 못했습니다. 이메일 로그인은 계속 사용할 수 있습니다."
+            : null);
+
+    public bool GoogleLoginAvailable { get; }
 
     public async Task<IActionResult> OnPostAsync()
     {
@@ -60,20 +76,10 @@ public class LoginModel : PageModel
             return Page();
         }
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()),
-            new(ClaimTypes.Name, UserDisplayIdentifier.Format(result.UserId.Value)),
-            new(
-                AuthenticationClaimTypes.SessionVersion,
-                result.SessionVersion!.Value.ToString()),
-        };
-
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-        await HttpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity));
+        await _accountSignInService.SignInAsync(
+            HttpContext,
+            result.UserId!.Value,
+            result.SessionVersion!.Value);
 
         // ReturnUrl is attacker-controlled, so only local URLs may become post-login redirects.
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))

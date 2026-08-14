@@ -11,6 +11,11 @@
     <div class="alert-success mb-6">@Model.StatusMessage</div>
 }
 
+@if (Model.GoogleErrorMessage is not null)
+{
+    <div class="alert-warning mb-6" role="alert">@Model.GoogleErrorMessage</div>
+}
+
 <form method="post" class="form-stack">
     <input type="hidden" asp-for="ReturnUrl" />
     <div asp-validation-summary="ModelOnly"></div>
@@ -29,6 +34,20 @@
 
     <button type="submit" class="button-primary">로그인</button>
 </form>
+
+@if (Model.GoogleLoginAvailable)
+{
+    <div class="my-6 flex items-center gap-3" aria-hidden="true">
+        <span class="h-px flex-1 bg-slate-200"></span>
+        <span class="text-xs font-medium text-slate-500">또는</span>
+        <span class="h-px flex-1 bg-slate-200"></span>
+    </div>
+
+    <form method="post" asp-page="/GoogleLogin" asp-page-handler="Challenge">
+        <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+        <button type="submit" class="button-outline w-full">Google로 계속하기</button>
+    </form>
+}
 
 <a asp-page="/ResendConfirmationEmail" class="button-link mt-4">
     확인 메일 다시 받기

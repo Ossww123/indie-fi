@@ -13,6 +13,7 @@ public static class AccountsModule
     {
         services.AddScoped<AccountRegistrationService>();
         services.AddScoped<AccountAuthenticationService>();
+        services.AddScoped<GoogleAccountService>();
         services.AddScoped<AccountPasswordChangeService>();
         services.AddScoped<AccountSessionValidationService>();
         services.AddScoped<EmailConfirmationTokenService>();

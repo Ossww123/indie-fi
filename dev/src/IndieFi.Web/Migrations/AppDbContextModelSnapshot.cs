@@ -598,7 +598,12 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("UserId", "Provider")
                         .IsUnique();
 
-                    b.ToTable("external_logins", (string)null);
+                    b.ToTable("external_logins", (string)null, t =>
+                        {
+                            t.HasCheckConstraint("CK_external_logins_provider_user_id_not_blank", "length(btrim(provider_user_id)) > 0");
+
+                            t.HasCheckConstraint("CK_external_logins_supported_provider", "provider = 'Google'");
+                        });
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.PasswordResetRequestAttempt", b =>
