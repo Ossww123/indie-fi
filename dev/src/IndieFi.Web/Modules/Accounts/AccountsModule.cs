@@ -11,6 +11,8 @@ public static class AccountsModule
     {
         services.AddScoped<AccountRegistrationService>();
         services.AddScoped<AccountAuthenticationService>();
+        services.AddScoped<EmailConfirmationTokenService>();
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IKeyProvider, ConfigurationKeyProvider>();
         services.AddSingleton<EmailProtectionService>();
 

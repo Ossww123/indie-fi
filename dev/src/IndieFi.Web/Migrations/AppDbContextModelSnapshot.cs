@@ -434,7 +434,10 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_email_confirmation_tokens_user_id_unresolved")
+                        .HasFilter("used_at IS NULL AND revoked_at IS NULL");
 
                     b.ToTable("email_confirmation_tokens", null, t =>
                         {

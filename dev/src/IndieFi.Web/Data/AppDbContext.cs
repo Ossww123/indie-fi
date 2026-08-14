@@ -137,7 +137,10 @@ public class AppDbContext : DbContext
             token.Property(item => item.UsedAt).HasColumnName("used_at");
             token.Property(item => item.RevokedAt).HasColumnName("revoked_at");
             token.HasIndex(item => item.TokenHash).IsUnique();
-            token.HasIndex(item => item.UserId);
+            token.HasIndex(item => item.UserId)
+                .IsUnique()
+                .HasFilter("used_at IS NULL AND revoked_at IS NULL")
+                .HasDatabaseName("IX_email_confirmation_tokens_user_id_unresolved");
             token.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
         });
 
