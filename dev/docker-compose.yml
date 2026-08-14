@@ -38,5 +38,14 @@ services:
       timeout: 3s
       retries: 10
 
+  # Local SMTP inbox for confirmation and password-reset email development.
+  # Open http://localhost:8025 to inspect messages captured on SMTP port 1025.
+  mailpit:
+    image: axllent/mailpit:v1.30.7
+    container_name: indiefi-mailpit
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
 volumes:
   db-data:

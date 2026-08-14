@@ -104,6 +104,7 @@ internal static class TestAccountProtection
             ["AccountProtection:Purposes:account-email-message-encryption:ReadKeyIds:0"] = "message-test-v1",
             ["AccountProtection:Purposes:account-email-message-encryption:WriteKeyIds:0"] = "message-test-v1",
             ["AccountProtection:Purposes:account-email-message-encryption:Keys:message-test-v1"] = Convert.ToBase64String(MessageKey),
+            ["AuthenticationEmail:Enabled"] = "false",
         };
     }
 
