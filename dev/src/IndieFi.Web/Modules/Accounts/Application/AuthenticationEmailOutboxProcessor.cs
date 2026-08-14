@@ -6,10 +6,17 @@ namespace IndieFi.Web.Modules.Accounts.Application;
 
 public sealed record AuthenticationEmailOutboxProcessResult(
     int SentCount,
-    int ExpiredCount);
+    int ExpiredCount,
+    int FailedCount);
 
 public sealed class AuthenticationEmailOutboxProcessor
 {
+    /// <summary>
+    /// How long a failed message waits before it is eligible again. A failure must not
+    /// block the messages behind it, so the row is rescheduled instead of retried at once.
+    /// </summary>
+    public static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(1);
+
     private readonly AppDbContext _db;
     private readonly IAuthenticationEmailSender _sender;
     private readonly EmailProtectionService _emailProtection;
@@ -41,6 +48,7 @@ public sealed class AuthenticationEmailOutboxProcessor
 
         var sentCount = 0;
         var expiredCount = 0;
+        var failedCount = 0;
 
         for (var index = 0; index < batchSize; index++)
         {
@@ -50,17 +58,24 @@ public sealed class AuthenticationEmailOutboxProcessor
                 break;
             }
 
-            if (outcome == ProcessNextOutcome.Sent)
+            switch (outcome)
             {
-                sentCount++;
-            }
-            else
-            {
-                expiredCount++;
+                case ProcessNextOutcome.Sent:
+                    sentCount++;
+                    break;
+                case ProcessNextOutcome.Expired:
+                    expiredCount++;
+                    break;
+                default:
+                    failedCount++;
+                    break;
             }
         }
 
-        return new AuthenticationEmailOutboxProcessResult(sentCount, expiredCount);
+        return new AuthenticationEmailOutboxProcessResult(
+            sentCount,
+            expiredCount,
+            failedCount);
     }
 
     private async Task<ProcessNextOutcome> ProcessNextAsync(
@@ -69,13 +84,16 @@ public sealed class AuthenticationEmailOutboxProcessor
         await using var transaction = await _db.Database.BeginTransactionAsync(
             cancellationToken);
 
+        var now = _timeProvider.GetUtcNow();
+
         // A row lock is held through SMTP delivery. SKIP LOCKED lets another app
         // instance work on a different row without sending this message twice.
         var candidates = await _db.AuthenticationEmailOutboxMessages
-            .FromSqlRaw(
-                """
+            .FromSqlInterpolated(
+                $"""
                 SELECT *
                   FROM authentication_email_outbox_messages
+                 WHERE next_attempt_at <= {now}
                  ORDER BY id
                  LIMIT 1
                    FOR UPDATE SKIP LOCKED
@@ -89,7 +107,7 @@ public sealed class AuthenticationEmailOutboxProcessor
             return ProcessNextOutcome.None;
         }
 
-        if (message.ExpiresAt <= _timeProvider.GetUtcNow())
+        if (message.ExpiresAt <= now)
         {
             _db.AuthenticationEmailOutboxMessages.Remove(message);
             await _db.SaveChangesAsync(cancellationToken);
@@ -120,12 +138,27 @@ public sealed class AuthenticationEmailOutboxProcessor
                 "The authentication email message kind is not supported.");
         }
 
-        await _sender.SendEmailConfirmationAsync(
-            new AuthenticationEmailDelivery(
-                recipientAddress,
-                plaintextToken,
-                message.ExpiresAt),
-            cancellationToken);
+        try
+        {
+            await _sender.SendEmailConfirmationAsync(
+                new AuthenticationEmailDelivery(
+                    recipientAddress,
+                    plaintextToken,
+                    message.ExpiresAt),
+                cancellationToken);
+        }
+        catch (Exception exception) when (
+            exception is not OperationCanceledException
+            || !cancellationToken.IsCancellationRequested)
+        {
+            // Committing the new attempt time is the point: rolling back here would put
+            // the message straight back at the front of the queue. An SMTP timeout also
+            // surfaces as a cancellation, so only a real shutdown is allowed to propagate.
+            message.NextAttemptAt = now.Add(RetryDelay);
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return ProcessNextOutcome.Failed;
+        }
 
         _db.AuthenticationEmailOutboxMessages.Remove(message);
         await _db.SaveChangesAsync(cancellationToken);
@@ -138,5 +171,6 @@ public sealed class AuthenticationEmailOutboxProcessor
         None,
         Sent,
         Expired,
+        Failed,
     }
 }

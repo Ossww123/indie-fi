@@ -52,6 +52,7 @@ public sealed class AuthenticationEmailOutboxService
             PayloadKeyId = protectedPayload.KeyId,
             CreatedAt = createdAt,
             ExpiresAt = expiresAt,
+            NextAttemptAt = createdAt,
         };
 
         // Deliberately do not call SaveChanges. The account operation that stages this

@@ -418,6 +418,12 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("kind");
 
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at")
+                        .HasDefaultValueSql("now()");
+
                     b.Property<byte[]>("PayloadAuthenticationTag")
                         .IsRequired()
                         .HasColumnType("bytea")

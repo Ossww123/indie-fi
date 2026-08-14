@@ -186,6 +186,9 @@ public class AppDbContext : DbContext
                 .IsRequired();
             message.Property(item => item.CreatedAt).HasColumnName("created_at");
             message.Property(item => item.ExpiresAt).HasColumnName("expires_at");
+            message.Property(item => item.NextAttemptAt)
+                .HasColumnName("next_attempt_at")
+                .HasDefaultValueSql("now()");
             message.HasIndex(item => new { item.UserId, item.Kind }).IsUnique();
             message.HasIndex(item => item.ExpiresAt);
             message.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);

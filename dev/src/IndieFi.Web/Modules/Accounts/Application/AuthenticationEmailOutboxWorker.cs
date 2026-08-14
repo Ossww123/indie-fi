@@ -50,6 +50,16 @@ public sealed class AuthenticationEmailOutboxWorker : BackgroundService
                         result.SentCount,
                         result.ExpiredCount);
                 }
+
+                if (result.FailedCount > 0)
+                {
+                    // Recipient addresses and tokens must stay out of logs, so only the
+                    // count is recorded. Each failed message is retried after its delay.
+                    _logger.LogWarning(
+                        "Authentication email delivery failed for {FailedCount} messages; " +
+                        "they are rescheduled.",
+                        result.FailedCount);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

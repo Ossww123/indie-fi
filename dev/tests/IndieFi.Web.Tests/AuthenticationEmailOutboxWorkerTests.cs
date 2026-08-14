@@ -26,10 +26,11 @@ public sealed class AuthenticationEmailOutboxWorkerTests
     public async Task ExecuteAsync_WhenFirstDeliveryFails_RetriesOnTheNextInterval()
     {
         await StageMessageAsync();
-        var sender = new FailsOnceSender();
+        var timeProvider = new MutableTimeProvider(Now);
+        var sender = new FailsOnceSender(timeProvider);
         var logger = new RecordingLogger<AuthenticationEmailOutboxWorker>();
 
-        using var provider = BuildServiceProvider(sender);
+        using var provider = BuildServiceProvider(sender, timeProvider);
         var worker = new AuthenticationEmailOutboxWorker(
             provider.GetRequiredService<IServiceScopeFactory>(),
             logger,
@@ -55,7 +56,9 @@ public sealed class AuthenticationEmailOutboxWorkerTests
         Assert.All(logger.Exceptions, exception => Assert.Null(exception));
     }
 
-    private ServiceProvider BuildServiceProvider(IAuthenticationEmailSender sender)
+    private ServiceProvider BuildServiceProvider(
+        IAuthenticationEmailSender sender,
+        TimeProvider timeProvider)
     {
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
@@ -64,7 +67,7 @@ public sealed class AuthenticationEmailOutboxWorkerTests
         services.AddSingleton<IAuthenticationEmailSender>(sender);
         services.AddSingleton(TestAccountProtection.CreateService());
         services.AddSingleton(TestAccountProtection.CreateMessageProtectionService());
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton(timeProvider);
         services.AddLogging();
         return services.BuildServiceProvider();
     }
@@ -113,7 +116,13 @@ public sealed class AuthenticationEmailOutboxWorkerTests
 
     private sealed class FailsOnceSender : IAuthenticationEmailSender
     {
+        private readonly MutableTimeProvider _timeProvider;
         private int _callCount;
+
+        public FailsOnceSender(MutableTimeProvider timeProvider)
+        {
+            _timeProvider = timeProvider;
+        }
 
         public int CallCount => Volatile.Read(ref _callCount);
 
@@ -123,12 +132,31 @@ public sealed class AuthenticationEmailOutboxWorkerTests
         {
             if (Interlocked.Increment(ref _callCount) == 1)
             {
+                // A failure reschedules the message, so the clock must pass that delay
+                // before the worker is allowed to pick it up again.
+                _timeProvider.Advance(AuthenticationEmailOutboxProcessor.RetryDelay);
                 throw new InvalidOperationException(
                     "private-recipient@example.test was rejected.");
             }
 
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class MutableTimeProvider : TimeProvider
+    {
+        private long _utcNowTicks;
+
+        public MutableTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNowTicks = utcNow.UtcTicks;
+        }
+
+        public override DateTimeOffset GetUtcNow() =>
+            new(Volatile.Read(ref _utcNowTicks), TimeSpan.Zero);
+
+        public void Advance(TimeSpan amount) =>
+            Interlocked.Add(ref _utcNowTicks, amount.Ticks);
     }
 
     private sealed class FixedTimeProvider : TimeProvider

@@ -22,4 +22,10 @@ public sealed class AuthenticationEmailOutboxMessage
     public string PayloadKeyId { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    /// The earliest time a delivery attempt may pick this message up. A failed attempt
+    /// pushes it out so one undeliverable address cannot hold back the whole queue.
+    /// </summary>
+    public DateTimeOffset NextAttemptAt { get; set; }
 }
