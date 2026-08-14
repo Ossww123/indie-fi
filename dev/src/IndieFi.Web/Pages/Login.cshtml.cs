@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Authentication;
@@ -60,6 +61,9 @@ public class LoginModel : PageModel
         {
             new(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()),
             new(ClaimTypes.Name, UserDisplayIdentifier.Format(result.UserId.Value)),
+            new(
+                AuthenticationClaimTypes.SessionVersion,
+                result.SessionVersion!.Value.ToString()),
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

@@ -15,7 +15,8 @@ public enum AccountAuthenticationOutcome
 
 public sealed record AccountAuthenticationResult(
     AccountAuthenticationOutcome Outcome,
-    long? UserId = null);
+    long? UserId = null,
+    long? SessionVersion = null);
 
 public sealed class AccountAuthenticationService
 {
@@ -86,6 +87,7 @@ public sealed class AccountAuthenticationService
 
         return new AccountAuthenticationResult(
             AccountAuthenticationOutcome.Authenticated,
-            user.Id);
+            user.Id,
+            user.SessionVersion);
     }
 }
