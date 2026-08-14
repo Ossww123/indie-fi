@@ -201,10 +201,7 @@ public sealed class AccountStatusTransitionService
                 expiredReviewAssignmentCount);
         }
 
-        var nextSessionVersion = checked(user.SessionVersion + 1);
-        user.AccountStatus = targetStatus;
-        user.SuspendedUntil = targetSuspendedUntil;
-        user.SessionVersion = nextSessionVersion;
+        ApplyTransition(user, targetStatus, targetSuspendedUntil);
 
         await _db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -212,6 +209,24 @@ public sealed class AccountStatusTransitionService
             AccountStatusTransitionOutcome.Changed,
             user,
             expiredReviewAssignmentCount);
+    }
+
+    internal static void ApplyTransition(
+        User user,
+        AccountStatus targetStatus,
+        DateTimeOffset? suspendedUntil)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+
+        var targetSuspendedUntil = targetStatus == AccountStatus.TemporarilySuspended
+            ? suspendedUntil
+            : null;
+        AccountStatusPolicy.ValidateShape(targetStatus, targetSuspendedUntil);
+
+        var nextSessionVersion = checked(user.SessionVersion + 1);
+        user.AccountStatus = targetStatus;
+        user.SuspendedUntil = targetSuspendedUntil;
+        user.SessionVersion = nextSessionVersion;
     }
 
     private static AccountStatusTransitionResult Current(

@@ -9,23 +9,42 @@ public enum AccountAccessState
 
 public static class AccountStatusPolicy
 {
+    public static void ValidateShape(
+        AccountStatus status,
+        DateTimeOffset? suspendedUntil)
+    {
+        var valid = status switch
+        {
+            AccountStatus.Active => suspendedUntil is null,
+            AccountStatus.TemporarilySuspended => suspendedUntil is not null,
+            AccountStatus.IndefinitelySuspended => suspendedUntil is null,
+            _ => false,
+        };
+
+        if (!valid)
+        {
+            throw new InvalidOperationException(
+                "The account status and suspension end do not form a valid state.");
+        }
+    }
+
     public static AccountAccessState Evaluate(
         AccountStatus status,
         DateTimeOffset? suspendedUntil,
         DateTimeOffset now)
     {
+        ValidateShape(status, suspendedUntil);
+
         return status switch
         {
-            AccountStatus.Active when suspendedUntil is null =>
-                AccountAccessState.Active,
-            AccountStatus.TemporarilySuspended when suspendedUntil is not null =>
+            AccountStatus.Active => AccountAccessState.Active,
+            AccountStatus.TemporarilySuspended =>
                 suspendedUntil <= now
                     ? AccountAccessState.TemporarySuspensionExpired
                     : AccountAccessState.Suspended,
-            AccountStatus.IndefinitelySuspended when suspendedUntil is null =>
+            AccountStatus.IndefinitelySuspended =>
                 AccountAccessState.Suspended,
-            _ => throw new InvalidOperationException(
-                "The account status and suspension end do not form a valid state."),
+            _ => throw new System.Diagnostics.UnreachableException(),
         };
     }
 }
