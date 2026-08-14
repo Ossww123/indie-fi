@@ -458,7 +458,7 @@ namespace IndieFi.Web.Migrations
 
                     b.ToTable("authentication_email_outbox_messages", null, t =>
                         {
-                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_kind", "kind IN ('EmailConfirmation')");
+                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_kind", "kind IN ('EmailConfirmation', 'PasswordReset')");
 
                             t.HasCheckConstraint("CK_authentication_email_outbox_messages_lifetime", "expires_at > created_at");
 
@@ -601,6 +601,49 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("external_logins", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.PasswordResetRequestAttempt", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte[]>("RequestIpHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("request_ip_hash");
+
+                    b.Property<string>("RequestIpHashKeyId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("request_ip_hash_key_id");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("RequestIpHashKeyId", "RequestIpHash", "CreatedAt")
+                        .HasDatabaseName("IX_password_reset_request_attempts_ip_created_at");
+
+                    b.ToTable("password_reset_request_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_password_reset_request_attempts_ip_hash_length", "octet_length(request_ip_hash) = 32");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.PasswordResetToken", b =>
                 {
                     b.Property<long>("Id")
@@ -640,7 +683,10 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_password_reset_tokens_user_id_unresolved")
+                        .HasFilter("used_at IS NULL AND revoked_at IS NULL");
 
                     b.ToTable("password_reset_tokens", null, t =>
                         {
@@ -853,6 +899,14 @@ namespace IndieFi.Web.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.PasswordResetRequestAttempt", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.PasswordResetToken", b =>
