@@ -132,7 +132,8 @@ public sealed class AuthenticationEmailOutboxProcessor
                 message.PayloadAuthenticationTag,
                 message.PayloadKeyId));
 
-        if (message.Kind != AuthenticationEmailMessageKind.EmailConfirmation)
+        if (message.Kind is not AuthenticationEmailMessageKind.EmailConfirmation
+            and not AuthenticationEmailMessageKind.PasswordReset)
         {
             throw new InvalidOperationException(
                 "The authentication email message kind is not supported.");
@@ -140,12 +141,26 @@ public sealed class AuthenticationEmailOutboxProcessor
 
         try
         {
-            await _sender.SendEmailConfirmationAsync(
-                new AuthenticationEmailDelivery(
-                    recipientAddress,
-                    plaintextToken,
-                    message.ExpiresAt),
-                cancellationToken);
+            var delivery = new AuthenticationEmailDelivery(
+                recipientAddress,
+                plaintextToken,
+                message.ExpiresAt);
+            switch (message.Kind)
+            {
+                case AuthenticationEmailMessageKind.EmailConfirmation:
+                    await _sender.SendEmailConfirmationAsync(
+                        delivery,
+                        cancellationToken);
+                    break;
+                case AuthenticationEmailMessageKind.PasswordReset:
+                    await _sender.SendPasswordResetAsync(
+                        delivery,
+                        cancellationToken);
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        "The authentication email message kind is not supported.");
+            }
         }
         catch (Exception exception) when (
             exception is not OperationCanceledException

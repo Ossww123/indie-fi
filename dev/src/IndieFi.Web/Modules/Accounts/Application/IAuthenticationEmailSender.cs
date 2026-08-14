@@ -10,4 +10,8 @@ public interface IAuthenticationEmailSender
     Task SendEmailConfirmationAsync(
         AuthenticationEmailDelivery delivery,
         CancellationToken cancellationToken);
+
+    Task SendPasswordResetAsync(
+        AuthenticationEmailDelivery delivery,
+        CancellationToken cancellationToken);
 }

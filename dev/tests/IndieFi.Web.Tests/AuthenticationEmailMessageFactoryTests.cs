@@ -34,6 +34,29 @@ public sealed class AuthenticationEmailMessageFactoryTests
     }
 
     [Fact]
+    public void CreatePasswordReset_IncludesRecipientAndTrustedResetLink()
+    {
+        var factory = new AuthenticationEmailMessageFactory(
+            Options.Create(ValidOptions()));
+        var delivery = new AuthenticationEmailDelivery(
+            "owner@example.test",
+            Token,
+            new DateTimeOffset(2026, 8, 14, 6, 30, 0, TimeSpan.Zero));
+
+        using var message = factory.CreatePasswordReset(delivery);
+
+        Assert.Equal("IndieFi", message.From!.DisplayName);
+        Assert.Equal("no-reply@example.test", message.From.Address);
+        Assert.Equal("owner@example.test", Assert.Single(message.To).Address);
+        Assert.Equal("IndieFi 비밀번호 재설정", message.Subject);
+        Assert.Contains(
+            $"http://localhost:5258/ResetPassword?token={Token}",
+            message.Body,
+            StringComparison.Ordinal);
+        Assert.Contains("2026-08-14 06:30 UTC", message.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_WhenEnabledConfigurationIsIncomplete_RejectsIt()
     {
         var options = ValidOptions();

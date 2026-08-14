@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -34,6 +35,32 @@ public sealed class AuthenticationEmailOutboxProcessorTests
         var delivery = Assert.Single(sender.Deliveries);
         Assert.Equal(1, result.SentCount);
         Assert.Equal(0, result.ExpiredCount);
+        Assert.Equal(pending.Email, delivery.RecipientAddress);
+        Assert.Equal(pending.Token, delivery.PlaintextToken);
+        Assert.Equal(pending.ExpiresAt, delivery.ExpiresAt);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.AuthenticationEmailOutboxMessages.AnyAsync(
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ProcessBatchAsync_WhenPasswordResetIsPending_UsesResetDelivery()
+    {
+        await ResetOutboxAsync();
+        var pending = await StageMessageAsync(
+            Now,
+            Now.Add(PasswordResetTokenService.TokenLifetime),
+            AuthenticationEmailMessageKind.PasswordReset);
+        var sender = new RecordingSender();
+
+        await using var db = _fixture.NewDbContext();
+        var result = await NewProcessor(db, sender).ProcessBatchAsync(
+            batchSize: 10,
+            TestContext.Current.CancellationToken);
+
+        var delivery = Assert.Single(sender.PasswordResetDeliveries);
+        Assert.Equal(1, result.SentCount);
         Assert.Equal(pending.Email, delivery.RecipientAddress);
         Assert.Equal(pending.Token, delivery.PlaintextToken);
         Assert.Equal(pending.ExpiresAt, delivery.ExpiresAt);
@@ -190,7 +217,9 @@ public sealed class AuthenticationEmailOutboxProcessorTests
 
     private async Task<PendingMessage> StageMessageAsync(
         DateTimeOffset createdAt,
-        DateTimeOffset expiresAt)
+        DateTimeOffset expiresAt,
+        AuthenticationEmailMessageKind kind =
+            AuthenticationEmailMessageKind.EmailConfirmation)
     {
         await using var db = _fixture.NewDbContext();
         var email = $"outbox-{Guid.NewGuid():N}@example.test";
@@ -198,13 +227,24 @@ public sealed class AuthenticationEmailOutboxProcessorTests
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var token = WebEncoders.Base64UrlEncode(
-            Enumerable.Repeat((byte)37, EmailConfirmationTokenService.TokenEntropySize)
+            Enumerable.Repeat(
+                    (byte)37,
+                    kind == AuthenticationEmailMessageKind.EmailConfirmation
+                        ? EmailConfirmationTokenService.TokenEntropySize
+                        : PasswordResetTokenService.TokenEntropySize)
                 .ToArray());
         var outbox = new AuthenticationEmailOutboxService(
             db,
             TestAccountProtection.CreateMessageProtectionService(),
             new FixedTimeProvider(createdAt));
-        outbox.StageEmailConfirmation(user.Id, token, expiresAt);
+        if (kind == AuthenticationEmailMessageKind.EmailConfirmation)
+        {
+            outbox.StageEmailConfirmation(user.Id, token, expiresAt);
+        }
+        else
+        {
+            outbox.StagePasswordReset(user.Id, token, expiresAt);
+        }
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return new PendingMessage(email, token, expiresAt);
@@ -225,12 +265,22 @@ public sealed class AuthenticationEmailOutboxProcessorTests
     private sealed class RecordingSender : IAuthenticationEmailSender
     {
         public List<AuthenticationEmailDelivery> Deliveries { get; } = [];
+        public List<AuthenticationEmailDelivery> PasswordResetDeliveries { get; } = [];
 
         public Task SendEmailConfirmationAsync(
             AuthenticationEmailDelivery delivery,
             CancellationToken cancellationToken)
         {
             Deliveries.Add(delivery);
+            return Task.CompletedTask;
+        }
+
+        public Task SendPasswordResetAsync(
+            AuthenticationEmailDelivery delivery,
+            CancellationToken cancellationToken)
+        {
+            Deliveries.Add(delivery);
+            PasswordResetDeliveries.Add(delivery);
             return Task.CompletedTask;
         }
     }
@@ -243,6 +293,11 @@ public sealed class AuthenticationEmailOutboxProcessorTests
         {
             throw new InvalidOperationException("Expected delivery failure.");
         }
+
+        public Task SendPasswordResetAsync(
+            AuthenticationEmailDelivery delivery,
+            CancellationToken cancellationToken) =>
+            SendEmailConfirmationAsync(delivery, cancellationToken);
     }
 
     private sealed class FailsForRecipientSender : IAuthenticationEmailSender
@@ -268,6 +323,11 @@ public sealed class AuthenticationEmailOutboxProcessorTests
             Deliveries.Add(delivery);
             return Task.CompletedTask;
         }
+
+        public Task SendPasswordResetAsync(
+            AuthenticationEmailDelivery delivery,
+            CancellationToken cancellationToken) =>
+            SendEmailConfirmationAsync(delivery, cancellationToken);
     }
 
     private sealed class BlockingSender : IAuthenticationEmailSender
@@ -290,6 +350,11 @@ public sealed class AuthenticationEmailOutboxProcessorTests
             Started.TrySetResult();
             await Release.Task.WaitAsync(cancellationToken);
         }
+
+        public Task SendPasswordResetAsync(
+            AuthenticationEmailDelivery delivery,
+            CancellationToken cancellationToken) =>
+            SendEmailConfirmationAsync(delivery, cancellationToken);
     }
 
     private sealed class FixedTimeProvider : TimeProvider

@@ -27,8 +27,67 @@ public sealed class AuthenticationEmailOutboxService
         string plaintextToken,
         DateTimeOffset expiresAt)
     {
-        ValidateConfirmationToken(plaintextToken);
+        ValidateToken(
+            plaintextToken,
+            EmailConfirmationTokenService.EncodedTokenLength,
+            EmailConfirmationTokenService.TokenEntropySize,
+            "email confirmation");
+        return Stage(
+            userId,
+            AuthenticationEmailMessageKind.EmailConfirmation,
+            plaintextToken,
+            expiresAt);
+    }
 
+    public AuthenticationEmailOutboxMessage StagePasswordReset(
+        long userId,
+        string plaintextToken,
+        DateTimeOffset expiresAt)
+    {
+        ValidateToken(
+            plaintextToken,
+            PasswordResetTokenService.EncodedTokenLength,
+            PasswordResetTokenService.TokenEntropySize,
+            "password reset");
+        return Stage(
+            userId,
+            AuthenticationEmailMessageKind.PasswordReset,
+            plaintextToken,
+            expiresAt);
+    }
+
+    public async Task<AuthenticationEmailOutboxMessage> ReplaceEmailConfirmationAsync(
+        long userId,
+        string plaintextToken,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        await DeletePendingAsync(
+            userId,
+            AuthenticationEmailMessageKind.EmailConfirmation,
+            cancellationToken);
+        return StageEmailConfirmation(userId, plaintextToken, expiresAt);
+    }
+
+    public async Task<AuthenticationEmailOutboxMessage> ReplacePasswordResetAsync(
+        long userId,
+        string plaintextToken,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        await DeletePendingAsync(
+            userId,
+            AuthenticationEmailMessageKind.PasswordReset,
+            cancellationToken);
+        return StagePasswordReset(userId, plaintextToken, expiresAt);
+    }
+
+    private AuthenticationEmailOutboxMessage Stage(
+        long userId,
+        AuthenticationEmailMessageKind kind,
+        string plaintextToken,
+        DateTimeOffset expiresAt)
+    {
         var createdAt = _timeProvider.GetUtcNow();
         if (expiresAt <= createdAt)
         {
@@ -37,7 +96,6 @@ public sealed class AuthenticationEmailOutboxService
                 "An authentication email message must expire in the future.");
         }
 
-        var kind = AuthenticationEmailMessageKind.EmailConfirmation;
         var protectedPayload = _protection.Protect(
             userId,
             kind,
@@ -62,27 +120,29 @@ public sealed class AuthenticationEmailOutboxService
         return message;
     }
 
-    public async Task<AuthenticationEmailOutboxMessage> ReplaceEmailConfirmationAsync(
+    private async Task DeletePendingAsync(
         long userId,
-        string plaintextToken,
-        DateTimeOffset expiresAt,
-        CancellationToken cancellationToken = default)
+        AuthenticationEmailMessageKind kind,
+        CancellationToken cancellationToken)
     {
         await _db.AuthenticationEmailOutboxMessages
             .Where(message =>
                 message.UserId == userId
-                && message.Kind == AuthenticationEmailMessageKind.EmailConfirmation)
+                && message.Kind == kind)
             .ExecuteDeleteAsync(cancellationToken);
-        return StageEmailConfirmation(userId, plaintextToken, expiresAt);
     }
 
-    private static void ValidateConfirmationToken(string plaintextToken)
+    private static void ValidateToken(
+        string plaintextToken,
+        int encodedLength,
+        int entropySize,
+        string purpose)
     {
         if (string.IsNullOrEmpty(plaintextToken)
-            || plaintextToken.Length != EmailConfirmationTokenService.EncodedTokenLength)
+            || plaintextToken.Length != encodedLength)
         {
             throw new ArgumentException(
-                "A valid email confirmation token is required.",
+                $"A valid {purpose} token is required.",
                 nameof(plaintextToken));
         }
 
@@ -94,17 +154,17 @@ public sealed class AuthenticationEmailOutboxService
         catch (FormatException exception)
         {
             throw new ArgumentException(
-                "A valid email confirmation token is required.",
+                $"A valid {purpose} token is required.",
                 nameof(plaintextToken),
                 exception);
         }
 
         try
         {
-            if (decoded.Length != EmailConfirmationTokenService.TokenEntropySize)
+            if (decoded.Length != entropySize)
             {
                 throw new ArgumentException(
-                    "A valid email confirmation token is required.",
+                    $"A valid {purpose} token is required.",
                     nameof(plaintextToken));
             }
         }

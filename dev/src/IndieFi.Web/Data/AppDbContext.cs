@@ -22,6 +22,8 @@ public class AppDbContext : DbContext
         Set<AuthenticationEmailOutboxMessage>();
     public DbSet<EmailConfirmationResendAttempt> EmailConfirmationResendAttempts =>
         Set<EmailConfirmationResendAttempt>();
+    public DbSet<PasswordResetRequestAttempt> PasswordResetRequestAttempts =>
+        Set<PasswordResetRequestAttempt>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
@@ -162,7 +164,7 @@ public class AppDbContext : DbContext
                     "expires_at > created_at");
                 table.HasCheckConstraint(
                     "CK_authentication_email_outbox_messages_kind",
-                    "kind IN ('EmailConfirmation')");
+                    "kind IN ('EmailConfirmation', 'PasswordReset')");
             });
             message.HasKey(item => item.Id);
             message.Property(item => item.Id).HasColumnName("id");
@@ -240,8 +242,42 @@ public class AppDbContext : DbContext
             token.Property(item => item.UsedAt).HasColumnName("used_at");
             token.Property(item => item.RevokedAt).HasColumnName("revoked_at");
             token.HasIndex(item => item.TokenHash).IsUnique();
-            token.HasIndex(item => item.UserId);
+            token.HasIndex(item => item.UserId)
+                .IsUnique()
+                .HasFilter("used_at IS NULL AND revoked_at IS NULL")
+                .HasDatabaseName("IX_password_reset_tokens_user_id_unresolved");
             token.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
+        });
+
+        modelBuilder.Entity<PasswordResetRequestAttempt>(attempt =>
+        {
+            attempt.ToTable("password_reset_request_attempts", table =>
+                table.HasCheckConstraint(
+                    "CK_password_reset_request_attempts_ip_hash_length",
+                    "octet_length(request_ip_hash) = 32"));
+            attempt.HasKey(item => item.Id);
+            attempt.Property(item => item.Id).HasColumnName("id");
+            attempt.Property(item => item.UserId).HasColumnName("user_id");
+            attempt.Property(item => item.RequestIpHash)
+                .HasColumnName("request_ip_hash")
+                .IsRequired();
+            attempt.Property(item => item.RequestIpHashKeyId)
+                .HasColumnName("request_ip_hash_key_id")
+                .HasMaxLength(100)
+                .IsRequired();
+            attempt.Property(item => item.CreatedAt).HasColumnName("created_at");
+            attempt.HasIndex(item => item.CreatedAt);
+            attempt.HasIndex(item => new
+            {
+                item.RequestIpHashKeyId,
+                item.RequestIpHash,
+                item.CreatedAt,
+            }).HasDatabaseName("IX_password_reset_request_attempts_ip_created_at");
+            attempt.HasIndex(item => new { item.UserId, item.CreatedAt });
+            attempt.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<ExternalLogin>(login =>
