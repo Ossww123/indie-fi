@@ -6,6 +6,7 @@
     <Project Path="tests/IndieFi.Web.Tests/IndieFi.Web.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/IndieFi.KeyRotation/IndieFi.KeyRotation.csproj" />
     <Project Path="tools/IndieFi.Seed/IndieFi.Seed.csproj" />
   </Folder>
 </Solution>
