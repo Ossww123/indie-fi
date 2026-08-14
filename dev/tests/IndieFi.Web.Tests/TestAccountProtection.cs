@@ -34,7 +34,13 @@ internal static class TestAccountProtection
         private static readonly KeyMaterial Lookup = new("lookup-test-v1", LookupKey);
 
         public KeyMaterial GetCurrent(KeyPurpose purpose) => Get(purpose);
-        public KeyMaterial GetById(KeyPurpose purpose, string keyId) => Get(purpose);
+        public KeyMaterial GetById(KeyPurpose purpose, string keyId)
+        {
+            var key = Get(purpose);
+            return string.Equals(key.Id, keyId, StringComparison.Ordinal)
+                ? key
+                : throw new InvalidOperationException($"Unknown test key: {keyId}");
+        }
         public IReadOnlyList<KeyMaterial> GetReadable(KeyPurpose purpose) => [Get(purpose)];
         public IReadOnlyList<KeyMaterial> GetWritable(KeyPurpose purpose) => [Get(purpose)];
 
