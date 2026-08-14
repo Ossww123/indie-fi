@@ -12,9 +12,11 @@ public static class AccountsModule
         services.AddScoped<AccountRegistrationService>();
         services.AddScoped<AccountAuthenticationService>();
         services.AddScoped<EmailConfirmationTokenService>();
+        services.AddScoped<AuthenticationEmailOutboxService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IKeyProvider, ConfigurationKeyProvider>();
         services.AddSingleton<EmailProtectionService>();
+        services.AddSingleton<AuthenticationEmailMessageProtectionService>();
 
         // Used on its own, without the rest of ASP.NET Core Identity.
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();

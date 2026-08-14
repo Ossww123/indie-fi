@@ -18,6 +18,8 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<UserEmailLookup> UserEmailLookups => Set<UserEmailLookup>();
     public DbSet<EmailConfirmationToken> EmailConfirmationTokens => Set<EmailConfirmationToken>();
+    public DbSet<AuthenticationEmailOutboxMessage> AuthenticationEmailOutboxMessages =>
+        Set<AuthenticationEmailOutboxMessage>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
@@ -142,6 +144,49 @@ public class AppDbContext : DbContext
                 .HasFilter("used_at IS NULL AND revoked_at IS NULL")
                 .HasDatabaseName("IX_email_confirmation_tokens_user_id_unresolved");
             token.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
+        });
+
+        modelBuilder.Entity<AuthenticationEmailOutboxMessage>(message =>
+        {
+            message.ToTable("authentication_email_outbox_messages", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_authentication_email_outbox_messages_payload_shape",
+                    "octet_length(payload_ciphertext) > 0 AND " +
+                    "octet_length(payload_nonce) = 12 AND " +
+                    "octet_length(payload_authentication_tag) = 16");
+                table.HasCheckConstraint(
+                    "CK_authentication_email_outbox_messages_lifetime",
+                    "expires_at > created_at");
+                table.HasCheckConstraint(
+                    "CK_authentication_email_outbox_messages_kind",
+                    "kind IN ('EmailConfirmation')");
+            });
+            message.HasKey(item => item.Id);
+            message.Property(item => item.Id).HasColumnName("id");
+            message.Property(item => item.UserId).HasColumnName("user_id");
+            message.Property(item => item.Kind)
+                .HasColumnName("kind")
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            message.Property(item => item.PayloadCiphertext)
+                .HasColumnName("payload_ciphertext")
+                .IsRequired();
+            message.Property(item => item.PayloadNonce)
+                .HasColumnName("payload_nonce")
+                .IsRequired();
+            message.Property(item => item.PayloadAuthenticationTag)
+                .HasColumnName("payload_authentication_tag")
+                .IsRequired();
+            message.Property(item => item.PayloadKeyId)
+                .HasColumnName("payload_key_id")
+                .HasMaxLength(100)
+                .IsRequired();
+            message.Property(item => item.CreatedAt).HasColumnName("created_at");
+            message.Property(item => item.ExpiresAt).HasColumnName("expires_at");
+            message.HasIndex(item => new { item.UserId, item.Kind }).IsUnique();
+            message.HasIndex(item => item.ExpiresAt);
+            message.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
         });
 
         modelBuilder.Entity<PasswordResetToken>(token =>

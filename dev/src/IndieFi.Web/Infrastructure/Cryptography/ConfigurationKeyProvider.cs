@@ -19,11 +19,12 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
             [KeyPurpose.AccountEmailLookup] = LoadPurpose(
                 configuration,
                 KeyPurpose.AccountEmailLookup),
+            [KeyPurpose.AccountEmailMessageEncryption] = LoadPurpose(
+                configuration,
+                KeyPurpose.AccountEmailMessageEncryption),
         };
 
-        RejectSharedSecrets(
-            _purposes[KeyPurpose.AccountEmailEncryption],
-            _purposes[KeyPurpose.AccountEmailLookup]);
+        RejectSharedSecrets(_purposes.Values);
     }
 
     public KeyMaterial GetCurrent(KeyPurpose purpose)
@@ -177,18 +178,27 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
         return values;
     }
 
-    private static void RejectSharedSecrets(PurposeKeys first, PurposeKeys second)
+    private static void RejectSharedSecrets(IEnumerable<PurposeKeys> purposes)
     {
-        foreach (var firstKey in first.Keys.Values)
+        var purposeList = purposes.ToArray();
+        for (var firstIndex = 0; firstIndex < purposeList.Length; firstIndex++)
         {
-            foreach (var secondKey in second.Keys.Values)
+            for (var secondIndex = firstIndex + 1;
+                 secondIndex < purposeList.Length;
+                 secondIndex++)
             {
-                if (CryptographicOperations.FixedTimeEquals(
-                        firstKey.Secret.Span,
-                        secondKey.Secret.Span))
+                foreach (var firstKey in purposeList[firstIndex].Keys.Values)
                 {
-                    throw new InvalidOperationException(
-                        "Email encryption and email lookup must not share key material.");
+                    foreach (var secondKey in purposeList[secondIndex].Keys.Values)
+                    {
+                        if (CryptographicOperations.FixedTimeEquals(
+                                firstKey.Secret.Span,
+                                secondKey.Secret.Span))
+                        {
+                            throw new InvalidOperationException(
+                                "Account protection purposes must not share key material.");
+                        }
+                    }
                 }
             }
         }

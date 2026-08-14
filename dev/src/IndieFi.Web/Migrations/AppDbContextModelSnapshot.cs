@@ -395,6 +395,71 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.AuthenticationEmailOutboxMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<byte[]>("PayloadAuthenticationTag")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload_authentication_tag");
+
+                    b.Property<byte[]>("PayloadCiphertext")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload_ciphertext");
+
+                    b.Property<string>("PayloadKeyId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("payload_key_id");
+
+                    b.Property<byte[]>("PayloadNonce")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload_nonce");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("authentication_email_outbox_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_kind", "kind IN ('EmailConfirmation')");
+
+                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_lifetime", "expires_at > created_at");
+
+                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_payload_shape", "octet_length(payload_ciphertext) > 0 AND octet_length(payload_nonce) = 12 AND octet_length(payload_authentication_tag) = 16");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>
                 {
                     b.Property<long>("Id")
@@ -704,6 +769,15 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("Drop");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.AuthenticationEmailOutboxMessage", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>
