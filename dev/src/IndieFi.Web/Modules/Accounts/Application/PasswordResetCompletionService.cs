@@ -82,7 +82,10 @@ public sealed class PasswordResetCompletionService
                 .ToListAsync(cancellationToken);
             var user = users.SingleOrDefault();
 
-            if (user?.PasswordHash is null)
+            if (user?.PasswordHash is null
+                || !AccountStatusPolicy.AllowsMutation(
+                    user.AccountStatus,
+                    user.SuspendedUntil))
             {
                 await transaction.CommitAsync(cancellationToken);
                 return InvalidToken();

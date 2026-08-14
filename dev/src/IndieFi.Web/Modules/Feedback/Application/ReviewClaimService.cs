@@ -10,6 +10,7 @@ public enum ReviewClaimOutcome
     Claimed,
     NoneAvailable,
     AlreadyHasThatGame,
+    AccountUnavailable,
 }
 
 public record ReviewClaimResult(ReviewClaimOutcome Outcome, long? RequestId);
@@ -28,12 +29,12 @@ public class ReviewClaimService
     // claim path moves cleanly to the next eligible request instead of hitting the unique backstop.
     // The added subquery makes the lock target less obvious, so OF r explicitly limits the lock
     // to the candidate request row that SKIP LOCKED coordinates between concurrent claims.
-    // Selection, state transition, and assignment insertion share one statement so no other
-    // transaction can interleave and no explicit transaction is needed. If selection is empty,
-    // the update and insert also affect no rows, leaving no result row. EF Core requires the
-    // Value alias when materializing a scalar result.
+    // The request is selected before the account row is locked. This preserves SKIP LOCKED
+    // concurrency between claims while the active-user CTE still serializes the final mutation
+    // against suspension. A suspension that wins makes active_user empty; a claim that wins is
+    // visible when suspension subsequently collects that user's assignments.
     private const string ClaimSql = """
-        WITH picked AS (
+        WITH picked AS MATERIALIZED (
             SELECT r.id, r.game_id
               FROM review_requests r
              WHERE r.status = 'Queued'
@@ -49,18 +50,47 @@ public class ReviewClaimService
              LIMIT 1
              FOR UPDATE OF r SKIP LOCKED
         ),
+        active_user AS MATERIALIZED (
+            SELECT u.id
+              FROM users u
+              CROSS JOIN (
+                  SELECT count(*) AS picked_count
+                    FROM picked
+              ) AS dependency
+             WHERE u.id = @reviewerId
+               AND u.account_status = 'Active'
+               AND u.suspended_until IS NULL
+             FOR UPDATE OF u
+        ),
         assigned AS (
             UPDATE review_requests
                SET status = 'Assigned'
-              FROM picked
+              FROM picked, active_user
              WHERE review_requests.id = picked.id
             RETURNING review_requests.id, review_requests.game_id
+        ),
+        inserted AS (
+            INSERT INTO review_assignments (
+                request_id,
+                game_id,
+                reviewer_id,
+                status,
+                leased_until)
+            SELECT assigned.id, assigned.game_id, @reviewerId, 'Active',
+                   now() + (@leaseMinutes * INTERVAL '1 minute')
+              FROM assigned
+            RETURNING request_id
+        ),
+        outcome AS (
+            SELECT request_id FROM inserted
+            UNION ALL
+            SELECT CASE
+                       WHEN EXISTS (SELECT 1 FROM active_user) THEN -1
+                       ELSE -2
+                   END
+             WHERE NOT EXISTS (SELECT 1 FROM inserted)
         )
-        INSERT INTO review_assignments (request_id, game_id, reviewer_id, status, leased_until)
-        SELECT assigned.id, assigned.game_id, @reviewerId, 'Active',
-               now() + (@leaseMinutes * INTERVAL '1 minute')
-          FROM assigned
-        RETURNING request_id AS "Value"
+        SELECT request_id AS "Value" FROM outcome
         """;
 
     private readonly AppDbContext _db;
@@ -74,11 +104,11 @@ public class ReviewClaimService
 
     public async Task<ReviewClaimResult> ClaimNextAsync(long reviewerId)
     {
-        List<long> claimedRequestIds;
+        List<long> claimMarkers;
 
         try
         {
-            claimedRequestIds = await _db.Database
+            claimMarkers = await _db.Database
                 .SqlQueryRaw<long>(
                     ClaimSql,
                     new NpgsqlParameter("reviewerId", reviewerId),
@@ -95,12 +125,21 @@ public class ReviewClaimService
             return Result(ReviewClaimOutcome.AlreadyHasThatGame, reviewerId, null);
         }
 
-        if (claimedRequestIds.Count == 0)
+        var claimMarker = claimMarkers.Single();
+        if (claimMarker == -2)
+        {
+            return Result(
+                ReviewClaimOutcome.AccountUnavailable,
+                reviewerId,
+                null);
+        }
+
+        if (claimMarker == -1)
         {
             return Result(ReviewClaimOutcome.NoneAvailable, reviewerId, null);
         }
 
-        return Result(ReviewClaimOutcome.Claimed, reviewerId, claimedRequestIds[0]);
+        return Result(ReviewClaimOutcome.Claimed, reviewerId, claimMarker);
     }
 
     private ReviewClaimResult Result(

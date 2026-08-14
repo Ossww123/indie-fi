@@ -125,7 +125,10 @@ public sealed class PasswordResetRequestService
 
         var queueEmail = false;
         if (user is { EmailConfirmedAt: not null }
-            && !string.IsNullOrEmpty(user.PasswordHash))
+            && !string.IsNullOrEmpty(user.PasswordHash)
+            && AccountStatusPolicy.AllowsMutation(
+                user.AccountStatus,
+                user.SuspendedUntil))
         {
             var accountRequestCount = await _db.PasswordResetRequestAttempts.CountAsync(
                 attempt =>

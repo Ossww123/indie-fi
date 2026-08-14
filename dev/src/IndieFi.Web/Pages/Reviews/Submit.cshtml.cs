@@ -52,6 +52,11 @@ public class SubmitModel : PageModel
             assignmentId,
             reviewerId,
             Body);
+        if (result.Outcome == FeedbackSubmissionOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         var code = result.Outcome switch
         {
             FeedbackSubmissionOutcome.Submitted => "submitted",

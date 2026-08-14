@@ -123,15 +123,6 @@ public sealed class AccountStatusTransitionService
             cancellationToken);
         var suspending = transition is TransitionKind.SuspendTemporarily
             or TransitionKind.SuspendIndefinitely;
-        if (suspending)
-        {
-            await _db.Database
-                .SqlQueryRaw<long>(
-                    LockActiveReviewAssignmentsSql,
-                    new NpgsqlParameter("reviewerId", userId))
-                .ToListAsync(cancellationToken);
-        }
-
         var users = await _db.Users
             .FromSqlInterpolated(
                 $"SELECT * FROM users WHERE id = {userId} FOR UPDATE")
@@ -143,6 +134,15 @@ public sealed class AccountStatusTransitionService
             await transaction.CommitAsync(cancellationToken);
             return new AccountStatusTransitionResult(
                 AccountStatusTransitionOutcome.UserNotFound);
+        }
+
+        if (suspending)
+        {
+            await _db.Database
+                .SqlQueryRaw<long>(
+                    LockActiveReviewAssignmentsSql,
+                    new NpgsqlParameter("reviewerId", userId))
+                .ToListAsync(cancellationToken);
         }
 
         var now = _timeProvider.GetUtcNow();

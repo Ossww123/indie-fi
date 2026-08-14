@@ -1,6 +1,7 @@
 using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Application;
 
 namespace IndieFi.Web.Modules.Games.Application;
 
@@ -8,6 +9,7 @@ public enum CreateGameOutcome
 {
     Created,
     Invalid,
+    AccountUnavailable,
 }
 
 public enum UpdateGameOutcome
@@ -15,6 +17,7 @@ public enum UpdateGameOutcome
     Updated,
     NotFound,
     Invalid,
+    AccountUnavailable,
 }
 
 public sealed record CreateGameResult(
@@ -55,6 +58,16 @@ public sealed class GameManagementService
             return new CreateGameResult(CreateGameOutcome.Invalid, violations);
         }
 
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return new CreateGameResult(
+                CreateGameOutcome.AccountUnavailable,
+                NoViolations);
+        }
+
         var game = new Game
         {
             OwnerId = ownerId,
@@ -64,6 +77,7 @@ public sealed class GameManagementService
 
         _db.Games.Add(game);
         await _db.SaveChangesAsync();
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         return new CreateGameResult(
             CreateGameOutcome.Created,
@@ -78,24 +92,37 @@ public sealed class GameManagementService
         string? title,
         string? description)
     {
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return new UpdateGameResult(
+                UpdateGameOutcome.AccountUnavailable,
+                NoViolations);
+        }
+
         var game = await _db.Games.FindAsync(gameId);
 
         // Checked before validation so an unauthorized caller cannot tell a missing
         // game apart from one they do not own by comparing error messages.
         if (game is null || game.OwnerId != ownerId)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return new UpdateGameResult(UpdateGameOutcome.NotFound, NoViolations);
         }
 
         var violations = Validate(title, description);
         if (violations.Count > 0)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return new UpdateGameResult(UpdateGameOutcome.Invalid, violations);
         }
 
         game.Title = title!.Trim();
         game.Description = NormalizeDescription(description);
         await _db.SaveChangesAsync();
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         return new UpdateGameResult(UpdateGameOutcome.Updated, NoViolations);
     }

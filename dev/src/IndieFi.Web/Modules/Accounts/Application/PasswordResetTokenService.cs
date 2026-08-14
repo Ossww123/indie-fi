@@ -12,6 +12,7 @@ public enum PasswordResetTokenIssueOutcome
 {
     Issued,
     UserNotFound,
+    AccountUnavailable,
 }
 
 public sealed record PasswordResetTokenIssueResult(
@@ -50,6 +51,15 @@ public sealed class PasswordResetTokenService
             await transaction.CommitAsync(cancellationToken);
             return new PasswordResetTokenIssueResult(
                 PasswordResetTokenIssueOutcome.UserNotFound);
+        }
+
+        if (!AccountStatusPolicy.AllowsMutation(
+                user.AccountStatus,
+                user.SuspendedUntil))
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new PasswordResetTokenIssueResult(
+                PasswordResetTokenIssueOutcome.AccountUnavailable);
         }
 
         var issue = await StageReplacementForLockedAccountAsync(

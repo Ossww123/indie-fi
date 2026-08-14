@@ -154,6 +154,11 @@ public class IndexModel : PageModel
     {
         var userId = _currentUser.GetRequiredUserId();
         var result = await _reviewClaimService.ClaimNextAsync(userId);
+        if (result.Outcome == ReviewClaimOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         var claimNotice = ClaimNotices
             .FirstOrDefault(notice => notice.Outcome == result.Outcome);
 
@@ -167,7 +172,12 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostSweepAsync()
     {
-        var result = await _reviewLeaseSweepService.SweepAsync();
+        var result = await _reviewLeaseSweepService.SweepAsync(
+            _currentUser.GetRequiredUserId());
+        if (result.Outcome == ReviewLeaseSweepOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
 
         return RedirectToPage(new { sweep = SweptCode, count = result.ExpiredCount });
     }

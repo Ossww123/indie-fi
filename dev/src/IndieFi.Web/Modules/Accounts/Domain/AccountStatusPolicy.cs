@@ -47,4 +47,12 @@ public static class AccountStatusPolicy
             _ => throw new System.Diagnostics.UnreachableException(),
         };
     }
+
+    public static bool AllowsMutation(
+        AccountStatus status,
+        DateTimeOffset? suspendedUntil)
+    {
+        ValidateShape(status, suspendedUntil);
+        return status == AccountStatus.Active;
+    }
 }

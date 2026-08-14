@@ -13,6 +13,7 @@ public enum EmailConfirmationTokenIssueOutcome
     Issued,
     UserNotFound,
     EmailAlreadyConfirmed,
+    AccountUnavailable,
 }
 
 public sealed record EmailConfirmationTokenIssueResult(
@@ -68,6 +69,15 @@ public sealed class EmailConfirmationTokenService
             await transaction.CommitAsync(cancellationToken);
             return new EmailConfirmationTokenIssueResult(
                 EmailConfirmationTokenIssueOutcome.EmailAlreadyConfirmed);
+        }
+
+        if (!AccountStatusPolicy.AllowsMutation(
+                user.AccountStatus,
+                user.SuspendedUntil))
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new EmailConfirmationTokenIssueResult(
+                EmailConfirmationTokenIssueOutcome.AccountUnavailable);
         }
 
         var issue = await StageReplacementForLockedAccountAsync(
@@ -140,6 +150,15 @@ public sealed class EmailConfirmationTokenService
 
             var user = await LockUserAsync(candidate.UserId, cancellationToken);
             if (user is null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return new EmailConfirmationTokenConsumeResult(
+                    EmailConfirmationTokenConsumeOutcome.Invalid);
+            }
+
+            if (!AccountStatusPolicy.AllowsMutation(
+                    user.AccountStatus,
+                    user.SuspendedUntil))
             {
                 await transaction.CommitAsync(cancellationToken);
                 return new EmailConfirmationTokenConsumeResult(

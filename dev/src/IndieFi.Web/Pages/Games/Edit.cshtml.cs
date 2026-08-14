@@ -63,6 +63,11 @@ public class EditModel : PageModel
             return NotFound();
         }
 
+        if (result.Outcome == UpdateGameOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         if (result.Outcome == UpdateGameOutcome.Invalid)
         {
             foreach (var violation in result.Violations)

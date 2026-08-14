@@ -1,6 +1,7 @@
 using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.KeyDistributions.Application;
@@ -11,6 +12,7 @@ public enum ScheduleKeyDropOutcome
     GameNotFound,
     NotOwner,
     Invalid,
+    AccountUnavailable,
 }
 
 public sealed record ScheduleKeyDropResult(
@@ -39,6 +41,16 @@ public sealed class KeyDropSchedulingService
         DateTimeOffset? opensAt,
         string? keysText)
     {
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return new ScheduleKeyDropResult(
+                ScheduleKeyDropOutcome.AccountUnavailable,
+                NoViolations);
+        }
+
         var gameOwnerId = await _db.Games
             .Where(game => game.Id == gameId)
             .Select(game => (long?)game.OwnerId)
@@ -46,6 +58,7 @@ public sealed class KeyDropSchedulingService
 
         if (gameOwnerId is null)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return new ScheduleKeyDropResult(
                 ScheduleKeyDropOutcome.GameNotFound,
                 NoViolations);
@@ -53,6 +66,7 @@ public sealed class KeyDropSchedulingService
 
         if (gameOwnerId != ownerId)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return new ScheduleKeyDropResult(
                 ScheduleKeyDropOutcome.NotOwner,
                 NoViolations);
@@ -86,6 +100,7 @@ public sealed class KeyDropSchedulingService
 
         if (violations.Count > 0)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.Invalid, violations);
         }
 
@@ -106,6 +121,7 @@ public sealed class KeyDropSchedulingService
         _db.KeyDrops.Add(keyDrop);
         _db.SteamKeys.AddRange(steamKeys);
         await _db.SaveChangesAsync();
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         return new ScheduleKeyDropResult(
             ScheduleKeyDropOutcome.Scheduled,
