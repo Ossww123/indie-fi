@@ -1,10 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
 using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Application;
-using IndieFi.Web.Modules.Accounts.Domain;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -13,10 +9,14 @@ namespace IndieFi.Web.Pages;
 public class LoginModel : PageModel
 {
     private readonly AccountAuthenticationService _accountAuthenticationService;
+    private readonly AccountSignInService _accountSignInService;
 
-    public LoginModel(AccountAuthenticationService accountAuthenticationService)
+    public LoginModel(
+        AccountAuthenticationService accountAuthenticationService,
+        AccountSignInService accountSignInService)
     {
         _accountAuthenticationService = accountAuthenticationService;
+        _accountSignInService = accountSignInService;
     }
 
     [BindProperty]
@@ -60,20 +60,10 @@ public class LoginModel : PageModel
             return Page();
         }
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()),
-            new(ClaimTypes.Name, UserDisplayIdentifier.Format(result.UserId.Value)),
-            new(
-                AuthenticationClaimTypes.SessionVersion,
-                result.SessionVersion!.Value.ToString()),
-        };
-
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-
-        await HttpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity));
+        await _accountSignInService.SignInAsync(
+            HttpContext,
+            result.UserId!.Value,
+            result.SessionVersion!.Value);
 
         // ReturnUrl is attacker-controlled, so only local URLs may become post-login redirects.
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
