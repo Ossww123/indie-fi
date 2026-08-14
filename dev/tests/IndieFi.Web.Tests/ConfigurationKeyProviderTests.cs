@@ -13,7 +13,8 @@ public sealed class ConfigurationKeyProviderTests
             BuildConfiguration(
                 EmailKey: Bytes(1),
                 LookupKey: Bytes(2),
-                MessageKey: Bytes(3)));
+                MessageKey: Bytes(3),
+                RequestIpKey: Bytes(4)));
 
         Assert.Equal(
             "email-v1",
@@ -29,6 +30,9 @@ public sealed class ConfigurationKeyProviderTests
         Assert.Equal(
             "message-v1",
             provider.GetCurrent(KeyPurpose.AccountEmailMessageEncryption).Id);
+        Assert.Equal(
+            "request-ip-v1",
+            provider.GetCurrent(KeyPurpose.AccountRequestIpLookup).Id);
     }
 
     [Fact]
@@ -41,7 +45,8 @@ public sealed class ConfigurationKeyProviderTests
                 BuildConfiguration(
                     EmailKey: shared,
                     LookupKey: shared,
-                    MessageKey: Bytes(3))));
+                    MessageKey: Bytes(3),
+                    RequestIpKey: Bytes(4))));
 
         Assert.Contains("must not share", exception.Message);
         Assert.DoesNotContain(Convert.ToBase64String(shared), exception.Message);
@@ -57,7 +62,8 @@ public sealed class ConfigurationKeyProviderTests
                 BuildConfiguration(
                     EmailKey: shared,
                     LookupKey: Bytes(2),
-                    MessageKey: shared)));
+                    MessageKey: shared,
+                    RequestIpKey: Bytes(4))));
 
         Assert.Contains("must not share", exception.Message);
         Assert.DoesNotContain(Convert.ToBase64String(shared), exception.Message);
@@ -73,7 +79,8 @@ public sealed class ConfigurationKeyProviderTests
                 BuildConfiguration(
                     EmailKey: invalid,
                     LookupKey: Bytes(2),
-                    MessageKey: Bytes(3))));
+                    MessageKey: Bytes(3),
+                    RequestIpKey: Bytes(4))));
 
         Assert.Contains("must contain 32 bytes", exception.Message);
         Assert.DoesNotContain(Convert.ToBase64String(invalid), exception.Message);
@@ -82,7 +89,8 @@ public sealed class ConfigurationKeyProviderTests
     private static IConfiguration BuildConfiguration(
         byte[] EmailKey,
         byte[] LookupKey,
-        byte[] MessageKey)
+        byte[] MessageKey,
+        byte[] RequestIpKey)
     {
         return new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -99,6 +107,10 @@ public sealed class ConfigurationKeyProviderTests
                 ["AccountProtection:Purposes:account-email-message-encryption:ReadKeyIds:0"] = "message-v1",
                 ["AccountProtection:Purposes:account-email-message-encryption:WriteKeyIds:0"] = "message-v1",
                 ["AccountProtection:Purposes:account-email-message-encryption:Keys:message-v1"] = Convert.ToBase64String(MessageKey),
+                ["AccountProtection:Purposes:account-request-ip-lookup:CurrentKeyId"] = "request-ip-v1",
+                ["AccountProtection:Purposes:account-request-ip-lookup:ReadKeyIds:0"] = "request-ip-v1",
+                ["AccountProtection:Purposes:account-request-ip-lookup:WriteKeyIds:0"] = "request-ip-v1",
+                ["AccountProtection:Purposes:account-request-ip-lookup:Keys:request-ip-v1"] = Convert.ToBase64String(RequestIpKey),
             })
             .Build();
     }

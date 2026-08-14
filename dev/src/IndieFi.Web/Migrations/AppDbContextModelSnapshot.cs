@@ -460,6 +460,49 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationResendAttempt", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte[]>("RequestIpHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("request_ip_hash");
+
+                    b.Property<string>("RequestIpHashKeyId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("request_ip_hash_key_id");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("RequestIpHashKeyId", "RequestIpHash", "CreatedAt")
+                        .HasDatabaseName("IX_email_confirmation_resend_attempts_ip_created_at");
+
+                    b.ToTable("email_confirmation_resend_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_email_confirmation_resend_attempts_ip_hash_length", "octet_length(request_ip_hash) = 32");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>
                 {
                     b.Property<long>("Id")
@@ -778,6 +821,14 @@ namespace IndieFi.Web.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationResendAttempt", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>

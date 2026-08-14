@@ -70,21 +70,32 @@ public sealed class EmailConfirmationTokenService
                 EmailConfirmationTokenIssueOutcome.EmailAlreadyConfirmed);
         }
 
-        var now = _timeProvider.GetUtcNow();
+        var issue = await StageReplacementForLockedAccountAsync(
+            userId,
+            _timeProvider.GetUtcNow(),
+            cancellationToken);
+
+        await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return issue;
+    }
+
+    internal async Task<EmailConfirmationTokenIssueResult>
+        StageReplacementForLockedAccountAsync(
+            long userId,
+            DateTimeOffset createdAt,
+            CancellationToken cancellationToken)
+    {
         await _db.EmailConfirmationTokens
             .Where(token =>
                 token.UserId == userId
                 && token.UsedAt == null
                 && token.RevokedAt == null)
             .ExecuteUpdateAsync(
-                updates => updates.SetProperty(token => token.RevokedAt, now),
+                updates => updates.SetProperty(token => token.RevokedAt, createdAt),
                 cancellationToken);
 
-        var issue = StageToken(userId, now);
-
-        await _db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return issue;
+        return StageToken(userId, createdAt);
     }
 
     internal EmailConfirmationTokenIssueResult StageForNewAccount(long userId)

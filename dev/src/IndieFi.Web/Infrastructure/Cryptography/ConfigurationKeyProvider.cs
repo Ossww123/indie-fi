@@ -22,6 +22,9 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
             [KeyPurpose.AccountEmailMessageEncryption] = LoadPurpose(
                 configuration,
                 KeyPurpose.AccountEmailMessageEncryption),
+            [KeyPurpose.AccountRequestIpLookup] = LoadPurpose(
+                configuration,
+                KeyPurpose.AccountRequestIpLookup),
         };
 
         RejectSharedSecrets(_purposes.Values);

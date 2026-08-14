@@ -20,6 +20,8 @@ public class AppDbContext : DbContext
     public DbSet<EmailConfirmationToken> EmailConfirmationTokens => Set<EmailConfirmationToken>();
     public DbSet<AuthenticationEmailOutboxMessage> AuthenticationEmailOutboxMessages =>
         Set<AuthenticationEmailOutboxMessage>();
+    public DbSet<EmailConfirmationResendAttempt> EmailConfirmationResendAttempts =>
+        Set<EmailConfirmationResendAttempt>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
@@ -187,6 +189,37 @@ public class AppDbContext : DbContext
             message.HasIndex(item => new { item.UserId, item.Kind }).IsUnique();
             message.HasIndex(item => item.ExpiresAt);
             message.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
+        });
+
+        modelBuilder.Entity<EmailConfirmationResendAttempt>(attempt =>
+        {
+            attempt.ToTable("email_confirmation_resend_attempts", table =>
+                table.HasCheckConstraint(
+                    "CK_email_confirmation_resend_attempts_ip_hash_length",
+                    "octet_length(request_ip_hash) = 32"));
+            attempt.HasKey(item => item.Id);
+            attempt.Property(item => item.Id).HasColumnName("id");
+            attempt.Property(item => item.UserId).HasColumnName("user_id");
+            attempt.Property(item => item.RequestIpHash)
+                .HasColumnName("request_ip_hash")
+                .IsRequired();
+            attempt.Property(item => item.RequestIpHashKeyId)
+                .HasColumnName("request_ip_hash_key_id")
+                .HasMaxLength(100)
+                .IsRequired();
+            attempt.Property(item => item.CreatedAt).HasColumnName("created_at");
+            attempt.HasIndex(item => item.CreatedAt);
+            attempt.HasIndex(item => new
+            {
+                item.RequestIpHashKeyId,
+                item.RequestIpHash,
+                item.CreatedAt,
+            }).HasDatabaseName("IX_email_confirmation_resend_attempts_ip_created_at");
+            attempt.HasIndex(item => new { item.UserId, item.CreatedAt });
+            attempt.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<PasswordResetToken>(token =>

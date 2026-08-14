@@ -14,11 +14,13 @@ public static class AccountsModule
         services.AddScoped<AccountRegistrationService>();
         services.AddScoped<AccountAuthenticationService>();
         services.AddScoped<EmailConfirmationTokenService>();
+        services.AddScoped<EmailConfirmationResendService>();
         services.AddScoped<AuthenticationEmailOutboxService>();
         services.AddScoped<AuthenticationEmailOutboxProcessor>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IKeyProvider, ConfigurationKeyProvider>();
         services.AddSingleton<EmailProtectionService>();
+        services.AddSingleton<RequestIpProtectionService>();
         services.AddSingleton<AuthenticationEmailMessageProtectionService>();
         services.AddOptions<AuthenticationEmailDeliveryOptions>()
             .BindConfiguration(AuthenticationEmailDeliveryOptions.SectionName)

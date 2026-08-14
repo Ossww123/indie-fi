@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.Accounts.Application;
 
@@ -58,6 +59,20 @@ public sealed class AuthenticationEmailOutboxService
         // or roll back together.
         _db.AuthenticationEmailOutboxMessages.Add(message);
         return message;
+    }
+
+    public async Task<AuthenticationEmailOutboxMessage> ReplaceEmailConfirmationAsync(
+        long userId,
+        string plaintextToken,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        await _db.AuthenticationEmailOutboxMessages
+            .Where(message =>
+                message.UserId == userId
+                && message.Kind == AuthenticationEmailMessageKind.EmailConfirmation)
+            .ExecuteDeleteAsync(cancellationToken);
+        return StageEmailConfirmation(userId, plaintextToken, expiresAt);
     }
 
     private static void ValidateConfirmationToken(string plaintextToken)
