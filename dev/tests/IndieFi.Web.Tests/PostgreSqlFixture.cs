@@ -1,4 +1,5 @@
 using IndieFi.Web.Data;
+using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
@@ -51,6 +52,31 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         return NewDbContext(_container.GetConnectionString(), interceptors);
     }
 
+    public AppDbContext NewApplicationDbContext(string database)
+    {
+        return NewDbContext(
+            CreateApplicationConnectionString(database, pooling: false),
+            []);
+    }
+
+    public string CreateOwnerConnectionString(string database)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        {
+            Database = database,
+            Pooling = false,
+        };
+
+        return builder.ConnectionString;
+    }
+
+    public Task<ExecResult> ExecAsync(
+        IList<string> command,
+        CancellationToken cancellationToken = default)
+    {
+        return _container.ExecAsync(command, cancellationToken);
+    }
+
     private static AppDbContext NewDbContext(
         string connectionString,
         IInterceptor[] interceptors)
@@ -65,10 +91,21 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 
     private string CreateApplicationConnectionString()
     {
+        return CreateApplicationConnectionString(
+            new NpgsqlConnectionStringBuilder(_container.GetConnectionString()).Database!,
+            pooling: true);
+    }
+
+    private string CreateApplicationConnectionString(
+        string database,
+        bool pooling)
+    {
         var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         {
+            Database = database,
             Username = "indiefi_app",
             Password = ApplicationRolePassword,
+            Pooling = pooling,
         };
 
         return builder.ConnectionString;
