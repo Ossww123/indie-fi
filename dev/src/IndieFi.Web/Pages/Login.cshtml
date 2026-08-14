@@ -6,6 +6,11 @@
 
 <h1 class="page-title mb-6">로그인</h1>
 
+@if (Model.StatusMessage is not null)
+{
+    <div class="alert-success mb-6">@Model.StatusMessage</div>
+}
+
 <form method="post" class="form-stack">
     <input type="hidden" asp-for="ReturnUrl" />
     <div asp-validation-summary="ModelOnly"></div>
