@@ -395,6 +395,120 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.AuthenticationEmailOutboxMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<byte[]>("PayloadAuthenticationTag")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload_authentication_tag");
+
+                    b.Property<byte[]>("PayloadCiphertext")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload_ciphertext");
+
+                    b.Property<string>("PayloadKeyId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("payload_key_id");
+
+                    b.Property<byte[]>("PayloadNonce")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload_nonce");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("authentication_email_outbox_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_kind", "kind IN ('EmailConfirmation')");
+
+                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_lifetime", "expires_at > created_at");
+
+                            t.HasCheckConstraint("CK_authentication_email_outbox_messages_payload_shape", "octet_length(payload_ciphertext) > 0 AND octet_length(payload_nonce) = 12 AND octet_length(payload_authentication_tag) = 16");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationResendAttempt", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte[]>("RequestIpHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("request_ip_hash");
+
+                    b.Property<string>("RequestIpHashKeyId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("request_ip_hash_key_id");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("RequestIpHashKeyId", "RequestIpHash", "CreatedAt")
+                        .HasDatabaseName("IX_email_confirmation_resend_attempts_ip_created_at");
+
+                    b.ToTable("email_confirmation_resend_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_email_confirmation_resend_attempts_ip_hash_length", "octet_length(request_ip_hash) = 32");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>
                 {
                     b.Property<long>("Id")
@@ -434,7 +548,10 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_email_confirmation_tokens_user_id_unresolved")
+                        .HasFilter("used_at IS NULL AND revoked_at IS NULL");
 
                     b.ToTable("email_confirmation_tokens", null, t =>
                         {
@@ -701,6 +818,23 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("Drop");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.AuthenticationEmailOutboxMessage", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationResendAttempt", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>

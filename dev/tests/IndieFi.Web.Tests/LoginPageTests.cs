@@ -112,4 +112,44 @@ public sealed class LoginPageTests
         Assert.Contains(UserDisplayIdentifier.Format(userId), html);
         Assert.DoesNotContain(email, html);
     }
+
+    [Fact]
+    public async Task Post_Login_BeforeEmailConfirmation_ShowsConfirmationRequiredWithoutCookie()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(
+            _fixture,
+            emailConfirmed: false);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var pageResponse = await client.GetAsync(
+            "/Login",
+            TestContext.Current.CancellationToken);
+        var pageHtml = await pageResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var antiforgeryToken = PageTestSupport.ExtractAntiforgeryToken(pageHtml);
+
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = email,
+            ["Password"] = password,
+            ["__RequestVerificationToken"] = antiforgeryToken,
+        });
+        using var response = await client.PostAsync(
+            "/Login",
+            form,
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var decodedHtml = WebUtility.HtmlDecode(html);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("이메일 확인이 필요합니다", decodedHtml);
+        if (response.Headers.TryGetValues("Set-Cookie", out var setCookieValues))
+        {
+            Assert.DoesNotContain(
+                setCookieValues,
+                value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+        }
+    }
 }

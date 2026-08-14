@@ -1,0 +1,26 @@
+@page
+@model ResendConfirmationEmailModel
+@{
+    ViewData["Title"] = "확인 메일 다시 받기";
+}
+
+<h1 class="page-title mb-6">확인 메일 다시 받기</h1>
+
+@if (Model.RequestCompleted)
+{
+    <div class="alert-success">
+        입력한 이메일의 미확인 계정이 재발송 제한 범위 안에 있으면 확인 메일을 보냈습니다.
+    </div>
+}
+
+<form method="post" class="form-stack">
+    <div asp-validation-summary="ModelOnly"></div>
+
+    <div class="field-group">
+        <label asp-for="Email" class="field-label">이메일</label>
+        <input asp-for="Email" class="field-input" autocomplete="email" />
+        <span asp-validation-for="Email" class="field-error"></span>
+    </div>
+
+    <button type="submit" class="button-primary">확인 메일 다시 받기</button>
+</form>

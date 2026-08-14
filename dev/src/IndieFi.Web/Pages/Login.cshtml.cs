@@ -40,6 +40,14 @@ public class LoginModel : PageModel
 
         var result = await _accountAuthenticationService.AuthenticateAsync(Email, Password);
 
+        if (result.Outcome == AccountAuthenticationOutcome.EmailNotConfirmed)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "이메일 확인이 필요합니다. 가입할 때 받은 확인 메일을 확인해 주세요.");
+            return Page();
+        }
+
         if (result.Outcome == AccountAuthenticationOutcome.InvalidCredentials)
         {
             // Deliberately the same message either way: saying "no such account"

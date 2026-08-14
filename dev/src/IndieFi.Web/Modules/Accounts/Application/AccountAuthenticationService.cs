@@ -10,6 +10,7 @@ public enum AccountAuthenticationOutcome
 {
     Authenticated,
     InvalidCredentials,
+    EmailNotConfirmed,
 }
 
 public sealed record AccountAuthenticationResult(
@@ -77,8 +78,14 @@ public sealed class AccountAuthenticationService
                 AccountAuthenticationOutcome.InvalidCredentials);
         }
 
+        if (user!.EmailConfirmedAt is null)
+        {
+            return new AccountAuthenticationResult(
+                AccountAuthenticationOutcome.EmailNotConfirmed);
+        }
+
         return new AccountAuthenticationResult(
             AccountAuthenticationOutcome.Authenticated,
-            user!.Id);
+            user.Id);
     }
 }

@@ -11,10 +11,23 @@ internal static class TestAccountProtection
 {
     public static readonly byte[] EmailKey = Enumerable.Repeat((byte)21, 32).ToArray();
     public static readonly byte[] LookupKey = Enumerable.Repeat((byte)22, 32).ToArray();
+    public static readonly byte[] MessageKey = Enumerable.Repeat((byte)23, 32).ToArray();
+    public static readonly byte[] MessageKeyV2 = Enumerable.Repeat((byte)24, 32).ToArray();
+    public static readonly byte[] RequestIpKey = Enumerable.Repeat((byte)25, 32).ToArray();
 
     public static EmailProtectionService CreateService()
     {
         return new EmailProtectionService(new Provider());
+    }
+
+    public static AuthenticationEmailMessageProtectionService CreateMessageProtectionService()
+    {
+        return new AuthenticationEmailMessageProtectionService(new Provider());
+    }
+
+    public static RequestIpProtectionService CreateRequestIpProtectionService()
+    {
+        return new RequestIpProtectionService(new Provider());
     }
 
     public static User AddUser(
@@ -93,6 +106,15 @@ internal static class TestAccountProtection
             ["AccountProtection:Purposes:account-email-lookup:ReadKeyIds:0"] = "lookup-test-v1",
             ["AccountProtection:Purposes:account-email-lookup:WriteKeyIds:0"] = "lookup-test-v1",
             ["AccountProtection:Purposes:account-email-lookup:Keys:lookup-test-v1"] = Convert.ToBase64String(LookupKey),
+            ["AccountProtection:Purposes:account-email-message-encryption:CurrentKeyId"] = "message-test-v1",
+            ["AccountProtection:Purposes:account-email-message-encryption:ReadKeyIds:0"] = "message-test-v1",
+            ["AccountProtection:Purposes:account-email-message-encryption:WriteKeyIds:0"] = "message-test-v1",
+            ["AccountProtection:Purposes:account-email-message-encryption:Keys:message-test-v1"] = Convert.ToBase64String(MessageKey),
+            ["AccountProtection:Purposes:account-request-ip-lookup:CurrentKeyId"] = "request-ip-test-v1",
+            ["AccountProtection:Purposes:account-request-ip-lookup:ReadKeyIds:0"] = "request-ip-test-v1",
+            ["AccountProtection:Purposes:account-request-ip-lookup:WriteKeyIds:0"] = "request-ip-test-v1",
+            ["AccountProtection:Purposes:account-request-ip-lookup:Keys:request-ip-test-v1"] = Convert.ToBase64String(RequestIpKey),
+            ["AuthenticationEmail:Enabled"] = "false",
         };
     }
 
@@ -100,10 +122,23 @@ internal static class TestAccountProtection
     {
         private static readonly KeyMaterial Email = new("email-test-v1", EmailKey);
         private static readonly KeyMaterial Lookup = new("lookup-test-v1", LookupKey);
+        private static readonly KeyMaterial Message = new("message-test-v1", MessageKey);
+        private static readonly KeyMaterial MessageV2 = new("message-test-v2", MessageKeyV2);
+        private static readonly KeyMaterial RequestIp = new("request-ip-test-v1", RequestIpKey);
 
         public KeyMaterial GetCurrent(KeyPurpose purpose) => Get(purpose);
         public KeyMaterial GetById(KeyPurpose purpose, string keyId)
         {
+            if (purpose == KeyPurpose.AccountEmailMessageEncryption)
+            {
+                return keyId switch
+                {
+                    "message-test-v1" => Message,
+                    "message-test-v2" => MessageV2,
+                    _ => throw new InvalidOperationException($"Unknown test key: {keyId}"),
+                };
+            }
+
             var key = Get(purpose);
             return string.Equals(key.Id, keyId, StringComparison.Ordinal)
                 ? key
@@ -112,7 +147,13 @@ internal static class TestAccountProtection
         public IReadOnlyList<KeyMaterial> GetReadable(KeyPurpose purpose) => [Get(purpose)];
         public IReadOnlyList<KeyMaterial> GetWritable(KeyPurpose purpose) => [Get(purpose)];
 
-        private static KeyMaterial Get(KeyPurpose purpose) =>
-            purpose == KeyPurpose.AccountEmailEncryption ? Email : Lookup;
+        private static KeyMaterial Get(KeyPurpose purpose) => purpose switch
+        {
+            var value when value == KeyPurpose.AccountEmailEncryption => Email,
+            var value when value == KeyPurpose.AccountEmailLookup => Lookup,
+            var value when value == KeyPurpose.AccountEmailMessageEncryption => Message,
+            var value when value == KeyPurpose.AccountRequestIpLookup => RequestIp,
+            _ => throw new InvalidOperationException($"Unknown test purpose: {purpose}"),
+        };
     }
 }
