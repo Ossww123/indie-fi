@@ -16,6 +16,7 @@ public static class AccountsModule
         services.AddScoped<GoogleAccountService>();
         services.AddScoped<AccountPasswordChangeService>();
         services.AddScoped<AccountSessionValidationService>();
+        services.AddScoped<AccountStatusTransitionService>();
         services.AddScoped<EmailConfirmationTokenService>();
         services.AddScoped<PasswordResetTokenService>();
         services.AddScoped<PasswordResetRequestService>();
