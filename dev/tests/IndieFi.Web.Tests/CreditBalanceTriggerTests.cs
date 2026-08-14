@@ -22,13 +22,9 @@ public sealed class CreditBalanceTriggerTests
 
         await using (var arrangeDb = _fixture.NewDbContext())
         {
-            var user = new User
-            {
-                Email = $"{Guid.NewGuid():N}@example.test",
-                PasswordHash = "test-password-hash",
-            };
-
-            arrangeDb.Users.Add(user);
+            var user = TestAccountProtection.AddUser(
+                arrangeDb,
+                $"{Guid.NewGuid():N}@example.test");
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             userId = user.Id;
         }

@@ -27,10 +27,10 @@ public sealed class GameDetailPageTests
 
         await using (var arrangeDb = _fixture.NewDbContext())
         {
-            var ownerId = await arrangeDb.Users
-                .Where(user => user.Email == email)
-                .Select(user => user.Id)
-                .SingleAsync(TestContext.Current.CancellationToken);
+            var ownerId = (await TestAccountProtection.FindUserAsync(
+                arrangeDb,
+                email,
+                TestContext.Current.CancellationToken)).Id;
             arrangeDb.CreditLedgerEntries.Add(new CreditLedgerEntry
             {
                 UserId = ownerId,

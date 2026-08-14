@@ -1,4 +1,6 @@
 using System.Net;
+using IndieFi.Web.Modules.Accounts.Domain;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -81,5 +83,33 @@ public sealed class LoginPageTests
         Assert.Equal("/", location.OriginalString);
         Assert.NotEqual(returnUrl, location.OriginalString);
         Assert.DoesNotContain("example.com", location.OriginalString);
+    }
+
+    [Fact]
+    public async Task Get_Layout_AfterLogin_ShowsUserIdentifierWithoutEmail()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        long userId;
+        await using (var db = _fixture.NewDbContext())
+        {
+            userId = (await TestAccountProtection.FindUserAsync(
+                db,
+                email,
+                TestContext.Current.CancellationToken)).Id;
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var response = await client.GetAsync(
+            "/",
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(UserDisplayIdentifier.Format(userId), html);
+        Assert.DoesNotContain(email, html);
     }
 }

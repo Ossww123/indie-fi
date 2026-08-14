@@ -1,5 +1,6 @@
 using System.Net;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -17,7 +18,7 @@ public sealed class ReceivedFeedbackPageTests
     }
 
     [Fact]
-    public async Task Get_FeedbackPage_AsOwner_ShowsBodyAndReviewerEmail()
+    public async Task Get_FeedbackPage_AsOwner_ShowsBodyAndReviewerIdentifierWithoutEmail()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
         var ownerId = await FindUserIdAsync(email);
@@ -38,7 +39,10 @@ public sealed class ReceivedFeedbackPageTests
         var decodedHtml = WebUtility.HtmlDecode(html);
         Assert.Contains(feedback.GameTitle, decodedHtml);
         Assert.Contains(feedbackBody, decodedHtml);
-        Assert.Contains(feedback.ReviewerEmail, decodedHtml);
+        Assert.Contains(
+            UserDisplayIdentifier.Format(feedback.ReviewerId),
+            decodedHtml);
+        Assert.DoesNotContain(feedback.ReviewerEmail, decodedHtml);
     }
 
     [Fact]
@@ -156,10 +160,10 @@ public sealed class ReceivedFeedbackPageTests
     private async Task<long> FindUserIdAsync(string email)
     {
         await using var db = _fixture.NewDbContext();
-        return await db.Users
-            .Where(user => user.Email == email)
-            .Select(user => user.Id)
-            .SingleAsync(TestContext.Current.CancellationToken);
+        return (await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken)).Id;
     }
 
     private async Task<FeedbackTestData> CreateGameWithFeedbackAsync(
@@ -178,7 +182,11 @@ public sealed class ReceivedFeedbackPageTests
         });
         await db.SaveChangesAsync(cancellationToken);
 
-        var reviewer = await ReviewTestData.CreateUserWithCreditAsync(db, balance: 0);
+        var reviewerEmail = $"{Guid.NewGuid():N}@example.test";
+        var reviewer = await ReviewTestData.CreateUserWithCreditAsync(
+            db,
+            balance: 0,
+            reviewerEmail);
         var game = await ReviewTestData.CreateGameAsync(db, ownerId);
         var reviewRequest = await ReviewTestData.CreateQueuedRequestAsync(
             db,
@@ -206,11 +214,16 @@ public sealed class ReceivedFeedbackPageTests
         });
         await db.SaveChangesAsync(cancellationToken);
 
-        return new FeedbackTestData(game.Id, game.Title, reviewer.Email);
+        return new FeedbackTestData(
+            game.Id,
+            game.Title,
+            reviewer.Id,
+            reviewerEmail);
     }
 
     private sealed record FeedbackTestData(
         long GameId,
         string GameTitle,
+        long ReviewerId,
         string ReviewerEmail);
 }

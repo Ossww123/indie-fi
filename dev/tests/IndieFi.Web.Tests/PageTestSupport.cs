@@ -31,9 +31,8 @@ internal static class PageTestSupport
         var email = $"{Guid.NewGuid():N}@example.test";
 
         await using var db = fixture.NewDbContext();
-        var user = new User { Email = email };
+        var user = TestAccountProtection.AddUser(db, email, passwordHash: null);
         user.PasswordHash = new PasswordHasher<User>().HashPassword(user, password);
-        db.Users.Add(user);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return (email, password);

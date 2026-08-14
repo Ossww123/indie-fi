@@ -1,6 +1,7 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Feedback.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -124,21 +125,29 @@ public class IndexModel : PageModel
                 assignment.LeasedUntil))
             .ToListAsync();
 
-        Items = await (
+        var queuedItems = await (
             from reviewRequest in _db.ReviewRequests
             join game in _db.Games on reviewRequest.GameId equals game.Id
-            join requester in _db.Users on reviewRequest.RequesterId equals requester.Id
             where reviewRequest.Status == ReviewRequestStatus.Queued
             // A developer cannot review their own game, so their requests are hidden.
             where reviewRequest.RequesterId != userId
             // Ordering by id rather than created_at settles requests that share a
             // timestamp, and it survives a request returning to the queue later.
             orderby reviewRequest.Id
-            select new ReviewListItem(
+            select new
+            {
                 game.Title,
-                requester.Email,
-                reviewRequest.CreatedAt))
+                reviewRequest.RequesterId,
+                reviewRequest.CreatedAt,
+            })
             .ToListAsync();
+
+        Items = queuedItems
+            .Select(item => new ReviewListItem(
+                item.Title,
+                UserDisplayIdentifier.Format(item.RequesterId),
+                item.CreatedAt))
+            .ToList();
     }
 
     public async Task<IActionResult> OnPostClaimAsync()
@@ -165,7 +174,7 @@ public class IndexModel : PageModel
 
     public sealed record ReviewListItem(
         string GameTitle,
-        string RequesterEmail,
+        string RequesterDisplayIdentifier,
         DateTimeOffset RequestedAt);
 
     public sealed record ReviewAssignmentListItem(

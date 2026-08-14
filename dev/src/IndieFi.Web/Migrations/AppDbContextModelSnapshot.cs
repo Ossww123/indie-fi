@@ -22,41 +22,6 @@ namespace IndieFi.Web.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<int>("Delta")
-                        .HasColumnType("integer")
-                        .HasColumnName("delta");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("kind");
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("credit_ledger_entries", (string)null);
-                });
-
             modelBuilder.Entity("IndieFi.Web.Entities.FeedbackSubmission", b =>
                 {
                     b.Property<long>("Id")
@@ -357,6 +322,14 @@ namespace IndieFi.Web.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("AccountStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("Active")
+                        .HasColumnName("account_status");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -369,37 +342,255 @@ namespace IndieFi.Web.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("credit_balance");
 
-                    b.Property<string>("Email")
+                    b.Property<byte[]>("EmailAuthenticationTag")
                         .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)")
-                        .HasColumnName("email");
+                        .HasColumnType("bytea")
+                        .HasColumnName("email_authentication_tag");
+
+                    b.Property<byte[]>("EmailCiphertext")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("email_ciphertext");
+
+                    b.Property<DateTimeOffset?>("EmailConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("email_confirmed_at");
+
+                    b.Property<string>("EmailEncryptionKeyId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("email_encryption_key_id");
+
+                    b.Property<byte[]>("EmailNonce")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("email_nonce");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
 
-                    b.HasKey("Id");
+                    b.Property<long>("SessionVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L)
+                        .HasColumnName("session_version");
 
-                    b.HasIndex("Email")
-                        .IsUnique();
+                    b.Property<DateTimeOffset?>("SuspendedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("suspended_until");
+
+                    b.HasKey("Id");
 
                     b.ToTable("users", null, t =>
                         {
                             t.HasCheckConstraint("CK_users_credit_balance_not_negative", "credit_balance >= 0");
+
+                            t.HasCheckConstraint("CK_users_email_protection_complete", "octet_length(email_nonce) = 12 AND octet_length(email_authentication_tag) = 16");
+
+                            t.HasCheckConstraint("CK_users_session_version_positive", "session_version >= 1");
+
+                            t.HasCheckConstraint("CK_users_suspension_shape", "(account_status = 'TemporarilySuspended' AND suspended_until IS NOT NULL) OR (account_status IN ('Active', 'IndefinitelySuspended') AND suspended_until IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("email_confirmation_tokens", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_email_confirmation_tokens_hash_length", "octet_length(token_hash) = 32");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.ExternalLogin", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("LinkedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("linked_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderUserId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("provider_user_id");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "ProviderUserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Provider")
+                        .IsUnique();
+
+                    b.ToTable("external_logins", (string)null);
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.PasswordResetToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("password_reset_tokens", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_password_reset_tokens_hash_length", "octet_length(token_hash) = 32");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.UserEmailLookup", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("KeyId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("key_id");
+
+                    b.Property<byte[]>("Value")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("value");
+
+                    b.HasKey("UserId", "KeyId");
+
+                    b.HasIndex("KeyId", "Value")
+                        .IsUnique();
+
+                    b.ToTable("user_email_lookups", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_user_email_lookups_value_length", "octet_length(value) = 32");
                         });
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", b =>
                 {
-                    b.HasOne("IndieFi.Web.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
 
-                    b.Navigation("User");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Delta")
+                        .HasColumnType("integer")
+                        .HasColumnName("delta");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("credit_ledger_entries", (string)null);
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.FeedbackSubmission", b =>
@@ -510,6 +701,55 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("Drop");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.EmailConfirmationToken", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.ExternalLogin", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.PasswordResetToken", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.UserEmailLookup", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 #pragma warning restore 612, 618
         }

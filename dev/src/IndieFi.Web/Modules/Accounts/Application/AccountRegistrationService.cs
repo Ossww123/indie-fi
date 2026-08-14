@@ -1,7 +1,7 @@
-using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -19,8 +19,7 @@ public enum AccountRegistrationOutcome
 public sealed record AccountRegistrationResult(
     AccountRegistrationOutcome Outcome,
     IReadOnlyList<ValidationViolation> Violations,
-    long? UserId = null,
-    string? Email = null);
+    long? UserId = null);
 
 public sealed class AccountRegistrationService
 {
@@ -34,7 +33,6 @@ public sealed class AccountRegistrationService
     // can create a request while everyone has zero credits, so this grant starts the cycle.
     private const int SignupGrant = 3;
 
-    private const int EmailMaxLength = 320;
     private const int PasswordMinLength = 8;
     private const int PasswordMaxLength = 128;
 
@@ -42,20 +40,23 @@ public sealed class AccountRegistrationService
 
     private readonly AppDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly EmailProtectionService _emailProtection;
 
     public AccountRegistrationService(
         AppDbContext db,
-        IPasswordHasher<User> passwordHasher)
+        IPasswordHasher<User> passwordHasher,
+        EmailProtectionService emailProtection)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _emailProtection = emailProtection;
     }
 
     public async Task<AccountRegistrationResult> RegisterAsync(
         string? email,
         string? password)
     {
-        var violations = Validate(email, password);
+        var violations = Validate(email, password, out var accountEmail);
         if (violations.Count > 0)
         {
             return new AccountRegistrationResult(
@@ -63,8 +64,26 @@ public sealed class AccountRegistrationService
                 violations);
         }
 
-        var user = new User { Email = email! };
+        var validEmail = accountEmail!;
+        var protectedEmail = _emailProtection.Protect(validEmail);
+        var user = new User
+        {
+            EmailCiphertext = protectedEmail.Ciphertext,
+            EmailNonce = protectedEmail.Nonce,
+            EmailAuthenticationTag = protectedEmail.AuthenticationTag,
+            EmailEncryptionKeyId = protectedEmail.KeyId,
+        };
         user.PasswordHash = _passwordHasher.HashPassword(user, password!);
+
+        foreach (var lookup in _emailProtection.CreateWritableLookupValues(validEmail))
+        {
+            _db.UserEmailLookups.Add(new UserEmailLookup
+            {
+                User = user,
+                KeyId = lookup.KeyId,
+                Value = lookup.Value,
+            });
+        }
 
         // The database trigger derives the balance from the ledger. Because application
         // code writes only the ledger, there is no code path that can make them diverge.
@@ -95,35 +114,30 @@ public sealed class AccountRegistrationService
         return new AccountRegistrationResult(
             AccountRegistrationOutcome.Registered,
             NoViolations,
-            user.Id,
-            user.Email);
+            user.Id);
     }
 
     /// <summary>
     /// Enforces the account rules for every caller because nothing below this method
     /// checks the password length or the shape of the address.
     /// </summary>
-    private static List<ValidationViolation> Validate(string? email, string? password)
+    private static List<ValidationViolation> Validate(
+        string? email,
+        string? password,
+        out AccountEmailAddress? accountEmail)
     {
         var violations = new List<ValidationViolation>();
 
-        if (string.IsNullOrWhiteSpace(email))
+        if (!AccountEmailAddressPolicy.TryCreate(email, out accountEmail, out var emailError))
         {
             violations.Add(new ValidationViolation(
                 EmailField,
-                "이메일을 입력해 주세요."));
-        }
-        else if (email.Length > EmailMaxLength)
-        {
-            violations.Add(new ValidationViolation(
-                EmailField,
-                "이메일이 너무 깁니다."));
-        }
-        else if (!new EmailAddressAttribute().IsValid(email))
-        {
-            violations.Add(new ValidationViolation(
-                EmailField,
-                "이메일 형식이 아닙니다."));
+                emailError switch
+                {
+                    AccountEmailAddressError.Required => "이메일을 입력해 주세요.",
+                    AccountEmailAddressError.TooLong => "이메일은 254자 이하여야 합니다.",
+                    _ => "사용할 수 없는 이메일 형식입니다.",
+                }));
         }
 
         if (string.IsNullOrEmpty(password))

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -45,7 +46,8 @@ public class SignupModel : PageModel
         }
 
         // Redirect after a successful POST so refreshing the page does not resubmit.
-        TempData["SignupMessage"] = $"{result.Email} 가입 완료";
+        TempData["SignupMessage"] =
+            $"{UserDisplayIdentifier.Format(result.UserId!.Value)} 가입 완료";
         return RedirectToPage("/Index");
     }
 }

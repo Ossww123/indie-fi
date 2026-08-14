@@ -684,13 +684,9 @@ public sealed class ReviewRequestServiceTests
 
     private static async Task<User> CreateUserWithCreditAsync(AppDbContext db, int balance)
     {
-        var user = new User
-        {
-            Email = $"{Guid.NewGuid():N}@example.test",
-            PasswordHash = "test-password-hash",
-        };
-
-        db.Users.Add(user);
+        var user = TestAccountProtection.AddUser(
+            db,
+            $"{Guid.NewGuid():N}@example.test");
 
         if (balance > 0)
         {

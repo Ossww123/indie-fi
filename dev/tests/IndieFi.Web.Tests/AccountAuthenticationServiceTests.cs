@@ -27,7 +27,8 @@ public sealed class AccountAuthenticationServiceTests
         {
             var registration = await new AccountRegistrationService(
                     registrationDb,
-                    passwordHasher)
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
                 .RegisterAsync(email, password);
             userId = registration.UserId!.Value;
         }
@@ -37,13 +38,13 @@ public sealed class AccountAuthenticationServiceTests
         {
             result = await new AccountAuthenticationService(
                     authenticationDb,
-                    passwordHasher)
-                .AuthenticateAsync(email, password);
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
+                .AuthenticateAsync($"  {email.ToUpperInvariant()}  ", password);
         }
 
         Assert.Equal(AccountAuthenticationOutcome.Authenticated, result.Outcome);
         Assert.Equal(userId, result.UserId);
-        Assert.Equal(email, result.Email);
     }
 
     [Fact]
@@ -55,7 +56,7 @@ public sealed class AccountAuthenticationServiceTests
 
         await using (var registrationDb = _fixture.NewDbContext())
         {
-            await new AccountRegistrationService(registrationDb, passwordHasher)
+            await new AccountRegistrationService(registrationDb, passwordHasher, TestAccountProtection.CreateService())
                 .RegisterAsync(email, password);
         }
 
@@ -64,13 +65,13 @@ public sealed class AccountAuthenticationServiceTests
         {
             result = await new AccountAuthenticationService(
                     authenticationDb,
-                    passwordHasher)
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
                 .AuthenticateAsync(email, "Wrong-Test-Password-456!");
         }
 
         Assert.Equal(AccountAuthenticationOutcome.InvalidCredentials, result.Outcome);
         Assert.Null(result.UserId);
-        Assert.Null(result.Email);
     }
 
     [Fact]
@@ -83,7 +84,8 @@ public sealed class AccountAuthenticationServiceTests
         {
             result = await new AccountAuthenticationService(
                     authenticationDb,
-                    passwordHasher)
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
                 .AuthenticateAsync(
                     $"{Guid.NewGuid():N}@example.test",
                     "Any-Test-Password-123!");
@@ -91,6 +93,5 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.InvalidCredentials, result.Outcome);
         Assert.Null(result.UserId);
-        Assert.Null(result.Email);
     }
 }

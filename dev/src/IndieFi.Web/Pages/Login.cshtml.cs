@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +20,7 @@ public class LoginModel : PageModel
 
     [BindProperty]
     [Required(ErrorMessage = "이메일을 입력해 주세요.")]
-    [EmailAddress(ErrorMessage = "이메일 형식이 아닙니다.")]
+    [DataType(DataType.EmailAddress)]
     public string Email { get; set; } = string.Empty;
 
     [BindProperty]
@@ -50,7 +51,7 @@ public class LoginModel : PageModel
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()),
-            new(ClaimTypes.Name, result.Email!),
+            new(ClaimTypes.Name, UserDisplayIdentifier.Format(result.UserId.Value)),
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

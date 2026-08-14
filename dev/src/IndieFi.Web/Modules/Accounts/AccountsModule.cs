@@ -1,4 +1,5 @@
 using IndieFi.Web.Entities;
+using IndieFi.Web.Infrastructure.Cryptography;
 using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.AspNetCore.Identity;
 
@@ -10,6 +11,8 @@ public static class AccountsModule
     {
         services.AddScoped<AccountRegistrationService>();
         services.AddScoped<AccountAuthenticationService>();
+        services.AddSingleton<IKeyProvider, ConfigurationKeyProvider>();
+        services.AddSingleton<EmailProtectionService>();
 
         // Used on its own, without the rest of ASP.NET Core Identity.
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();

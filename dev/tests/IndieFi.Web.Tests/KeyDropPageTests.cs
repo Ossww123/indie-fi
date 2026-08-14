@@ -176,8 +176,9 @@ public sealed class KeyDropPageTests
         await using var db = _fixture.NewDbContext();
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        var owner = await db.Users.SingleAsync(
-            user => user.Email == ownerEmail,
+        var owner = await TestAccountProtection.FindUserAsync(
+            db,
+            ownerEmail,
             cancellationToken);
 
         var game = new Game
@@ -203,13 +204,9 @@ public sealed class KeyDropPageTests
         await using var db = _fixture.NewDbContext();
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        var owner = new User
-        {
-            Email = $"{Guid.NewGuid():N}@example.test",
-            PasswordHash = "test-password-hash"
-        };
-
-        db.Users.Add(owner);
+        var owner = TestAccountProtection.AddUser(
+            db,
+            $"{Guid.NewGuid():N}@example.test");
         await db.SaveChangesAsync(cancellationToken);
 
         var game = new Game
