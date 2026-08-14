@@ -11,6 +11,9 @@ public sealed class GoogleLoginModel : PageModel
 {
     private const string GenericFailureMessage =
         "Google 로그인을 완료하지 못했습니다. 다시 시도해 주세요.";
+    private const string LinkUnavailableMessage =
+        "이 이메일의 기존 계정에는 새 Google 로그인을 연결할 수 없습니다. " +
+        "기존 로그인 수단을 이용해 주세요.";
 
     private readonly GoogleAccountService _googleAccounts;
     private readonly AccountSignInService _accountSignIn;
@@ -71,9 +74,17 @@ public sealed class GoogleLoginModel : PageModel
             subject!,
             email!,
             HttpContext.RequestAborted);
-        if (result.Outcome == GoogleAccountOutcome.ExistingEmail)
+        if (result.Outcome == GoogleAccountOutcome.RequiresPasswordLink)
         {
-            return await FailAsync(returnUrl);
+            var safeReturnUrl = GetSafeReturnUrl(returnUrl);
+            return safeReturnUrl == "/"
+                ? RedirectToPage("/GoogleLink")
+                : RedirectToPage("/GoogleLink", new { returnUrl = safeReturnUrl });
+        }
+
+        if (result.Outcome == GoogleAccountOutcome.LinkUnavailable)
+        {
+            return await FailAsync(returnUrl, LinkUnavailableMessage);
         }
 
         await HttpContext.SignOutAsync(ExternalAuthenticationDefaults.TemporaryScheme);
@@ -85,10 +96,12 @@ public sealed class GoogleLoginModel : PageModel
         return LocalRedirect(GetSafeReturnUrl(returnUrl));
     }
 
-    private async Task<IActionResult> FailAsync(string? returnUrl)
+    private async Task<IActionResult> FailAsync(
+        string? returnUrl,
+        string message = GenericFailureMessage)
     {
         await HttpContext.SignOutAsync(ExternalAuthenticationDefaults.TemporaryScheme);
-        GoogleLoginError = GenericFailureMessage;
+        GoogleLoginError = message;
         var safeReturnUrl = GetSafeReturnUrl(returnUrl);
         return safeReturnUrl == "/"
             ? RedirectToPage("/Login")

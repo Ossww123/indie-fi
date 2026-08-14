@@ -1,11 +1,13 @@
 using System.Net;
 using System.Security.Claims;
+using IndieFi.Web.Entities;
 using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -310,7 +312,18 @@ public sealed class GoogleLoginPageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/Login", response.Headers.Location?.OriginalString);
+        Assert.Equal("/GoogleLink", response.Headers.Location?.OriginalString);
+        if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+        {
+            Assert.DoesNotContain(
+                setCookies,
+                value => value.StartsWith(
+                    $"{ExternalAuthenticationDefaults.TemporaryCookieName}=",
+                    StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                setCookies,
+                value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+        }
         await using var db = _fixture.NewDbContext();
         var resolvedUser = await TestAccountProtection.FindUserAsync(
             db,
@@ -324,6 +337,267 @@ public sealed class GoogleLoginPageTests
         Assert.False(await db.CreditLedgerEntries.AnyAsync(
             item => item.UserId == userId,
             TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task GetGoogleLink_WithValidTemporaryIdentity_ShowsPasswordOnlyAndPrivateHeaders()
+    {
+        const string password = "Existing-Password-123!";
+        var email = $"google-link-get-{Guid.NewGuid():N}@example.test";
+        var subject = $"google-link-get-subject-{Guid.NewGuid():N}";
+        await CreatePasswordUserAsync(email, password);
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateExternalRequest(
+            factory,
+            HttpMethod.Get,
+            "/GoogleLink?returnUrl=%2FAccount%2FPassword",
+            subject,
+            email,
+            emailVerified: true);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Contains("name=\"Password\"", html);
+        Assert.Contains("name=\"__RequestVerificationToken\"", html);
+        Assert.DoesNotContain(email, html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(subject, html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PostGoogleLink_WithCorrectPassword_LinksAndSignsInWithoutNewCredit()
+    {
+        const string password = "Existing-Password-123!";
+        const string returnUrl = "/Account/Password";
+        var email = $"google-link-success-{Guid.NewGuid():N}@example.test";
+        var subject = $"google-link-success-subject-{Guid.NewGuid():N}";
+        var userId = await CreatePasswordUserAsync(
+            email,
+            password,
+            emailConfirmed: false);
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        var pageUrl = $"/GoogleLink?returnUrl={Uri.EscapeDataString(returnUrl)}";
+        using var getRequest = CreateExternalRequest(
+            factory,
+            HttpMethod.Get,
+            pageUrl,
+            subject,
+            email,
+            emailVerified: true);
+        using var getResponse = await client.SendAsync(
+            getRequest,
+            TestContext.Current.CancellationToken);
+        var getHtml = await getResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Password"] = password,
+            ["ReturnUrl"] = returnUrl,
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(getHtml),
+        });
+        using var postRequest = CreateExternalRequest(
+            factory,
+            HttpMethod.Post,
+            "/GoogleLink",
+            subject,
+            email,
+            emailVerified: true,
+            form);
+
+        using var response = await client.SendAsync(
+            postRequest,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(returnUrl, response.Headers.Location?.OriginalString);
+        var setCookies = response.Headers.GetValues("Set-Cookie").ToArray();
+        Assert.Contains(
+            setCookies,
+            value => value.StartsWith(
+                $"{ExternalAuthenticationDefaults.TemporaryCookieName}=",
+                StringComparison.Ordinal)
+                && value.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
+        var ticket = ReadApplicationTicket(factory, setCookies);
+        Assert.Equal(
+            userId.ToString(),
+            ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier));
+
+        await using var db = _fixture.NewDbContext();
+        var user = await db.Users.SingleAsync(
+            item => item.Id == userId,
+            TestContext.Current.CancellationToken);
+        var login = await db.ExternalLogins.SingleAsync(
+            item => item.Provider == ExternalLoginPolicy.GoogleProvider
+                && item.ProviderUserId == subject,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(userId, login.UserId);
+        Assert.NotNull(user.EmailConfirmedAt);
+        Assert.False(await db.CreditLedgerEntries.AnyAsync(
+            item => item.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task PostGoogleLink_WithWrongPassword_LeavesTemporaryIdentityAndAccountUnchanged()
+    {
+        const string password = "Existing-Password-123!";
+        var email = $"google-link-wrong-{Guid.NewGuid():N}@example.test";
+        var subject = $"google-link-wrong-subject-{Guid.NewGuid():N}";
+        var userId = await CreatePasswordUserAsync(email, password);
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var getRequest = CreateExternalRequest(
+            factory,
+            HttpMethod.Get,
+            "/GoogleLink",
+            subject,
+            email,
+            emailVerified: true);
+        using var getResponse = await client.SendAsync(
+            getRequest,
+            TestContext.Current.CancellationToken);
+        var getHtml = await getResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Password"] = "Wrong-Password-123!",
+            ["ReturnUrl"] = "/",
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(getHtml),
+        });
+        using var postRequest = CreateExternalRequest(
+            factory,
+            HttpMethod.Post,
+            "/GoogleLink",
+            subject,
+            email,
+            emailVerified: true,
+            form);
+
+        using var response = await client.SendAsync(
+            postRequest,
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("현재 비밀번호가 올바르지 않습니다", html);
+        if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+        {
+            Assert.DoesNotContain(
+                setCookies,
+                value => value.StartsWith(
+                    $"{ExternalAuthenticationDefaults.TemporaryCookieName}=",
+                    StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                setCookies,
+                value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+        }
+        await using var db = _fixture.NewDbContext();
+        Assert.False(await db.ExternalLogins.AnyAsync(
+            item => item.UserId == userId
+                && item.Provider == ExternalLoginPolicy.GoogleProvider,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task PostGoogleLink_WithoutAntiforgeryToken_IsRejectedBeforeLinking()
+    {
+        const string password = "Existing-Password-123!";
+        var email = $"google-link-csrf-{Guid.NewGuid():N}@example.test";
+        var subject = $"google-link-csrf-subject-{Guid.NewGuid():N}";
+        var userId = await CreatePasswordUserAsync(email, password);
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Password"] = password,
+            ["ReturnUrl"] = "/",
+        });
+        using var request = CreateExternalRequest(
+            factory,
+            HttpMethod.Post,
+            "/GoogleLink",
+            subject,
+            email,
+            emailVerified: true,
+            form);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var db = _fixture.NewDbContext();
+        Assert.False(await db.ExternalLogins.AnyAsync(
+            item => item.UserId == userId
+                && item.Provider == ExternalLoginPolicy.GoogleProvider,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Callback_WithPasswordlessEmailCollision_RejectsNewSubject()
+    {
+        var email = $"google-link-passwordless-{Guid.NewGuid():N}@example.test";
+        var existingSubject = $"existing-passwordless-{Guid.NewGuid():N}";
+        var newSubject = $"new-passwordless-{Guid.NewGuid():N}";
+        long userId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            await using var transaction = await arrangeDb.Database.BeginTransactionAsync(
+                TestContext.Current.CancellationToken);
+            var user = TestAccountProtection.AddUser(
+                arrangeDb,
+                email,
+                passwordHash: null);
+            user.EmailConfirmedAt = DateTimeOffset.UtcNow;
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            arrangeDb.ExternalLogins.Add(new ExternalLogin
+            {
+                UserId = user.Id,
+                Provider = ExternalLoginPolicy.GoogleProvider,
+                ProviderUserId = existingSubject,
+            });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await transaction.CommitAsync(TestContext.Current.CancellationToken);
+            userId = user.Id;
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            newSubject,
+            email,
+            emailVerified: true);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Login", response.Headers.Location?.OriginalString);
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(
+                $"{ExternalAuthenticationDefaults.TemporaryCookieName}=",
+                StringComparison.Ordinal));
+        await using var db = _fixture.NewDbContext();
+        var logins = await db.ExternalLogins
+            .Where(item => item.UserId == userId)
+            .Select(item => item.ProviderUserId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { existingSubject }, logins);
     }
 
     [Fact]
@@ -365,12 +639,44 @@ public sealed class GoogleLoginPageTests
         return user.Id;
     }
 
+    private async Task<long> CreatePasswordUserAsync(
+        string email,
+        string password,
+        bool emailConfirmed = true)
+    {
+        await using var db = _fixture.NewDbContext();
+        var user = TestAccountProtection.AddUser(db, email, passwordHash: null);
+        user.PasswordHash = new PasswordHasher<User>()
+            .HashPassword(user, password);
+        user.EmailConfirmedAt = emailConfirmed ? DateTimeOffset.UtcNow : null;
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return user.Id;
+    }
+
     private static HttpRequestMessage CreateCallbackRequest(
         WebAppFactory factory,
         string requestUri,
         string subject,
         string email,
         bool emailVerified)
+    {
+        return CreateExternalRequest(
+            factory,
+            HttpMethod.Get,
+            requestUri,
+            subject,
+            email,
+            emailVerified);
+    }
+
+    private static HttpRequestMessage CreateExternalRequest(
+        WebAppFactory factory,
+        HttpMethod method,
+        string requestUri,
+        string subject,
+        string email,
+        bool emailVerified,
+        HttpContent? content = null)
     {
         var options = factory.Services
             .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
@@ -395,7 +701,10 @@ public sealed class GoogleLoginPageTests
             },
             ExternalAuthenticationDefaults.TemporaryScheme);
         var protectedTicket = options.TicketDataFormat.Protect(ticket);
-        var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        var request = new HttpRequestMessage(method, requestUri)
+        {
+            Content = content,
+        };
         request.Headers.Add(
             "Cookie",
             $"{ExternalAuthenticationDefaults.TemporaryCookieName}={protectedTicket}");

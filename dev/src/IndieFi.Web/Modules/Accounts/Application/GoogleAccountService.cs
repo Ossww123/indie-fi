@@ -2,6 +2,7 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -11,11 +12,24 @@ public enum GoogleAccountOutcome
 {
     Authenticated,
     Created,
-    ExistingEmail,
+    RequiresPasswordLink,
+    LinkUnavailable,
 }
 
 public sealed record GoogleAccountResult(
     GoogleAccountOutcome Outcome,
+    long? UserId = null,
+    long? SessionVersion = null);
+
+public enum GoogleAccountLinkOutcome
+{
+    Linked,
+    InvalidPassword,
+    Unavailable,
+}
+
+public sealed record GoogleAccountLinkResult(
+    GoogleAccountLinkOutcome Outcome,
     long? UserId = null,
     long? SessionVersion = null);
 
@@ -25,15 +39,18 @@ public sealed class GoogleAccountService
 
     private readonly AppDbContext _db;
     private readonly EmailProtectionService _emailProtection;
+    private readonly IPasswordHasher<User> _passwordHasher;
     private readonly TimeProvider _timeProvider;
 
     public GoogleAccountService(
         AppDbContext db,
         EmailProtectionService emailProtection,
+        IPasswordHasher<User> passwordHasher,
         TimeProvider timeProvider)
     {
         _db = db;
         _emailProtection = emailProtection;
+        _passwordHasher = passwordHasher;
         _timeProvider = timeProvider;
     }
 
@@ -59,10 +76,16 @@ public sealed class GoogleAccountService
                 return Authenticated(linkedAccount);
             }
 
-            if (await FindUserIdByEmailAsync(email, cancellationToken) is not null)
+            var existingUserId = await FindUserIdByEmailAsync(
+                email,
+                cancellationToken);
+            if (existingUserId is not null)
             {
+                var collisionOutcome = await GetEmailCollisionOutcomeAsync(
+                    existingUserId.Value,
+                    cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                return new GoogleAccountResult(GoogleAccountOutcome.ExistingEmail);
+                return new GoogleAccountResult(collisionOutcome);
             }
 
             var protectedEmail = _emailProtection.Protect(email);
@@ -129,12 +152,132 @@ public sealed class GoogleAccountService
                 return Authenticated(linkedAccount);
             }
 
-            if (await FindUserIdByEmailAsync(email, cancellationToken) is not null)
+            var existingUserId = await FindUserIdByEmailAsync(
+                email,
+                cancellationToken);
+            if (existingUserId is not null)
             {
-                return new GoogleAccountResult(GoogleAccountOutcome.ExistingEmail);
+                return new GoogleAccountResult(
+                    await GetEmailCollisionOutcomeAsync(
+                        existingUserId.Value,
+                        cancellationToken));
             }
 
             throw;
+        }
+    }
+
+    public async Task<GoogleAccountOutcome> GetLinkAvailabilityAsync(
+        string providerUserId,
+        AccountEmailAddress email,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerUserId);
+        ArgumentNullException.ThrowIfNull(email);
+
+        if (await FindLinkedAccountAsync(providerUserId, cancellationToken) is not null)
+        {
+            return GoogleAccountOutcome.LinkUnavailable;
+        }
+
+        var userId = await FindUserIdByEmailAsync(email, cancellationToken);
+        return userId is null
+            ? GoogleAccountOutcome.LinkUnavailable
+            : await GetEmailCollisionOutcomeAsync(userId.Value, cancellationToken);
+    }
+
+    public async Task<GoogleAccountLinkResult> LinkAsync(
+        string providerUserId,
+        AccountEmailAddress email,
+        string? password,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerUserId);
+        ArgumentNullException.ThrowIfNull(email);
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(
+            cancellationToken);
+        try
+        {
+            var userId = await FindUserIdByEmailAsync(email, cancellationToken);
+            if (userId is null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return UnavailableLink();
+            }
+
+            var users = await _db.Users
+                .FromSqlInterpolated(
+                    $"SELECT * FROM users WHERE id = {userId.Value} FOR UPDATE")
+                .ToListAsync(cancellationToken);
+            var user = users.SingleOrDefault();
+            if (user?.PasswordHash is null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return UnavailableLink();
+            }
+
+            var linkedAccount = await FindLinkedAccountAsync(
+                providerUserId,
+                cancellationToken);
+            if (linkedAccount is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return linkedAccount.UserId == user.Id
+                    ? Linked(user)
+                    : UnavailableLink();
+            }
+
+            if (await _db.ExternalLogins.AsNoTracking().AnyAsync(
+                    login => login.UserId == user.Id
+                        && login.Provider == ExternalLoginPolicy.GoogleProvider,
+                    cancellationToken))
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return UnavailableLink();
+            }
+
+            if (string.IsNullOrEmpty(password)
+                || _passwordHasher.VerifyHashedPassword(
+                    user,
+                    user.PasswordHash,
+                    password) == PasswordVerificationResult.Failed)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return new GoogleAccountLinkResult(
+                    GoogleAccountLinkOutcome.InvalidPassword);
+            }
+
+            _db.ExternalLogins.Add(new ExternalLogin
+            {
+                UserId = user.Id,
+                Provider = ExternalLoginPolicy.GoogleProvider,
+                ProviderUserId = providerUserId,
+            });
+            user.EmailConfirmedAt ??= _timeProvider.GetUtcNow();
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return Linked(user);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: UniqueViolation,
+            })
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            _db.ChangeTracker.Clear();
+
+            var linkedAccount = await FindLinkedAccountAsync(
+                providerUserId,
+                cancellationToken);
+            var userId = await FindUserIdByEmailAsync(email, cancellationToken);
+            return linkedAccount is not null && linkedAccount.UserId == userId
+                ? new GoogleAccountLinkResult(
+                    GoogleAccountLinkOutcome.Linked,
+                    linkedAccount.UserId,
+                    linkedAccount.SessionVersion)
+                : UnavailableLink();
         }
     }
 
@@ -183,11 +326,41 @@ public sealed class GoogleAccountService
         return userId;
     }
 
+    private async Task<GoogleAccountOutcome> GetEmailCollisionOutcomeAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        var account = await _db.Users
+            .AsNoTracking()
+            .Where(user => user.Id == userId)
+            .Select(user => new
+            {
+                HasPassword = user.PasswordHash != null,
+                HasGoogleLogin = _db.ExternalLogins.Any(login =>
+                    login.UserId == user.Id
+                    && login.Provider == ExternalLoginPolicy.GoogleProvider),
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return account is { HasPassword: true, HasGoogleLogin: false }
+            ? GoogleAccountOutcome.RequiresPasswordLink
+            : GoogleAccountOutcome.LinkUnavailable;
+    }
+
     private static GoogleAccountResult Authenticated(LinkedAccount account) =>
         new(
             GoogleAccountOutcome.Authenticated,
             account.UserId,
             account.SessionVersion);
+
+    private static GoogleAccountLinkResult Linked(User user) =>
+        new(
+            GoogleAccountLinkOutcome.Linked,
+            user.Id,
+            user.SessionVersion);
+
+    private static GoogleAccountLinkResult UnavailableLink() =>
+        new(GoogleAccountLinkOutcome.Unavailable);
 
     private sealed record LinkedAccount(long UserId, long SessionVersion);
 }
