@@ -15,6 +15,14 @@ else if (Model.State == EmailConfirmationPageState.Invalid)
 {
     <div class="alert-warning">유효하지 않거나 만료된 확인 링크입니다.</div>
 }
+else if (Model.State == EmailConfirmationPageState.ReadyToConfirm)
+{
+    <div class="alert-neutral mb-6">아래 버튼을 눌러 이메일 주소 확인을 마쳐 주세요.</div>
+    <form method="post">
+        <input type="hidden" asp-for="Token" />
+        <button type="submit" class="button-primary">이메일 주소 확인</button>
+    </form>
+}
 else
 {
     <div class="alert-neutral">가입할 때 받은 확인 메일의 링크를 열어 주세요.</div>

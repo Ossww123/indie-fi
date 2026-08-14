@@ -47,8 +47,26 @@ public sealed class EmailSignupFlowTests
                     message.PayloadKeyId));
         }
 
-        using (var confirmationResponse = await client.GetAsync(
+        // Opening the mailed link shows the button; pressing it is what confirms.
+        string confirmationPageHtml;
+        using (var linkResponse = await client.GetAsync(
                    $"/ConfirmEmail?token={Uri.EscapeDataString(plaintextToken)}",
+                   TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, linkResponse.StatusCode);
+            confirmationPageHtml = await linkResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken);
+        }
+
+        using (var confirmationForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Token"] = plaintextToken,
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(confirmationPageHtml),
+        }))
+        using (var confirmationResponse = await client.PostAsync(
+                   "/ConfirmEmail",
+                   confirmationForm,
                    TestContext.Current.CancellationToken))
         {
             Assert.Equal(HttpStatusCode.Redirect, confirmationResponse.StatusCode);

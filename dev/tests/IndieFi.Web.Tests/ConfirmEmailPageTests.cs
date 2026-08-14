@@ -17,16 +17,43 @@ public sealed class ConfirmEmailPageTests
         _fixture = fixture;
     }
 
+    /// <summary>
+    /// Mail scanners and link prefetchers follow links in email. Opening the link must
+    /// therefore not spend the token; only the person pressing the button may.
+    /// </summary>
     [Fact]
-    public async Task Get_WithValidToken_ConfirmsAccountThenRemovesTokenFromAddress()
+    public async Task Get_WithValidToken_DoesNotConsumeItAndOffersAConfirmButton()
     {
         var issued = await CreateIssuedTokenAsync();
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
-        using var consumeResponse = await client.GetAsync(
+        using var response = await client.GetAsync(
             $"/ConfirmEmail?token={Uri.EscapeDataString(issued.Token)}",
             TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("이메일 주소 확인", html);
+        Assert.Equal("no-referrer", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString());
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var user = await verificationDb.Users.SingleAsync(
+            item => item.Id == issued.UserId,
+            TestContext.Current.CancellationToken);
+        Assert.Null(user.EmailConfirmedAt);
+    }
+
+    [Fact]
+    public async Task Post_WithValidToken_ConfirmsAccountThenRemovesTokenFromAddress()
+    {
+        var issued = await CreateIssuedTokenAsync();
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var consumeResponse = await SubmitConfirmationAsync(client, issued.Token);
 
         Assert.Equal(HttpStatusCode.Redirect, consumeResponse.StatusCode);
         Assert.Equal("/ConfirmEmail", consumeResponse.Headers.Location?.OriginalString);
@@ -55,16 +82,14 @@ public sealed class ConfirmEmailPageTests
     }
 
     [Fact]
-    public async Task Get_WithUnknownToken_ShowsOneGenericInvalidMessageWithoutEchoingToken()
+    public async Task Post_WithUnknownToken_ShowsOneGenericInvalidMessageWithoutEchoingToken()
     {
         var token = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(
             EmailConfirmationTokenService.TokenEntropySize));
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
-        using var consumeResponse = await client.GetAsync(
-            $"/ConfirmEmail?token={Uri.EscapeDataString(token)}",
-            TestContext.Current.CancellationToken);
+        using var consumeResponse = await SubmitConfirmationAsync(client, token);
 
         Assert.Equal(HttpStatusCode.Redirect, consumeResponse.StatusCode);
         Assert.Equal("/ConfirmEmail", consumeResponse.Headers.Location?.OriginalString);
@@ -81,6 +106,31 @@ public sealed class ConfirmEmailPageTests
     }
 
     [Fact]
+    public async Task Post_WithoutAntiforgeryToken_IsRejectedAndLeavesTheTokenUnspent()
+    {
+        var issued = await CreateIssuedTokenAsync();
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Token"] = issued.Token,
+        });
+        using var response = await client.PostAsync(
+            "/ConfirmEmail",
+            form,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var user = await verificationDb.Users.SingleAsync(
+            item => item.Id == issued.UserId,
+            TestContext.Current.CancellationToken);
+        Assert.Null(user.EmailConfirmedAt);
+    }
+
+    [Fact]
     public async Task Get_WithoutToken_ShowsNeutralInstructionsWithoutChangingAnAccount()
     {
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
@@ -94,6 +144,27 @@ public sealed class ConfirmEmailPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("확인 메일의 링크를 열어 주세요", html);
+    }
+
+    private static async Task<HttpResponseMessage> SubmitConfirmationAsync(
+        HttpClient client,
+        string token)
+    {
+        using var pageResponse = await client.GetAsync(
+            $"/ConfirmEmail?token={Uri.EscapeDataString(token)}",
+            TestContext.Current.CancellationToken);
+        var html = await pageResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Token"] = token,
+            ["__RequestVerificationToken"] = PageTestSupport.ExtractAntiforgeryToken(html),
+        });
+        return await client.PostAsync(
+            "/ConfirmEmail",
+            form,
+            TestContext.Current.CancellationToken);
     }
 
     private async Task<(long UserId, string Token)> CreateIssuedTokenAsync()
