@@ -34,9 +34,20 @@ internal static class Program
             await using var db = new AppDbContext(dbOptions);
             var service = new AccountEmailKeyRotationService(db, provider);
 
-            return options.VerifyOnly
-                ? await VerifyAsync(service, options.BatchSize)
-                : await RotateAsync(service, options.BatchSize);
+            if (options.VerifyOnly)
+            {
+                return await VerifyAsync(service, options.BatchSize);
+            }
+
+            if (options.RetiredLookupKeyId is not null)
+            {
+                return await RetireLookupKeyAsync(
+                    service,
+                    options.RetiredLookupKeyId,
+                    options.BatchSize);
+            }
+
+            return await RotateAsync(service, options.BatchSize);
         }
         catch (Exception exception)
         {
@@ -80,22 +91,19 @@ internal static class Program
         AccountEmailKeyRotationService service,
         int batchSize)
     {
-        long cursor = 0;
-        var scanned = 0;
-
-        while (true)
-        {
-            var result = await service.VerifyBatchAsync(cursor, batchSize);
-            if (result.ScannedCount == 0)
-            {
-                break;
-            }
-
-            cursor = result.NextUserId;
-            scanned += result.ScannedCount;
-        }
-
+        var scanned = await service.VerifyAllAsync(batchSize);
         Console.WriteLine($"Verification complete. Scanned={scanned}.");
+        return 0;
+    }
+
+    private static async Task<int> RetireLookupKeyAsync(
+        AccountEmailKeyRotationService service,
+        string keyId,
+        int batchSize)
+    {
+        var deleted = await service.RetireLookupKeyAsync(keyId, batchSize);
+        Console.WriteLine(
+            $"Retired lookup cleanup complete. KeyId={keyId}, Deleted={deleted}.");
         return 0;
     }
 
@@ -103,7 +111,8 @@ internal static class Program
     {
         Console.Error.WriteLine(
             "Usage: dotnet run --project tools/IndieFi.KeyRotation -- " +
-            "(--apply | --verify-only) [--batch-size <1-1000>] [--key-file <absolute-path>]");
+            "(--apply | --verify-only | --retire-lookup-key <key-id>) " +
+            "[--batch-size <1-1000>] [--key-file <absolute-path>]");
         Console.Error.WriteLine(
             $"Set {ConnectionVariable}; {KeyFileVariable} supplies the default key file path.");
     }
@@ -112,7 +121,8 @@ internal static class Program
         string ConnectionString,
         string KeyFilePath,
         int BatchSize,
-        bool VerifyOnly)
+        bool VerifyOnly,
+        string? RetiredLookupKeyId)
     {
         public static RotationOptions Parse(string[] args)
         {
@@ -121,6 +131,7 @@ internal static class Program
             var batchSize = 100;
             var apply = false;
             var verifyOnly = false;
+            string? retiredLookupKeyId = null;
 
             for (var index = 0; index < args.Length; index++)
             {
@@ -131,6 +142,9 @@ internal static class Program
                         break;
                     case "--verify-only":
                         verifyOnly = true;
+                        break;
+                    case "--retire-lookup-key":
+                        retiredLookupKeyId = ReadValue(args, ref index);
                         break;
                     case "--batch-size":
                         batchSize = ParseBatchSize(ReadValue(args, ref index));
@@ -143,10 +157,14 @@ internal static class Program
                 }
             }
 
-            if (apply == verifyOnly)
+            var operationCount = (apply ? 1 : 0)
+                + (verifyOnly ? 1 : 0)
+                + (retiredLookupKeyId is null ? 0 : 1);
+            if (operationCount != 1)
             {
                 throw new ArgumentException(
-                    "Choose exactly one operation: --apply or --verify-only.");
+                    "Choose exactly one operation: --apply, --verify-only, or " +
+                    "--retire-lookup-key.");
             }
 
             if (string.IsNullOrWhiteSpace(connection))
@@ -166,7 +184,8 @@ internal static class Program
                 connection,
                 keyFile,
                 batchSize,
-                verifyOnly);
+                verifyOnly,
+                retiredLookupKeyId);
         }
 
         private static string ReadValue(string[] args, ref int index)

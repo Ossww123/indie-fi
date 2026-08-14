@@ -200,6 +200,75 @@ public sealed class AccountEmailKeyRotationService
             users.Count);
     }
 
+    public async Task<int> VerifyAllAsync(
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateCursorAndBatchSize(0, batchSize);
+
+        long cursor = 0;
+        var verifiedCount = 0;
+        while (true)
+        {
+            var result = await VerifyBatchAsync(
+                cursor,
+                batchSize,
+                cancellationToken);
+            if (result.ScannedCount == 0)
+            {
+                return verifiedCount;
+            }
+
+            cursor = result.NextUserId;
+            verifiedCount += result.ScannedCount;
+        }
+    }
+
+    public async Task<int> RetireLookupKeyAsync(
+        string retiredKeyId,
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(retiredKeyId);
+        if (retiredKeyId.Length > 100)
+        {
+            throw new ArgumentException(
+                "A retired lookup key ID cannot exceed 100 characters.",
+                nameof(retiredKeyId));
+        }
+
+        EnsureLookupKeyIsRetired(retiredKeyId);
+        await VerifyAllAsync(batchSize, cancellationToken);
+
+        var deletedCount = 0;
+        while (true)
+        {
+            await using var transaction = await _db.Database.BeginTransactionAsync(
+                cancellationToken);
+            var lookups = await _db.UserEmailLookups
+                .FromSqlInterpolated($$"""
+                    SELECT *
+                    FROM user_email_lookups
+                    WHERE key_id = {{retiredKeyId}}
+                    ORDER BY user_id
+                    LIMIT {{batchSize}}
+                    FOR UPDATE
+                    """)
+                .ToListAsync(cancellationToken);
+
+            if (lookups.Count == 0)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return deletedCount;
+            }
+
+            _db.UserEmailLookups.RemoveRange(lookups);
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            deletedCount += lookups.Count;
+        }
+    }
+
     private AccountEmailAddress ReadEmail(User user)
     {
         var displayEmail = _emailProtection.Unprotect(new ProtectedEmailAddress(
@@ -224,6 +293,24 @@ public sealed class AccountEmailKeyRotationService
             .Select(key => key.Id)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private void EnsureLookupKeyIsRetired(string keyId)
+    {
+        var currentKeyId = _keyProvider
+            .GetCurrent(KeyPurpose.AccountEmailLookup)
+            .Id;
+        var activeKeyIds = _keyProvider
+            .GetReadable(KeyPurpose.AccountEmailLookup)
+            .Concat(_keyProvider.GetWritable(KeyPurpose.AccountEmailLookup))
+            .Select(key => key.Id)
+            .Append(currentKeyId);
+
+        if (activeKeyIds.Contains(keyId, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Lookup key '{keyId}' is still current, readable, or writable.");
+        }
     }
 
     private static void ValidateCursorAndBatchSize(long afterUserId, int batchSize)
