@@ -141,6 +141,11 @@ public sealed class AuthenticationEmailOutboxWorkerTests
 
             return Task.CompletedTask;
         }
+
+        public Task SendPasswordResetAsync(
+            AuthenticationEmailDelivery delivery,
+            CancellationToken cancellationToken) =>
+            SendEmailConfirmationAsync(delivery, cancellationToken);
     }
 
     private sealed class MutableTimeProvider : TimeProvider

@@ -18,11 +18,28 @@ public sealed class SmtpAuthenticationEmailSender : IAuthenticationEmailSender
         _messageFactory = messageFactory;
     }
 
-    public async Task SendEmailConfirmationAsync(
+    public Task SendEmailConfirmationAsync(
         AuthenticationEmailDelivery delivery,
+        CancellationToken cancellationToken) =>
+        SendAsync(
+            delivery,
+            _messageFactory.CreateEmailConfirmation,
+            cancellationToken);
+
+    public Task SendPasswordResetAsync(
+        AuthenticationEmailDelivery delivery,
+        CancellationToken cancellationToken) =>
+        SendAsync(
+            delivery,
+            _messageFactory.CreatePasswordReset,
+            cancellationToken);
+
+    private async Task SendAsync(
+        AuthenticationEmailDelivery delivery,
+        Func<AuthenticationEmailDelivery, MailMessage> createMessage,
         CancellationToken cancellationToken)
     {
-        using var message = _messageFactory.CreateEmailConfirmation(delivery);
+        using var message = createMessage(delivery);
         using var client = new SmtpClient(_options.Smtp.Host, _options.Smtp.Port)
         {
             DeliveryMethod = SmtpDeliveryMethod.Network,

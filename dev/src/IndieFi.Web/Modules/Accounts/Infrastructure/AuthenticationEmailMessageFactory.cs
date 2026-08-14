@@ -56,4 +56,44 @@ public sealed class AuthenticationEmailMessageFactory
         message.To.Add(new MailAddress(delivery.RecipientAddress));
         return message;
     }
+
+    public MailMessage CreatePasswordReset(AuthenticationEmailDelivery delivery)
+    {
+        ArgumentNullException.ThrowIfNull(delivery);
+        ArgumentException.ThrowIfNullOrEmpty(delivery.PlaintextToken);
+
+        var resetPage = new Uri(
+            new Uri(_options.PublicBaseUrl, UriKind.Absolute),
+            "/ResetPassword");
+        var resetLink = QueryHelpers.AddQueryString(
+            resetPage.AbsoluteUri,
+            "token",
+            delivery.PlaintextToken);
+        var expiresAt = delivery.ExpiresAt.UtcDateTime.ToString(
+            "yyyy-MM-dd HH:mm 'UTC'",
+            CultureInfo.InvariantCulture);
+
+        var message = new MailMessage
+        {
+            From = new MailAddress(
+                _options.Smtp.FromAddress,
+                _options.Smtp.FromName,
+                Encoding.UTF8),
+            Subject = "IndieFi 비밀번호 재설정",
+            SubjectEncoding = Encoding.UTF8,
+            Body = $"""
+                IndieFi 비밀번호 재설정
+
+                아래 링크를 열어 비밀번호를 재설정해 주세요.
+                {resetLink}
+
+                이 링크는 {expiresAt}까지 유효합니다.
+                본인이 요청하지 않았다면 이 메일을 무시해 주세요.
+                """,
+            BodyEncoding = Encoding.UTF8,
+            IsBodyHtml = false,
+        };
+        message.To.Add(new MailAddress(delivery.RecipientAddress));
+        return message;
+    }
 }

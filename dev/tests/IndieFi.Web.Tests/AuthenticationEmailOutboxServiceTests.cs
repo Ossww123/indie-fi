@@ -65,6 +65,107 @@ public sealed class AuthenticationEmailOutboxServiceTests
     }
 
     [Fact]
+    public async Task StagePasswordReset_StoresOnlyEncryptedTokenPayloadForResetPurpose()
+    {
+        var userId = await CreateUserAsync();
+        var plaintextToken = CreatePasswordResetToken();
+        var expiresAt = Now.Add(PasswordResetTokenService.TokenLifetime);
+
+        await using (var stageDb = _fixture.NewDbContext())
+        {
+            NewService(stageDb).StagePasswordReset(
+                userId,
+                plaintextToken,
+                expiresAt);
+            await stageDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var stored = await verificationDb.AuthenticationEmailOutboxMessages
+            .SingleAsync(
+                message => message.UserId == userId,
+                TestContext.Current.CancellationToken);
+        var protectedPayload = new ProtectedAuthenticationEmailPayload(
+            stored.PayloadCiphertext,
+            stored.PayloadNonce,
+            stored.PayloadAuthenticationTag,
+            stored.PayloadKeyId);
+
+        Assert.Equal(AuthenticationEmailMessageKind.PasswordReset, stored.Kind);
+        Assert.Equal(Now, stored.CreatedAt);
+        Assert.Equal(expiresAt, stored.ExpiresAt);
+        Assert.DoesNotContain(
+            plaintextToken,
+            Convert.ToBase64String(stored.PayloadCiphertext));
+        Assert.Equal(
+            plaintextToken,
+            TestAccountProtection.CreateMessageProtectionService().Unprotect(
+                userId,
+                stored.Kind,
+                protectedPayload));
+    }
+
+    [Fact]
+    public async Task ReplacePasswordReset_ReplacesOnlyTheResetMessage()
+    {
+        var userId = await CreateUserAsync();
+        long confirmationId;
+        long previousResetId;
+
+        await using (var stageDb = _fixture.NewDbContext())
+        {
+            var service = NewService(stageDb);
+            var confirmation = service.StageEmailConfirmation(
+                userId,
+                CreateToken(),
+                Now.AddHours(24));
+            var reset = service.StagePasswordReset(
+                userId,
+                CreatePasswordResetToken(),
+                Now.Add(PasswordResetTokenService.TokenLifetime));
+            await stageDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            confirmationId = confirmation.Id;
+            previousResetId = reset.Id;
+        }
+
+        var replacementToken = CreatePasswordResetToken();
+        await using (var replaceDb = _fixture.NewDbContext())
+        {
+            await NewService(replaceDb).ReplacePasswordResetAsync(
+                userId,
+                replacementToken,
+                Now.Add(PasswordResetTokenService.TokenLifetime),
+                TestContext.Current.CancellationToken);
+            await replaceDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var messages = await verificationDb.AuthenticationEmailOutboxMessages
+            .Where(message => message.UserId == userId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, messages.Count);
+        Assert.Contains(
+            messages,
+            message => message.Id == confirmationId
+                && message.Kind == AuthenticationEmailMessageKind.EmailConfirmation);
+        var resetMessage = Assert.Single(
+            messages,
+            message => message.Kind == AuthenticationEmailMessageKind.PasswordReset);
+        Assert.NotEqual(previousResetId, resetMessage.Id);
+        Assert.Equal(
+            replacementToken,
+            TestAccountProtection.CreateMessageProtectionService().Unprotect(
+                userId,
+                resetMessage.Kind,
+                new ProtectedAuthenticationEmailPayload(
+                    resetMessage.PayloadCiphertext,
+                    resetMessage.PayloadNonce,
+                    resetMessage.PayloadAuthenticationTag,
+                    resetMessage.PayloadKeyId)));
+    }
+
+    [Fact]
     public async Task OutboxTable_HasNoPlaintextTokenColumn()
     {
         await using var db = _fixture.NewDbContext();
@@ -205,6 +306,12 @@ public sealed class AuthenticationEmailOutboxServiceTests
     {
         return WebEncoders.Base64UrlEncode(
             RandomNumberGenerator.GetBytes(EmailConfirmationTokenService.TokenEntropySize));
+    }
+
+    private static string CreatePasswordResetToken()
+    {
+        return WebEncoders.Base64UrlEncode(
+            RandomNumberGenerator.GetBytes(PasswordResetTokenService.TokenEntropySize));
     }
 
     private sealed class FixedTimeProvider : TimeProvider

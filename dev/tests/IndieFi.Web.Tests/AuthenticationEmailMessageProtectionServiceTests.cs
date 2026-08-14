@@ -110,6 +110,22 @@ public sealed class AuthenticationEmailMessageProtectionServiceTests
     }
 
     [Fact]
+    public void Unprotect_WhenMessagePurposeWasChanged_RejectsPayloadSwap()
+    {
+        var service = TestAccountProtection.CreateMessageProtectionService();
+        var protectedPayload = service.Protect(
+            UserId,
+            AuthenticationEmailMessageKind.PasswordReset,
+            PlaintextToken);
+
+        Assert.ThrowsAny<CryptographicException>(
+            () => service.Unprotect(
+                UserId,
+                AuthenticationEmailMessageKind.EmailConfirmation,
+                protectedPayload));
+    }
+
+    [Fact]
     public void Unprotect_WhenKeyIdWasChanged_RejectsIt()
     {
         var service = TestAccountProtection.CreateMessageProtectionService();
