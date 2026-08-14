@@ -1,6 +1,11 @@
 using System.Net;
+using System.Security.Claims;
+using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Domain;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -111,6 +116,75 @@ public sealed class LoginPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains(UserDisplayIdentifier.Format(userId), html);
         Assert.DoesNotContain(email, html);
+    }
+
+    [Fact]
+    public async Task Post_Login_IssuesOnlyTheRequiredClaimsWithTheCurrentSessionVersion()
+    {
+        const long sessionVersion = 37;
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(
+            _fixture,
+            sessionVersion: sessionVersion);
+        long userId;
+        await using (var db = _fixture.NewDbContext())
+        {
+            userId = (await TestAccountProtection.FindUserAsync(
+                db,
+                email,
+                TestContext.Current.CancellationToken)).Id;
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var loginPageResponse = await client.GetAsync(
+            "/Login",
+            TestContext.Current.CancellationToken);
+        var loginHtml = await loginPageResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var loginForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = email,
+            ["Password"] = password,
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(loginHtml),
+        });
+        using var loginResponse = await client.PostAsync(
+            "/Login",
+            loginForm,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+
+        var cookieOptions = factory.Services
+            .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(CookieAuthenticationDefaults.AuthenticationScheme);
+        var cookieName = Assert.IsType<string>(cookieOptions.Cookie.Name);
+        var cookiePrefix = $"{cookieName}=";
+        var setCookie = Assert.Single(
+            loginResponse.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(cookiePrefix, StringComparison.Ordinal));
+        var protectedTicket = setCookie[cookiePrefix.Length..].Split(';', 2)[0];
+        var ticket = cookieOptions.TicketDataFormat.Unprotect(protectedTicket);
+
+        Assert.NotNull(ticket);
+        var claims = ticket.Principal.Claims.ToList();
+        Assert.Equal(3, claims.Count);
+        Assert.Contains(
+            claims,
+            claim => claim.Type == ClaimTypes.NameIdentifier
+                && claim.Value == userId.ToString());
+        Assert.Contains(
+            claims,
+            claim => claim.Type == ClaimTypes.Name
+                && claim.Value == UserDisplayIdentifier.Format(userId));
+        Assert.Contains(
+            claims,
+            claim => claim.Type == AuthenticationClaimTypes.SessionVersion
+                && claim.Value == sessionVersion.ToString());
+        Assert.DoesNotContain(
+            claims,
+            claim => claim.Type == ClaimTypes.Email
+                || claim.Value.Contains(email, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

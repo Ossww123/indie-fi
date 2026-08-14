@@ -35,6 +35,7 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.Authenticated, result.Outcome);
         Assert.Equal(userId, result.UserId);
+        Assert.Equal(1, result.SessionVersion);
     }
 
     [Fact]
@@ -58,6 +59,7 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.InvalidCredentials, result.Outcome);
         Assert.Null(result.UserId);
+        Assert.Null(result.SessionVersion);
     }
 
     [Fact]
@@ -77,6 +79,7 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.EmailNotConfirmed, result.Outcome);
         Assert.Null(result.UserId);
+        Assert.Null(result.SessionVersion);
     }
 
     [Fact]
@@ -98,6 +101,7 @@ public sealed class AccountAuthenticationServiceTests
 
         Assert.Equal(AccountAuthenticationOutcome.InvalidCredentials, result.Outcome);
         Assert.Null(result.UserId);
+        Assert.Null(result.SessionVersion);
     }
 
     private async Task<long> CreateUserAsync(

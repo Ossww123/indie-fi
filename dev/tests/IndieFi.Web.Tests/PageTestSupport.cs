@@ -26,7 +26,8 @@ internal static class PageTestSupport
 
     public static async Task<(string Email, string Password)> CreateUserWithKnownPasswordAsync(
         PostgreSqlFixture fixture,
-        bool emailConfirmed = true)
+        bool emailConfirmed = true,
+        long sessionVersion = 1)
     {
         const string password = "Known-Test-Password-123!";
         var email = $"{Guid.NewGuid():N}@example.test";
@@ -34,6 +35,7 @@ internal static class PageTestSupport
         await using var db = fixture.NewDbContext();
         var user = TestAccountProtection.AddUser(db, email, passwordHash: null);
         user.PasswordHash = new PasswordHasher<User>().HashPassword(user, password);
+        user.SessionVersion = sessionVersion;
         if (emailConfirmed)
         {
             user.EmailConfirmedAt = DateTimeOffset.UtcNow;
