@@ -21,7 +21,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\tools\IndieFi.AccountMigration\IndieFi.AccountMigration.csproj" />
     <ProjectReference Include="..\..\src\IndieFi.Web\IndieFi.Web.csproj" />
   </ItemGroup>
 

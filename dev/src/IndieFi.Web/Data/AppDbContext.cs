@@ -55,8 +55,8 @@ public class AppDbContext : DbContext
                     "session_version >= 1");
                 table.HasCheckConstraint(
                     "CK_users_email_protection_complete",
-                    "(email_ciphertext IS NULL AND email_nonce IS NULL AND email_authentication_tag IS NULL AND email_encryption_key_id IS NULL) OR " +
-                    "(email_ciphertext IS NOT NULL AND octet_length(email_nonce) = 12 AND octet_length(email_authentication_tag) = 16 AND email_encryption_key_id IS NOT NULL)");
+                    "octet_length(email_nonce) = 12 AND " +
+                    "octet_length(email_authentication_tag) = 16");
                 table.HasCheckConstraint(
                     "CK_users_suspension_shape",
                     "(account_status = 'TemporarilySuspended' AND suspended_until IS NOT NULL) OR " +
@@ -66,22 +66,19 @@ public class AppDbContext : DbContext
             user.HasKey(u => u.Id);
             user.Property(u => u.Id).HasColumnName("id");
 
-            user.Property(u => u.Email)
-                .HasColumnName("email")
-                .HasMaxLength(320)
+            user.Property(u => u.EmailCiphertext)
+                .HasColumnName("email_ciphertext")
                 .IsRequired();
-
-            user.Property(u => u.NormalizedEmail)
-                .HasColumnName("normalized_email")
-                .HasMaxLength(320)
+            user.Property(u => u.EmailNonce)
+                .HasColumnName("email_nonce")
                 .IsRequired();
-
-            user.Property(u => u.EmailCiphertext).HasColumnName("email_ciphertext");
-            user.Property(u => u.EmailNonce).HasColumnName("email_nonce");
-            user.Property(u => u.EmailAuthenticationTag).HasColumnName("email_authentication_tag");
+            user.Property(u => u.EmailAuthenticationTag)
+                .HasColumnName("email_authentication_tag")
+                .IsRequired();
             user.Property(u => u.EmailEncryptionKeyId)
                 .HasColumnName("email_encryption_key_id")
-                .HasMaxLength(100);
+                .HasMaxLength(100)
+                .IsRequired();
 
             user.Property(u => u.PasswordHash)
                 .HasColumnName("password_hash")
@@ -107,10 +104,6 @@ public class AppDbContext : DbContext
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
                 .ValueGeneratedOnAdd();
-
-            // Display casing may differ, but no two accounts may share the same
-            // case-insensitive lookup key.
-            user.HasIndex(u => u.NormalizedEmail).IsUnique();
         });
 
         modelBuilder.Entity<UserEmailLookup>(lookup =>

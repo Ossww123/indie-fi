@@ -9,17 +9,10 @@ public class User
 {
     public long Id { get; set; }
 
-    public string Email { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Case-insensitive lookup key derived from <see cref="Email"/>.
-    /// </summary>
-    public string NormalizedEmail { get; set; } = string.Empty;
-
-    public byte[]? EmailCiphertext { get; set; }
-    public byte[]? EmailNonce { get; set; }
-    public byte[]? EmailAuthenticationTag { get; set; }
-    public string? EmailEncryptionKeyId { get; set; }
+    public byte[] EmailCiphertext { get; set; } = [];
+    public byte[] EmailNonce { get; set; } = [];
+    public byte[] EmailAuthenticationTag { get; set; } = [];
+    public string EmailEncryptionKeyId { get; set; } = string.Empty;
     public string? PasswordHash { get; set; }
     public DateTimeOffset? EmailConfirmedAt { get; set; }
     public AccountStatus AccountStatus { get; set; } = AccountStatus.Active;

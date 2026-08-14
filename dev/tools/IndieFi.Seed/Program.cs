@@ -2,12 +2,16 @@ using System.Globalization;
 using System.Text.Json;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Infrastructure.Cryptography;
+using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace IndieFi.Seed;
 
-internal static class Program
+internal sealed class Program
 {
     // The database password is not kept in the repository, so the connection string
     // comes from the environment. loadtest.bat builds this variable from dev/.env.
@@ -36,6 +40,11 @@ internal static class Program
 
         await using var db = new AppDbContext(dbOptions);
         var passwordHasher = new PasswordHasher<User>();
+        var keyConfiguration = new ConfigurationManager();
+        keyConfiguration.AddUserSecrets<Program>(optional: true);
+        keyConfiguration.AddEnvironmentVariables();
+        var emailProtection = new EmailProtectionService(
+            new ConfigurationKeyProvider(keyConfiguration));
 
         // Latecomers get their own accounts: reusing an account that already holds
         // a key would return AlreadyClaimed, which the page renders exactly like a
@@ -45,31 +54,54 @@ internal static class Program
             .Select(LoadTestEmail)
             .ToArray();
 
-        var normalizedEmails = emails
-            .Select(email => email.ToUpperInvariant())
-            .ToArray();
-        var existingEmails = await db.Users
-            .Where(user => normalizedEmails.Contains(user.NormalizedEmail))
-            .Select(user => user.NormalizedEmail)
-            .ToHashSetAsync();
+        var existingLookupKeys = (await db.UserEmailLookups
+                .AsNoTracking()
+                .Select(lookup => new { lookup.KeyId, lookup.Value })
+                .ToListAsync())
+            .Select(lookup => LookupKey(lookup.KeyId, lookup.Value))
+            .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var email in emails.Where(
-                     email => !existingEmails.Contains(email.ToUpperInvariant())))
+        foreach (var email in emails)
         {
+            if (!AccountEmailAddressPolicy.TryCreate(email, out var address, out _))
+            {
+                throw new InvalidOperationException("The load-test email is invalid.");
+            }
+
+            if (emailProtection.CreateReadableLookupValues(address!)
+                .Any(lookup => existingLookupKeys.Contains(
+                    LookupKey(lookup.KeyId, lookup.Value))))
+            {
+                continue;
+            }
+
+            var protectedEmail = emailProtection.Protect(address!);
             var user = new User
             {
-                Email = email,
-                NormalizedEmail = email.ToUpperInvariant(),
+                EmailCiphertext = protectedEmail.Ciphertext,
+                EmailNonce = protectedEmail.Nonce,
+                EmailAuthenticationTag = protectedEmail.AuthenticationTag,
+                EmailEncryptionKeyId = protectedEmail.KeyId,
             };
             user.PasswordHash = passwordHasher.HashPassword(user, Password);
             db.Users.Add(user);
+
+            foreach (var lookup in emailProtection.CreateWritableLookupValues(address!))
+            {
+                db.UserEmailLookups.Add(new UserEmailLookup
+                {
+                    User = user,
+                    KeyId = lookup.KeyId,
+                    Value = lookup.Value,
+                });
+                existingLookupKeys.Add(LookupKey(lookup.KeyId, lookup.Value));
+            }
         }
 
         await db.SaveChangesAsync();
 
-        var ownerEmail = emails[0].ToUpperInvariant();
-        var owner = await db.Users.SingleAsync(
-            user => user.NormalizedEmail == ownerEmail);
+        AccountEmailAddressPolicy.TryCreate(emails[0], out var ownerEmail, out _);
+        var owner = await FindUserAsync(db, emailProtection, ownerEmail!);
         var game = await db.Games
             .Where(candidate =>
                 candidate.OwnerId == owner.Id &&
@@ -160,6 +192,45 @@ internal static class Program
     private static string LoadTestEmail(int number)
     {
         return $"loadtest-{number:D4}@example.test";
+    }
+
+    private static string LookupKey(string keyId, byte[] value)
+    {
+        return $"{keyId}:{Convert.ToHexString(value)}";
+    }
+
+    private static async Task<User> FindUserAsync(
+        AppDbContext db,
+        EmailProtectionService emailProtection,
+        AccountEmailAddress email)
+    {
+        User? user = null;
+
+        foreach (var lookup in emailProtection.CreateReadableLookupValues(email))
+        {
+            var candidate = await db.UserEmailLookups
+                .Where(item =>
+                    item.KeyId == lookup.KeyId
+                    && item.Value.SequenceEqual(lookup.Value))
+                .Select(item => item.User)
+                .SingleOrDefaultAsync();
+
+            if (candidate is null)
+            {
+                continue;
+            }
+
+            if (user is not null && user.Id != candidate.Id)
+            {
+                throw new InvalidOperationException(
+                    "Load-test lookup key versions resolved to different users.");
+            }
+
+            user = candidate;
+        }
+
+        return user
+            ?? throw new InvalidOperationException("The load-test owner was not created.");
     }
 
     private sealed record SeedOptions(

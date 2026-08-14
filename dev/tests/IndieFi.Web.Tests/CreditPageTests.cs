@@ -27,8 +27,9 @@ public sealed class CreditPageTests
         await SignupAsync(client, email, password);
 
         await using var db = _fixture.NewDbContext();
-        var user = await db.Users.SingleAsync(
-            user => user.Email == email,
+        var user = await TestAccountProtection.FindUserAsync(
+            db,
+            email,
             TestContext.Current.CancellationToken);
         var entries = await db.CreditLedgerEntries
             .Where(entry => entry.UserId == user.Id)

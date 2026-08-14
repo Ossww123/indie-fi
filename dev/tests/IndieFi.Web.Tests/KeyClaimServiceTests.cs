@@ -334,14 +334,9 @@ public sealed class KeyClaimServiceTests
 
     private static async Task<User> CreateUserAsync(AppDbContext db)
     {
-        var user = new User
-        {
-            Email = $"{Guid.NewGuid():N}@example.test",
-            PasswordHash = "test-password-hash"
-        };
-        user.NormalizedEmail = user.Email.ToUpperInvariant();
-
-        db.Users.Add(user);
+        var user = TestAccountProtection.AddUser(
+            db,
+            $"{Guid.NewGuid():N}@example.test");
         await db.SaveChangesAsync();
         return user;
     }

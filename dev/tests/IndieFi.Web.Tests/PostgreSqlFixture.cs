@@ -51,15 +51,6 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         return new AppDbContext(options);
     }
 
-    public AppDbContext NewOwnerDbContext()
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_container.GetConnectionString())
-            .Options;
-
-        return new AppDbContext(options);
-    }
-
     private string CreateApplicationConnectionString()
     {
         var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())

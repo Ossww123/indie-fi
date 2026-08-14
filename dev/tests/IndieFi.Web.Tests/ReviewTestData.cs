@@ -10,16 +10,14 @@ namespace IndieFi.Web.Tests;
 
 internal static class ReviewTestData
 {
-    public static async Task<User> CreateUserWithCreditAsync(AppDbContext db, int balance)
+    public static async Task<User> CreateUserWithCreditAsync(
+        AppDbContext db,
+        int balance,
+        string? email = null)
     {
-        var user = new User
-        {
-            Email = $"{Guid.NewGuid():N}@example.test",
-            PasswordHash = "test-password-hash",
-        };
-        user.NormalizedEmail = user.Email.ToUpperInvariant();
-
-        db.Users.Add(user);
+        var user = TestAccountProtection.AddUser(
+            db,
+            email ?? $"{Guid.NewGuid():N}@example.test");
 
         if (balance > 0)
         {

@@ -92,10 +92,10 @@ public sealed class LoginPageTests
         long userId;
         await using (var db = _fixture.NewDbContext())
         {
-            userId = await db.Users
-                .Where(user => user.Email == email)
-                .Select(user => user.Id)
-                .SingleAsync(TestContext.Current.CancellationToken);
+            userId = (await TestAccountProtection.FindUserAsync(
+                db,
+                email,
+                TestContext.Current.CancellationToken)).Id;
         }
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);

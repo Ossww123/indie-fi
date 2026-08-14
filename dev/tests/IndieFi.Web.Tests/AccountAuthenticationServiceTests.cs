@@ -38,7 +38,8 @@ public sealed class AccountAuthenticationServiceTests
         {
             result = await new AccountAuthenticationService(
                     authenticationDb,
-                    passwordHasher)
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
                 .AuthenticateAsync($"  {email.ToUpperInvariant()}  ", password);
         }
 
@@ -64,7 +65,8 @@ public sealed class AccountAuthenticationServiceTests
         {
             result = await new AccountAuthenticationService(
                     authenticationDb,
-                    passwordHasher)
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
                 .AuthenticateAsync(email, "Wrong-Test-Password-456!");
         }
 
@@ -82,7 +84,8 @@ public sealed class AccountAuthenticationServiceTests
         {
             result = await new AccountAuthenticationService(
                     authenticationDb,
-                    passwordHasher)
+                    passwordHasher,
+                    TestAccountProtection.CreateService())
                 .AuthenticateAsync(
                     $"{Guid.NewGuid():N}@example.test",
                     "Any-Test-Password-123!");

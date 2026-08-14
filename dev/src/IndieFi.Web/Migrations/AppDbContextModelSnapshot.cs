@@ -342,17 +342,13 @@ namespace IndieFi.Web.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("credit_balance");
 
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)")
-                        .HasColumnName("email");
-
                     b.Property<byte[]>("EmailAuthenticationTag")
+                        .IsRequired()
                         .HasColumnType("bytea")
                         .HasColumnName("email_authentication_tag");
 
                     b.Property<byte[]>("EmailCiphertext")
+                        .IsRequired()
                         .HasColumnType("bytea")
                         .HasColumnName("email_ciphertext");
 
@@ -361,19 +357,15 @@ namespace IndieFi.Web.Migrations
                         .HasColumnName("email_confirmed_at");
 
                     b.Property<string>("EmailEncryptionKeyId")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("email_encryption_key_id");
 
                     b.Property<byte[]>("EmailNonce")
+                        .IsRequired()
                         .HasColumnType("bytea")
                         .HasColumnName("email_nonce");
-
-                    b.Property<string>("NormalizedEmail")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)")
-                        .HasColumnName("normalized_email");
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text")
@@ -391,14 +383,11 @@ namespace IndieFi.Web.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("NormalizedEmail")
-                        .IsUnique();
-
                     b.ToTable("users", null, t =>
                         {
                             t.HasCheckConstraint("CK_users_credit_balance_not_negative", "credit_balance >= 0");
 
-                            t.HasCheckConstraint("CK_users_email_protection_complete", "(email_ciphertext IS NULL AND email_nonce IS NULL AND email_authentication_tag IS NULL AND email_encryption_key_id IS NULL) OR (email_ciphertext IS NOT NULL AND octet_length(email_nonce) = 12 AND octet_length(email_authentication_tag) = 16 AND email_encryption_key_id IS NOT NULL)");
+                            t.HasCheckConstraint("CK_users_email_protection_complete", "octet_length(email_nonce) = 12 AND octet_length(email_authentication_tag) = 16");
 
                             t.HasCheckConstraint("CK_users_session_version_positive", "session_version >= 1");
 

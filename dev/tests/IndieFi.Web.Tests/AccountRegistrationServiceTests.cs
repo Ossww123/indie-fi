@@ -35,7 +35,7 @@ public sealed class AccountRegistrationServiceTests
 
         await using var verificationDb = _fixture.NewDbContext();
         var user = await verificationDb.Users.SingleAsync(
-            item => item.Email == email,
+            item => item.Id == result.UserId,
             TestContext.Current.CancellationToken);
         var entry = await verificationDb.CreditLedgerEntries.SingleAsync(
             item => item.UserId == user.Id,
@@ -74,14 +74,16 @@ public sealed class AccountRegistrationServiceTests
     public async Task RegisterAsync_WhenEmailAndPasswordAreBothInvalid_ReportsBothAndWritesNothing()
     {
         AccountRegistrationResult result;
-        long userCount;
+        long userCountBefore;
+        long userCountAfter;
         await using (var serviceDb = _fixture.NewDbContext())
         {
+            userCountBefore = await serviceDb.Users.LongCountAsync(
+                TestContext.Current.CancellationToken);
             result = await new AccountRegistrationService(serviceDb, new PasswordHasher<User>(), TestAccountProtection.CreateService())
                 .RegisterAsync("not-an-email", "short");
 
-            userCount = await serviceDb.Users.CountAsync(
-                item => item.Email == "not-an-email",
+            userCountAfter = await serviceDb.Users.LongCountAsync(
                 TestContext.Current.CancellationToken);
         }
 
@@ -90,7 +92,7 @@ public sealed class AccountRegistrationServiceTests
             [AccountRegistrationService.EmailField, AccountRegistrationService.PasswordField],
             result.Violations.Select(violation => violation.Field));
         Assert.Null(result.UserId);
-        Assert.Equal(0, userCount);
+        Assert.Equal(userCountBefore, userCountAfter);
     }
 
     [Fact]
@@ -116,8 +118,24 @@ public sealed class AccountRegistrationServiceTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(AccountRegistrationOutcome.Registered, result.Outcome);
-        Assert.Equal(displayEmail, user.Email);
-        Assert.Equal(displayEmail.ToUpperInvariant(), user.NormalizedEmail);
+        Assert.Equal(
+            displayEmail,
+            TestAccountProtection.CreateService().Unprotect(
+                new ProtectedEmailAddress(
+                    user.EmailCiphertext,
+                    user.EmailNonce,
+                    user.EmailAuthenticationTag,
+                    user.EmailEncryptionKeyId)));
+
+        var expectedLookup = Assert.Single(
+            TestAccountProtection.CreateService().CreateWritableLookupValues(
+                new AccountEmailAddress(
+                    displayEmail,
+                    displayEmail.ToUpperInvariant())));
+        var actualLookup = await verificationDb.UserEmailLookups.SingleAsync(
+            item => item.UserId == user.Id,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(expectedLookup.Value, actualLookup.Value);
     }
 
     [Fact]
@@ -126,6 +144,8 @@ public sealed class AccountRegistrationServiceTests
         var email = $"{Guid.NewGuid():N}@invalid";
 
         await using var db = _fixture.NewDbContext();
+        var userCountBefore = await db.Users.LongCountAsync(
+            TestContext.Current.CancellationToken);
         var result = await new AccountRegistrationService(
                 db,
                 new PasswordHasher<User>(),
@@ -136,9 +156,9 @@ public sealed class AccountRegistrationServiceTests
         Assert.Contains(
             result.Violations,
             violation => violation.Field == AccountRegistrationService.EmailField);
-        Assert.False(await db.Users.AnyAsync(
-            item => item.Email == email,
-            TestContext.Current.CancellationToken));
+        Assert.Equal(
+            userCountBefore,
+            await db.Users.LongCountAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -148,12 +168,14 @@ public sealed class AccountRegistrationServiceTests
         const string firstPassword = "First-Known-Password-123!";
         const string secondPassword = "Second-Known-Password-456!";
         var passwordHasher = new PasswordHasher<User>();
+        long firstUserId;
 
         await using (var firstDb = _fixture.NewDbContext())
         {
             var firstResult = await new AccountRegistrationService(firstDb, passwordHasher, TestAccountProtection.CreateService())
                 .RegisterAsync(email, firstPassword);
             Assert.Equal(AccountRegistrationOutcome.Registered, firstResult.Outcome);
+            firstUserId = firstResult.UserId!.Value;
         }
 
         AccountRegistrationResult duplicateResult;
@@ -164,10 +186,9 @@ public sealed class AccountRegistrationServiceTests
         }
 
         await using var verificationDb = _fixture.NewDbContext();
-        var users = await verificationDb.Users
-            .Where(user => user.Email == email)
-            .ToListAsync(TestContext.Current.CancellationToken);
-        var user = Assert.Single(users);
+        var user = await verificationDb.Users.SingleAsync(
+            item => item.Id == firstUserId,
+            TestContext.Current.CancellationToken);
         var entries = await verificationDb.CreditLedgerEntries
             .Where(entry => entry.UserId == user.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
@@ -197,8 +218,11 @@ public sealed class AccountRegistrationServiceTests
             RegisterAsync(email.ToUpperInvariant(), "Second-Known-Password-456!"));
 
         await using var verificationDb = _fixture.NewDbContext();
+        var registered = Assert.Single(
+            results,
+            result => result.Outcome == AccountRegistrationOutcome.Registered);
         var user = await verificationDb.Users.SingleAsync(
-            item => item.Email == email,
+            item => item.Id == registered.UserId,
             TestContext.Current.CancellationToken);
         var entries = await verificationDb.CreditLedgerEntries
             .Where(entry => entry.UserId == user.Id)

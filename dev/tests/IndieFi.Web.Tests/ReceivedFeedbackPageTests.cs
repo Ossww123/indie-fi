@@ -160,10 +160,10 @@ public sealed class ReceivedFeedbackPageTests
     private async Task<long> FindUserIdAsync(string email)
     {
         await using var db = _fixture.NewDbContext();
-        return await db.Users
-            .Where(user => user.Email == email)
-            .Select(user => user.Id)
-            .SingleAsync(TestContext.Current.CancellationToken);
+        return (await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken)).Id;
     }
 
     private async Task<FeedbackTestData> CreateGameWithFeedbackAsync(
@@ -182,7 +182,11 @@ public sealed class ReceivedFeedbackPageTests
         });
         await db.SaveChangesAsync(cancellationToken);
 
-        var reviewer = await ReviewTestData.CreateUserWithCreditAsync(db, balance: 0);
+        var reviewerEmail = $"{Guid.NewGuid():N}@example.test";
+        var reviewer = await ReviewTestData.CreateUserWithCreditAsync(
+            db,
+            balance: 0,
+            reviewerEmail);
         var game = await ReviewTestData.CreateGameAsync(db, ownerId);
         var reviewRequest = await ReviewTestData.CreateQueuedRequestAsync(
             db,
@@ -214,7 +218,7 @@ public sealed class ReceivedFeedbackPageTests
             game.Id,
             game.Title,
             reviewer.Id,
-            reviewer.Email);
+            reviewerEmail);
     }
 
     private sealed record FeedbackTestData(

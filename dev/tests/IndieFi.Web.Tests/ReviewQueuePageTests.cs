@@ -176,10 +176,10 @@ public sealed class ReviewQueuePageTests
     private async Task<long> FindUserIdAsync(string email)
     {
         await using var db = _fixture.NewDbContext();
-        return await db.Users
-            .Where(user => user.Email == email)
-            .Select(user => user.Id)
-            .SingleAsync(TestContext.Current.CancellationToken);
+        return (await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken)).Id;
     }
 
     private async Task<ReviewRequestPageData> CreateReviewRequestAsync(
@@ -189,8 +189,9 @@ public sealed class ReviewQueuePageTests
         await using var db = _fixture.NewDbContext();
         var cancellationToken = TestContext.Current.CancellationToken;
 
+        var requesterEmail = $"{Guid.NewGuid():N}@example.test";
         var requesterId = existingRequesterId
-            ?? await CreateRequesterAsync(db, cancellationToken);
+            ?? await CreateRequesterAsync(db, requesterEmail, cancellationToken);
 
         // Credits have to arrive through the ledger: the application account may no
         // longer write credit_balance, so the database trigger is the only way to fund
@@ -228,11 +229,6 @@ public sealed class ReviewQueuePageTests
         db.ReviewRequests.Add(reviewRequest);
         await db.SaveChangesAsync(cancellationToken);
 
-        var requesterEmail = await db.Users
-            .Where(user => user.Id == requesterId)
-            .Select(user => user.Email)
-            .SingleAsync(cancellationToken);
-
         return new ReviewRequestPageData(
             reviewRequest.Id,
             game.Title,
@@ -242,16 +238,10 @@ public sealed class ReviewQueuePageTests
 
     private static async Task<long> CreateRequesterAsync(
         AppDbContext db,
+        string email,
         CancellationToken cancellationToken)
     {
-        var requester = new User
-        {
-            Email = $"{Guid.NewGuid():N}@example.test",
-            PasswordHash = "test-password-hash",
-        };
-        requester.NormalizedEmail = requester.Email.ToUpperInvariant();
-
-        db.Users.Add(requester);
+        var requester = TestAccountProtection.AddUser(db, email);
 
         // Saving here is what assigns the identity value the callers need.
         await db.SaveChangesAsync(cancellationToken);

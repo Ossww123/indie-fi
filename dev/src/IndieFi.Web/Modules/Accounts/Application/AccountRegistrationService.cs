@@ -68,8 +68,6 @@ public sealed class AccountRegistrationService
         var protectedEmail = _emailProtection.Protect(validEmail);
         var user = new User
         {
-            Email = validEmail.DisplayValue,
-            NormalizedEmail = validEmail.NormalizedValue,
             EmailCiphertext = protectedEmail.Ciphertext,
             EmailNonce = protectedEmail.Nonce,
             EmailAuthenticationTag = protectedEmail.AuthenticationTag,

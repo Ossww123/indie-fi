@@ -1,4 +1,5 @@
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -47,25 +48,47 @@ public sealed class CreditWritePermissionTests
     public async Task InsertingUserWithCreditBalance_IsRefused()
     {
         var email = $"{Guid.NewGuid():N}@example.test";
+        Assert.True(AccountEmailAddressPolicy.TryCreate(
+            email,
+            out var address,
+            out _));
+        var protectedEmail = TestAccountProtection.CreateService().Protect(address!);
+        long userCountBefore;
 
         await using (var attemptDb = _fixture.NewDbContext())
         {
+            userCountBefore = await attemptDb.Users.LongCountAsync(
+                TestContext.Current.CancellationToken);
             var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
                 await attemptDb.Database.ExecuteSqlRawAsync(
                     """
-                    INSERT INTO users (email, password_hash, credit_balance)
-                    VALUES ({0}, {1}, 999)
+                    INSERT INTO users (
+                        email_ciphertext,
+                        email_nonce,
+                        email_authentication_tag,
+                        email_encryption_key_id,
+                        password_hash,
+                        credit_balance)
+                    VALUES ({0}, {1}, {2}, {3}, {4}, 999)
                     """,
-                    new object[] { email, "test-password-hash" },
+                    new object[]
+                    {
+                        protectedEmail.Ciphertext,
+                        protectedEmail.Nonce,
+                        protectedEmail.AuthenticationTag,
+                        protectedEmail.KeyId,
+                        "test-password-hash",
+                    },
                     TestContext.Current.CancellationToken));
 
             Assert.Equal(InsufficientPrivilege, exception.SqlState);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
-        Assert.False(await verificationDb.Users.AnyAsync(
-            user => user.Email == email,
-            TestContext.Current.CancellationToken));
+        Assert.Equal(
+            userCountBefore,
+            await verificationDb.Users.LongCountAsync(
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -131,12 +154,9 @@ public sealed class CreditWritePermissionTests
     private async Task<(long UserId, long LedgerEntryId)> CreateUserWithGrantAsync()
     {
         await using var arrangeDb = _fixture.NewDbContext();
-        var user = new User
-        {
-            Email = $"{Guid.NewGuid():N}@example.test",
-            PasswordHash = "test-password-hash",
-        };
-        user.NormalizedEmail = user.Email.ToUpperInvariant();
+        var user = TestAccountProtection.AddUser(
+            arrangeDb,
+            $"{Guid.NewGuid():N}@example.test");
         var ledgerEntry = new CreditLedgerEntry
         {
             User = user,
@@ -144,7 +164,6 @@ public sealed class CreditWritePermissionTests
             Delta = 5,
         };
 
-        arrangeDb.Users.Add(user);
         arrangeDb.CreditLedgerEntries.Add(ledgerEntry);
         await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
 
