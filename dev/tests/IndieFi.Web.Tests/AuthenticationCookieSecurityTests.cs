@@ -86,7 +86,7 @@ public sealed class AuthenticationCookieSecurityTests
     }
 
     [Fact]
-    public async Task Post_Logout_RequiresAnAntiforgeryToken()
+    public async Task Post_Logout_RequiresAntiforgeryAndClearsTheSession()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
         long userId;
@@ -133,5 +133,14 @@ public sealed class AuthenticationCookieSecurityTests
 
         Assert.Equal(HttpStatusCode.Redirect, logoutResponse.StatusCode);
         Assert.Equal("/", logoutResponse.Headers.Location?.OriginalString);
+
+        using var anonymousResponse = await client.GetAsync(
+            "/",
+            TestContext.Current.CancellationToken);
+        var anonymousHtml = await anonymousResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, anonymousResponse.StatusCode);
+        Assert.DoesNotContain(UserDisplayIdentifier.Format(userId), anonymousHtml);
     }
 }
