@@ -25,7 +25,26 @@ public static class AccountsModule
         services.AddScoped<AuthenticationEmailOutboxService>();
         services.AddScoped<AuthenticationEmailOutboxProcessor>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
-        services.AddSingleton<IKeyProvider, ConfigurationKeyProvider>();
+        services.AddOptions<AccountProtectionKeyFileOptions>()
+            .BindConfiguration(AccountProtectionKeyFileOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<
+            IValidateOptions<AccountProtectionKeyFileOptions>,
+            AccountProtectionKeyFileOptionsValidator>();
+        services.AddSingleton<IKeyProvider>(provider =>
+        {
+            var environment = provider.GetRequiredService<IHostEnvironment>();
+            if (environment.IsProduction())
+            {
+                var options = provider
+                    .GetRequiredService<IOptions<AccountProtectionKeyFileOptions>>()
+                    .Value;
+                return new FileKeyProvider(options.Path!);
+            }
+
+            return new ConfigurationKeyProvider(
+                provider.GetRequiredService<IConfiguration>());
+        });
         services.AddSingleton<EmailProtectionService>();
         services.AddSingleton<RequestIpProtectionService>();
         services.AddSingleton<AuthenticationEmailMessageProtectionService>();

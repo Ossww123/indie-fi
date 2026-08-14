@@ -8,11 +8,13 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
 {
     private readonly string _connectionString;
     private readonly bool _configureGoogle;
+    private readonly string _accountProtectionKeyFilePath;
 
     public WebAppFactory(string connectionString, bool configureGoogle = true)
     {
         _connectionString = connectionString;
         _configureGoogle = configureGoogle;
+        _accountProtectionKeyFilePath = TestAccountProtection.CreateKeyFile();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -29,8 +31,12 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
         }
 
         builder.ConfigureAppConfiguration(configuration =>
-            configuration.AddInMemoryCollection(
-                TestAccountProtection.ConfigurationValues()));
+        {
+            var values = TestAccountProtection.ConfigurationValues();
+            values["AccountProtectionKeyFile:Path"] =
+                _accountProtectionKeyFilePath;
+            configuration.AddInMemoryCollection(values);
+        });
     }
 
     public new HttpClient CreateClient()
@@ -40,5 +46,14 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
         {
             AllowAutoRedirect = false
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing)
+        {
+            File.Delete(_accountProtectionKeyFilePath);
+        }
     }
 }

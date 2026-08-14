@@ -4,6 +4,7 @@ using IndieFi.Web.Infrastructure.Cryptography;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace IndieFi.Web.Tests;
 
@@ -115,6 +116,51 @@ internal static class TestAccountProtection
             ["AccountProtection:Purposes:account-request-ip-lookup:WriteKeyIds:0"] = "request-ip-test-v1",
             ["AccountProtection:Purposes:account-request-ip-lookup:Keys:request-ip-test-v1"] = Convert.ToBase64String(RequestIpKey),
             ["AuthenticationEmail:Enabled"] = "false",
+        };
+    }
+
+    public static string CreateKeyFile()
+    {
+        var path = Path.Combine(
+            Path.GetTempPath(),
+            $"indiefi-account-protection-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, CreateKeyFileJson());
+        return path;
+    }
+
+    public static string CreateKeyFileJson()
+    {
+        return JsonSerializer.Serialize(new
+        {
+            Purposes = new Dictionary<string, object>
+            {
+                [KeyPurpose.AccountEmailEncryption.Value] = Purpose(
+                    "email-test-v1",
+                    EmailKey),
+                [KeyPurpose.AccountEmailLookup.Value] = Purpose(
+                    "lookup-test-v1",
+                    LookupKey),
+                [KeyPurpose.AccountEmailMessageEncryption.Value] = Purpose(
+                    "message-test-v1",
+                    MessageKey),
+                [KeyPurpose.AccountRequestIpLookup.Value] = Purpose(
+                    "request-ip-test-v1",
+                    RequestIpKey),
+            },
+        });
+    }
+
+    private static object Purpose(string keyId, byte[] secret)
+    {
+        return new
+        {
+            CurrentKeyId = keyId,
+            ReadKeyIds = new[] { keyId },
+            WriteKeyIds = new[] { keyId },
+            Keys = new Dictionary<string, string>
+            {
+                [keyId] = Convert.ToBase64String(secret),
+            },
         };
     }
 
