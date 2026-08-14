@@ -423,9 +423,24 @@ public sealed class PasswordResetRequestServiceTests
         string? passwordHash = "test-password-hash")
     {
         await using var db = _fixture.NewDbContext();
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            TestContext.Current.CancellationToken);
         var user = TestAccountProtection.AddUser(db, email, passwordHash);
         user.EmailConfirmedAt = confirmed ? Now.AddDays(-1) : null;
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        if (passwordHash is null)
+        {
+            db.ExternalLogins.Add(new ExternalLogin
+            {
+                UserId = user.Id,
+                Provider = ExternalLoginPolicy.GoogleProvider,
+                ProviderUserId = $"reset-request-google-{Guid.NewGuid():N}",
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await transaction.CommitAsync(TestContext.Current.CancellationToken);
         return user.Id;
     }
 

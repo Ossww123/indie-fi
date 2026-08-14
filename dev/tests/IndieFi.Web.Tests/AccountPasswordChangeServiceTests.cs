@@ -1,6 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -196,6 +197,8 @@ public sealed class AccountPasswordChangeServiceTests
         bool passwordless = false)
     {
         await using var db = _fixture.NewDbContext();
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            TestContext.Current.CancellationToken);
         var user = TestAccountProtection.AddUser(
             db,
             $"password-change-{Guid.NewGuid():N}@example.test",
@@ -206,6 +209,19 @@ public sealed class AccountPasswordChangeServiceTests
         user.EmailConfirmedAt = DateTimeOffset.UtcNow;
         user.SessionVersion = sessionVersion;
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        if (passwordless)
+        {
+            db.ExternalLogins.Add(new ExternalLogin
+            {
+                UserId = user.Id,
+                Provider = ExternalLoginPolicy.GoogleProvider,
+                ProviderUserId = $"password-change-google-{Guid.NewGuid():N}",
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await transaction.CommitAsync(TestContext.Current.CancellationToken);
         return user.Id;
     }
 

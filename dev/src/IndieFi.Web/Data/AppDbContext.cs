@@ -282,12 +282,24 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<ExternalLogin>(login =>
         {
-            login.ToTable("external_logins");
+            login.ToTable("external_logins", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_external_logins_supported_provider",
+                    "provider = 'Google'");
+                table.HasCheckConstraint(
+                    "CK_external_logins_provider_user_id_not_blank",
+                    "length(btrim(provider_user_id)) > 0");
+            });
             login.HasKey(item => item.Id);
             login.Property(item => item.Id).HasColumnName("id");
             login.Property(item => item.UserId).HasColumnName("user_id");
-            login.Property(item => item.Provider).HasColumnName("provider").HasMaxLength(32);
-            login.Property(item => item.ProviderUserId).HasColumnName("provider_user_id").HasMaxLength(255);
+            login.Property(item => item.Provider)
+                .HasColumnName("provider")
+                .HasMaxLength(ExternalLoginPolicy.ProviderMaxLength);
+            login.Property(item => item.ProviderUserId)
+                .HasColumnName("provider_user_id")
+                .HasMaxLength(ExternalLoginPolicy.ProviderUserIdMaxLength);
             login.Property(item => item.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
             login.HasIndex(item => new { item.Provider, item.ProviderUserId }).IsUnique();
             login.HasIndex(item => new { item.UserId, item.Provider }).IsUnique();
