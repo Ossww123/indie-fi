@@ -135,6 +135,11 @@ public class DetailModel : PageModel
             return Forbid();
         }
 
+        if (result.Outcome == ReviewRequestOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         var requestNotice = RequestNotices
             .FirstOrDefault(notice => notice.Outcome == result.Outcome);
 
@@ -158,6 +163,11 @@ public class DetailModel : PageModel
         var result = await _reviewRequestService.CancelAsync(
             requestId,
             _currentUser.GetRequiredUserId());
+        if (result.Outcome == ReviewRequestOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         var requestNotice = RequestNotices
             .Single(notice => notice.Outcome == result.Outcome);
 

@@ -76,6 +76,14 @@ public class LoginModel : PageModel
             return Page();
         }
 
+        if (result.Outcome == AccountAuthenticationOutcome.AccountUnavailable)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "현재 이 계정으로 로그인할 수 없습니다.");
+            return Page();
+        }
+
         await _accountSignInService.SignInAsync(
             HttpContext,
             result.UserId!.Value,

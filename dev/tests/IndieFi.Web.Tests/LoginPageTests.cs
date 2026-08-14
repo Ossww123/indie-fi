@@ -226,4 +226,57 @@ public sealed class LoginPageTests
                 value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
         }
     }
+
+    [Theory]
+    [InlineData(AccountStatus.TemporarilySuspended)]
+    [InlineData(AccountStatus.IndefinitelySuspended)]
+    public async Task Post_Login_WithSuspendedAccount_DoesNotIssueApplicationCookie(
+        AccountStatus accountStatus)
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(
+            _fixture,
+            sessionVersion: 13);
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var user = await TestAccountProtection.FindUserAsync(
+                arrangeDb,
+                email,
+                TestContext.Current.CancellationToken);
+            user.AccountStatus = accountStatus;
+            user.SuspendedUntil = accountStatus == AccountStatus.TemporarilySuspended
+                ? DateTimeOffset.UtcNow.AddHours(1)
+                : null;
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var pageResponse = await client.GetAsync(
+            "/Login",
+            TestContext.Current.CancellationToken);
+        var pageHtml = await pageResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = email,
+            ["Password"] = password,
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(pageHtml),
+        });
+
+        using var response = await client.PostAsync(
+            "/Login",
+            form,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+        {
+            Assert.DoesNotContain(
+                setCookies,
+                value => value.StartsWith(
+                    ".AspNetCore.Cookies=",
+                    StringComparison.Ordinal));
+        }
+    }
 }

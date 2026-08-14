@@ -46,6 +46,11 @@ public class NewModel : PageModel
             return Page();
         }
 
+        if (result.Outcome == CreateGameOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         // Redirect after a successful POST so refreshing the page does not resubmit.
         TempData["GameMessage"] = $"'{result.Title}' 등록 완료";
         return RedirectToPage("/Games/Index");

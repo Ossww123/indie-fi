@@ -66,6 +66,11 @@ public class NewModel : PageModel
             return NotFound();
         }
 
+        if (result.Outcome == ScheduleKeyDropOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         foreach (var violation in result.Violations)
         {
             ModelState.AddModelError(violation.Field, violation.Message);

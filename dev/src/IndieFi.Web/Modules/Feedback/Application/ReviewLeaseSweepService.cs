@@ -1,10 +1,19 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace IndieFi.Web.Modules.Feedback.Application;
 
-public record ReviewLeaseSweepResult(int ExpiredCount);
+public enum ReviewLeaseSweepOutcome
+{
+    Swept,
+    AccountUnavailable,
+}
+
+public record ReviewLeaseSweepResult(
+    int ExpiredCount,
+    ReviewLeaseSweepOutcome Outcome = ReviewLeaseSweepOutcome.Swept);
 
 public class ReviewLeaseSweepService
 {
@@ -47,11 +56,24 @@ public class ReviewLeaseSweepService
         _logger = logger;
     }
 
-    public async Task<ReviewLeaseSweepResult> SweepAsync()
+    public async Task<ReviewLeaseSweepResult> SweepAsync(long? requestedByUserId = null)
     {
+        await using var transaction = requestedByUserId is null
+            ? null
+            : await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        if (requestedByUserId is long userId
+            && !await AccountMutationGuard.LockActiveAsync(_db, userId))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return new ReviewLeaseSweepResult(
+                0,
+                ReviewLeaseSweepOutcome.AccountUnavailable);
+        }
+
         var expiredCounts = await _db.Database
             .SqlQueryRaw<long>(SweepSql)
             .ToListAsync();
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         return Result(checked((int)expiredCounts[0]));
     }

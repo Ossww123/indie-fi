@@ -107,6 +107,11 @@ public class DetailModel : PageModel
             return NotFound();
         }
 
+        if (result.Outcome == ClaimOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
         var claimNotice = ClaimNotices
             .FirstOrDefault(notice => notice.Outcome == result.Outcome);
 

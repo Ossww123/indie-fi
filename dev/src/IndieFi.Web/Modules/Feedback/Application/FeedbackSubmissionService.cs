@@ -1,4 +1,5 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -10,6 +11,7 @@ public enum FeedbackSubmissionOutcome
     Submitted,
     LeaseExpired,
     NotSubmittable,
+    AccountUnavailable,
 }
 
 public record FeedbackSubmissionResult(FeedbackSubmissionOutcome Outcome);
@@ -77,6 +79,17 @@ public class FeedbackSubmissionService
         long reviewerId,
         string body)
     {
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, reviewerId))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return Result(
+                FeedbackSubmissionOutcome.AccountUnavailable,
+                assignmentId,
+                reviewerId);
+        }
+
         var submittedAssignmentIds = await _db.Database
             .SqlQueryRaw<long>(
                 SubmitSql,
@@ -87,6 +100,7 @@ public class FeedbackSubmissionService
 
         if (submittedAssignmentIds.Count != 0)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(FeedbackSubmissionOutcome.Submitted, assignmentId, reviewerId);
         }
 
@@ -102,9 +116,11 @@ public class FeedbackSubmissionService
 
         if (leaseExpired.Count != 0 && leaseExpired[0])
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(FeedbackSubmissionOutcome.LeaseExpired, assignmentId, reviewerId);
         }
 
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
         return Result(FeedbackSubmissionOutcome.NotSubmittable, assignmentId, reviewerId);
     }
 

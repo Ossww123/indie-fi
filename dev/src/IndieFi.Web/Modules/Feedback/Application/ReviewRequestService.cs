@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ public enum ReviewRequestOutcome
     NotOwner,
     Cancelled,
     NotCancellable,
+    AccountUnavailable,
 }
 
 public record ReviewRequestResult(ReviewRequestOutcome Outcome);
@@ -64,6 +66,17 @@ public class ReviewRequestService
 
     public async Task<ReviewRequestResult> RequestAsync(long gameId, long requesterId)
     {
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, requesterId))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return Result(
+                ReviewRequestOutcome.AccountUnavailable,
+                gameId,
+                requesterId);
+        }
+
         var game = await _db.Games
             .Where(game => game.Id == gameId)
             .Select(game => new { game.OwnerId })
@@ -71,11 +84,13 @@ public class ReviewRequestService
 
         if (game is null)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(ReviewRequestOutcome.GameNotFound, gameId, requesterId);
         }
 
         if (game.OwnerId != requesterId)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(ReviewRequestOutcome.NotOwner, gameId, requesterId);
         }
 
@@ -107,20 +122,31 @@ public class ReviewRequestService
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException { SqlState: CheckViolation })
         {
+            await AccountMutationGuard.RollbackIfOwnedAsync(transaction);
             return Result(ReviewRequestOutcome.InsufficientCredit, gameId, requesterId);
         }
 
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
         return Result(ReviewRequestOutcome.Queued, gameId, requesterId);
     }
 
     public async Task<ReviewRequestResult> CancelAsync(long requestId, long userId)
     {
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, userId))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return new ReviewRequestResult(ReviewRequestOutcome.AccountUnavailable);
+        }
+
         var cancelledRequestIds = await _db.Database
             .SqlQueryRaw<long>(
                 CancelSql,
                 new NpgsqlParameter("requestId", requestId),
                 new NpgsqlParameter("userId", userId))
             .ToListAsync();
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         var outcome = cancelledRequestIds.Count == 0
             ? ReviewRequestOutcome.NotCancellable

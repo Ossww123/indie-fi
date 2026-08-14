@@ -128,7 +128,10 @@ public sealed class EmailConfirmationResendService
 
         var outcome = EmailConfirmationResendOutcome.RequestAccepted;
         var queueEmail = false;
-        if (user is { EmailConfirmedAt: null })
+        if (user is { EmailConfirmedAt: null }
+            && AccountStatusPolicy.AllowsMutation(
+                user.AccountStatus,
+                user.SuspendedUntil))
         {
             var accountRequestCount = await _db.EmailConfirmationResendAttempts.CountAsync(
                 attempt =>

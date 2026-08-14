@@ -120,6 +120,88 @@ public sealed class GoogleLoginPageTests
         Assert.Empty(applicationTicket.Properties.GetTokens());
     }
 
+    [Theory]
+    [InlineData(AccountStatus.TemporarilySuspended)]
+    [InlineData(AccountStatus.IndefinitelySuspended)]
+    public async Task Callback_WithSuspendedLinkedAccount_DoesNotIssueApplicationSession(
+        AccountStatus accountStatus)
+    {
+        var subject = $"suspended-linked-google-{Guid.NewGuid():N}";
+        var suspendedUntil = accountStatus == AccountStatus.TemporarilySuspended
+            ? DateTimeOffset.UtcNow.AddHours(1)
+            : (DateTimeOffset?)null;
+        var userId = await CreateLinkedUserAsync(
+            subject,
+            sessionVersion: 11,
+            accountStatus: accountStatus,
+            suspendedUntil: suspendedUntil);
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email: "suspended-linked@example.test",
+            emailVerified: true);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Login", response.Headers.Location?.OriginalString);
+        Assert.DoesNotContain(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+
+        await using var db = _fixture.NewDbContext();
+        var user = await db.Users.SingleAsync(
+            item => item.Id == userId,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(accountStatus, user.AccountStatus);
+        Assert.Equal(11, user.SessionVersion);
+    }
+
+    [Fact]
+    public async Task Callback_AfterLinkedAccountTemporarySuspensionExpires_ReactivatesAndIssuesNewSession()
+    {
+        var subject = $"expired-linked-google-{Guid.NewGuid():N}";
+        var userId = await CreateLinkedUserAsync(
+            subject,
+            sessionVersion: 11,
+            accountStatus: AccountStatus.TemporarilySuspended,
+            suspendedUntil: DateTimeOffset.UtcNow.AddMinutes(-1));
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email: "expired-linked@example.test",
+            emailVerified: true);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/", response.Headers.Location?.OriginalString);
+        var ticket = ReadApplicationTicket(
+            factory,
+            response.Headers.GetValues("Set-Cookie"));
+        Assert.Equal(
+            "12",
+            ticket.Principal.FindFirstValue(AuthenticationClaimTypes.SessionVersion));
+
+        await using var db = _fixture.NewDbContext();
+        var user = await db.Users.SingleAsync(
+            item => item.Id == userId,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(AccountStatus.Active, user.AccountStatus);
+        Assert.Null(user.SuspendedUntil);
+        Assert.Equal(12, user.SessionVersion);
+    }
+
     [Fact]
     public async Task Callback_WithExternalReturnUrl_RedirectsHome()
     {
@@ -339,6 +421,42 @@ public sealed class GoogleLoginPageTests
             TestContext.Current.CancellationToken));
         Assert.False(await db.CreditLedgerEntries.AnyAsync(
             item => item.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Callback_WithSuspendedPasswordAccount_DoesNotStartGoogleLinkFlow()
+    {
+        const string password = "Existing-Password-123!";
+        var email = $"suspended-google-link-{Guid.NewGuid():N}@example.test";
+        var subject = $"suspended-google-link-subject-{Guid.NewGuid():N}";
+        var userId = await CreatePasswordUserAsync(
+            email,
+            password,
+            accountStatus: AccountStatus.TemporarilySuspended,
+            suspendedUntil: DateTimeOffset.UtcNow.AddHours(1));
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email,
+            emailVerified: true);
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Login", response.Headers.Location?.OriginalString);
+        Assert.DoesNotContain(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+        await using var db = _fixture.NewDbContext();
+        Assert.False(await db.ExternalLogins.AnyAsync(
+            item => item.UserId == userId
+                && item.Provider == ExternalLoginPolicy.GoogleProvider,
             TestContext.Current.CancellationToken));
     }
 
@@ -723,7 +841,9 @@ public sealed class GoogleLoginPageTests
 
     private async Task<long> CreateLinkedUserAsync(
         string subject,
-        long sessionVersion = 1)
+        long sessionVersion = 1,
+        AccountStatus accountStatus = AccountStatus.Active,
+        DateTimeOffset? suspendedUntil = null)
     {
         await using var db = _fixture.NewDbContext();
         var user = TestAccountProtection.AddUser(
@@ -731,6 +851,8 @@ public sealed class GoogleLoginPageTests
             $"linked-google-{Guid.NewGuid():N}@example.test");
         user.EmailConfirmedAt = DateTimeOffset.UtcNow;
         user.SessionVersion = sessionVersion;
+        user.AccountStatus = accountStatus;
+        user.SuspendedUntil = suspendedUntil;
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.ExternalLogins.Add(new ExternalLogin
         {
@@ -745,13 +867,17 @@ public sealed class GoogleLoginPageTests
     private async Task<long> CreatePasswordUserAsync(
         string email,
         string password,
-        bool emailConfirmed = true)
+        bool emailConfirmed = true,
+        AccountStatus accountStatus = AccountStatus.Active,
+        DateTimeOffset? suspendedUntil = null)
     {
         await using var db = _fixture.NewDbContext();
         var user = TestAccountProtection.AddUser(db, email, passwordHash: null);
         user.PasswordHash = new PasswordHasher<User>()
             .HashPassword(user, password);
         user.EmailConfirmedAt = emailConfirmed ? DateTimeOffset.UtcNow : null;
+        user.AccountStatus = accountStatus;
+        user.SuspendedUntil = suspendedUntil;
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         return user.Id;
     }

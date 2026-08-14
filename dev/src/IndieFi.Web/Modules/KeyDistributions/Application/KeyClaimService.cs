@@ -13,6 +13,7 @@ public enum ClaimOutcome
     SoldOut,
     Conflict,
     DropNotFound,
+    AccountUnavailable,
 }
 
 public record ClaimResult(ClaimOutcome Outcome);
@@ -79,24 +80,47 @@ public class KeyClaimService
         {
             try
             {
-                var keyIds = await _db.Database
+                var claimMarkers = await _db.Database
                     .SqlQuery<long>($@"
-                        WITH picked AS (
+                        WITH active_user AS MATERIALIZED (
+                            SELECT id
+                            FROM users
+                            WHERE id = {userId}
+                              AND account_status = 'Active'
+                              AND suspended_until IS NULL
+                            FOR UPDATE
+                        ),
+                        picked AS (
                             SELECT s.id
                             FROM steam_keys AS s
+                            CROSS JOIN active_user
                             WHERE s.drop_id = {dropId}
                               AND NOT EXISTS (
                                   SELECT 1 FROM key_grants AS g WHERE g.key_id = s.id)
                             ORDER BY s.id
                             FOR UPDATE SKIP LOCKED
                             LIMIT 1
+                        ),
+                        granted AS (
+                            INSERT INTO key_grants (drop_id, user_id, key_id)
+                            SELECT {dropId}, {userId}, picked.id FROM picked
+                            RETURNING key_id
                         )
-                        INSERT INTO key_grants (drop_id, user_id, key_id)
-                        SELECT {dropId}, {userId}, picked.id FROM picked
-                        RETURNING key_id")
+                        SELECT COALESCE(
+                            (SELECT key_id FROM granted),
+                            CASE
+                                WHEN EXISTS (SELECT 1 FROM active_user) THEN -1
+                                ELSE -2
+                            END) AS ""Value""")
                     .ToListAsync();
 
-                if (keyIds.Count == 0)
+                var claimMarker = claimMarkers.Single();
+                if (claimMarker == -2)
+                {
+                    return Result(ClaimOutcome.AccountUnavailable, dropId, userId);
+                }
+
+                if (claimMarker == -1)
                 {
                     // No key is free for us: every key is granted or held by someone else.
                     return Result(ClaimOutcome.SoldOut, dropId, userId);

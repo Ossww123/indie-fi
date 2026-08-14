@@ -98,6 +98,13 @@ public sealed class GoogleLoginModel : PageModel
             return await FailAsync(returnUrl, LinkUnavailableMessage);
         }
 
+        if (result.Outcome == GoogleAccountOutcome.AccountUnavailable)
+        {
+            return await FailAsync(
+                returnUrl,
+                "현재 이 계정으로 로그인할 수 없습니다.");
+        }
+
         await HttpContext.SignOutAsync(ExternalAuthenticationDefaults.TemporaryScheme);
         await _accountSignIn.SignInAsync(
             HttpContext,
