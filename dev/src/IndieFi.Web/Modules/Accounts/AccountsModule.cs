@@ -18,6 +18,7 @@ public static class AccountsModule
         services.AddScoped<EmailConfirmationTokenService>();
         services.AddScoped<PasswordResetTokenService>();
         services.AddScoped<PasswordResetRequestService>();
+        services.AddScoped<PasswordResetCompletionService>();
         services.AddScoped<EmailConfirmationResendService>();
         services.AddScoped<AuthenticationEmailOutboxService>();
         services.AddScoped<AuthenticationEmailOutboxProcessor>();
