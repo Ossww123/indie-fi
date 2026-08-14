@@ -91,6 +91,7 @@ public sealed class CreditPageTests
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
         await SignupAsync(client, email, password);
+        await ConfirmEmailForPageSetupAsync(email);
         await PageTestSupport.LoginAsync(client, email, password);
 
         using var response = await client.GetAsync(
@@ -130,5 +131,16 @@ public sealed class CreditPageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, signupResponse.StatusCode);
+    }
+
+    private async Task ConfirmEmailForPageSetupAsync(string email)
+    {
+        await using var db = _fixture.NewDbContext();
+        var user = await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken);
+        user.EmailConfirmedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 }

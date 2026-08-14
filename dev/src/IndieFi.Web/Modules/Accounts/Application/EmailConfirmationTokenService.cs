@@ -80,22 +80,21 @@ public sealed class EmailConfirmationTokenService
                 updates => updates.SetProperty(token => token.RevokedAt, now),
                 cancellationToken);
 
-        var plaintextToken = CreatePlaintextToken();
-        _db.EmailConfirmationTokens.Add(new EmailConfirmationToken
-        {
-            UserId = userId,
-            TokenHash = HashToken(plaintextToken),
-            CreatedAt = now,
-            ExpiresAt = now.Add(TokenLifetime),
-        });
+        var issue = StageToken(userId, now);
 
         await _db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        return issue;
+    }
 
-        return new EmailConfirmationTokenIssueResult(
-            EmailConfirmationTokenIssueOutcome.Issued,
-            plaintextToken,
-            now.Add(TokenLifetime));
+    internal EmailConfirmationTokenIssueResult StageForNewAccount(long userId)
+    {
+        if (userId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(userId));
+        }
+
+        return StageToken(userId, _timeProvider.GetUtcNow());
     }
 
     public async Task<EmailConfirmationTokenConsumeResult> ConsumeAsync(
@@ -201,6 +200,26 @@ public sealed class EmailConfirmationTokenService
         {
             CryptographicOperations.ZeroMemory(entropy);
         }
+    }
+
+    private EmailConfirmationTokenIssueResult StageToken(
+        long userId,
+        DateTimeOffset createdAt)
+    {
+        var plaintextToken = CreatePlaintextToken();
+        var expiresAt = createdAt.Add(TokenLifetime);
+        _db.EmailConfirmationTokens.Add(new EmailConfirmationToken
+        {
+            UserId = userId,
+            TokenHash = HashToken(plaintextToken),
+            CreatedAt = createdAt,
+            ExpiresAt = expiresAt,
+        });
+
+        return new EmailConfirmationTokenIssueResult(
+            EmailConfirmationTokenIssueOutcome.Issued,
+            plaintextToken,
+            expiresAt);
     }
 
     private static byte[] HashToken(string token)

@@ -58,9 +58,25 @@ public sealed class SignupPageTests
             TestContext.Current.CancellationToken);
         var homeHtml = await homeResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
+        var decodedHomeHtml = WebUtility.HtmlDecode(homeHtml);
 
         Assert.Equal(HttpStatusCode.OK, homeResponse.StatusCode);
-        Assert.Contains(UserDisplayIdentifier.Format(userId), homeHtml);
-        Assert.DoesNotContain(email, homeHtml);
+        Assert.Contains(UserDisplayIdentifier.Format(userId), decodedHomeHtml);
+        Assert.Contains("이메일 확인 메일", decodedHomeHtml);
+        Assert.DoesNotContain(email, decodedHomeHtml);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var user = await verificationDb.Users.SingleAsync(
+            item => item.Id == userId,
+            TestContext.Current.CancellationToken);
+        var token = await verificationDb.EmailConfirmationTokens.SingleAsync(
+            item => item.UserId == userId,
+            TestContext.Current.CancellationToken);
+        var outbox = await verificationDb.AuthenticationEmailOutboxMessages.SingleAsync(
+            item => item.UserId == userId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(user.EmailConfirmedAt);
+        Assert.Equal(token.ExpiresAt, outbox.ExpiresAt);
     }
 }

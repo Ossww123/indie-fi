@@ -27,7 +27,10 @@ public class SignupModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        var result = await _accountRegistrationService.RegisterAsync(Email, Password);
+        var result = await _accountRegistrationService.RegisterAsync(
+            Email,
+            Password,
+            HttpContext.RequestAborted);
 
         if (result.Outcome == AccountRegistrationOutcome.EmailAlreadyRegistered)
         {
@@ -47,7 +50,8 @@ public class SignupModel : PageModel
 
         // Redirect after a successful POST so refreshing the page does not resubmit.
         TempData["SignupMessage"] =
-            $"{UserDisplayIdentifier.Format(result.UserId!.Value)} 가입 완료";
+            $"{UserDisplayIdentifier.Format(result.UserId!.Value)} 가입 완료. " +
+            "이메일 확인 메일을 확인해 주세요.";
         return RedirectToPage("/Index");
     }
 }

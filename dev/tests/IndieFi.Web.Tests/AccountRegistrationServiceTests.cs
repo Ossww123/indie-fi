@@ -1,9 +1,13 @@
+using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -11,6 +15,9 @@ namespace IndieFi.Web.Tests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class AccountRegistrationServiceTests
 {
+    private static readonly DateTimeOffset Now =
+        new(2026, 8, 14, 8, 0, 0, TimeSpan.Zero);
+
     private readonly PostgreSqlFixture _fixture;
 
     public AccountRegistrationServiceTests(PostgreSqlFixture fixture)
@@ -29,8 +36,8 @@ public sealed class AccountRegistrationServiceTests
         AccountRegistrationResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new AccountRegistrationService(serviceDb, passwordHasher, emailProtection)
-                .RegisterAsync(email, password);
+            result = await NewService(serviceDb, passwordHasher)
+                .RegisterAsync(email, password, TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -43,6 +50,20 @@ public sealed class AccountRegistrationServiceTests
         var lookup = await verificationDb.UserEmailLookups.SingleAsync(
             item => item.UserId == user.Id,
             TestContext.Current.CancellationToken);
+        var token = await verificationDb.EmailConfirmationTokens.SingleAsync(
+            item => item.UserId == user.Id,
+            TestContext.Current.CancellationToken);
+        var outbox = await verificationDb.AuthenticationEmailOutboxMessages.SingleAsync(
+            item => item.UserId == user.Id,
+            TestContext.Current.CancellationToken);
+        var plaintextToken = TestAccountProtection.CreateMessageProtectionService().Unprotect(
+            user.Id,
+            outbox.Kind,
+            new ProtectedAuthenticationEmailPayload(
+                outbox.PayloadCiphertext,
+                outbox.PayloadNonce,
+                outbox.PayloadAuthenticationTag,
+                outbox.PayloadKeyId));
 
         Assert.Equal(AccountRegistrationOutcome.Registered, result.Outcome);
         Assert.Equal(user.Id, result.UserId);
@@ -68,6 +89,13 @@ public sealed class AccountRegistrationServiceTests
                 user.EmailEncryptionKeyId!)));
         Assert.Equal("lookup-test-v1", lookup.KeyId);
         Assert.Equal(EmailProtectionService.LookupValueSize, lookup.Value.Length);
+        Assert.Null(user.EmailConfirmedAt);
+        Assert.Equal(Now, token.CreatedAt);
+        Assert.Equal(Now.Add(EmailConfirmationTokenService.TokenLifetime), token.ExpiresAt);
+        Assert.Equal(token.ExpiresAt, outbox.ExpiresAt);
+        Assert.Equal(
+            token.TokenHash,
+            SHA256.HashData(Encoding.UTF8.GetBytes(plaintextToken)));
     }
 
     [Fact]
@@ -80,8 +108,11 @@ public sealed class AccountRegistrationServiceTests
         {
             userCountBefore = await serviceDb.Users.LongCountAsync(
                 TestContext.Current.CancellationToken);
-            result = await new AccountRegistrationService(serviceDb, new PasswordHasher<User>(), TestAccountProtection.CreateService())
-                .RegisterAsync("not-an-email", "short");
+            result = await NewService(serviceDb, new PasswordHasher<User>())
+                .RegisterAsync(
+                    "not-an-email",
+                    "short",
+                    TestContext.Current.CancellationToken);
 
             userCountAfter = await serviceDb.Users.LongCountAsync(
                 TestContext.Current.CancellationToken);
@@ -105,11 +136,11 @@ public sealed class AccountRegistrationServiceTests
         AccountRegistrationResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new AccountRegistrationService(
-                    serviceDb,
-                    new PasswordHasher<User>(),
-                    TestAccountProtection.CreateService())
-                .RegisterAsync(input, "Known-Test-Password-123!");
+            result = await NewService(serviceDb, new PasswordHasher<User>())
+                .RegisterAsync(
+                    input,
+                    "Known-Test-Password-123!",
+                    TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -146,11 +177,11 @@ public sealed class AccountRegistrationServiceTests
         await using var db = _fixture.NewDbContext();
         var userCountBefore = await db.Users.LongCountAsync(
             TestContext.Current.CancellationToken);
-        var result = await new AccountRegistrationService(
-                db,
-                new PasswordHasher<User>(),
-                TestAccountProtection.CreateService())
-            .RegisterAsync(email, "Known-Test-Password-123!");
+        var result = await NewService(db, new PasswordHasher<User>())
+            .RegisterAsync(
+                email,
+                "Known-Test-Password-123!",
+                TestContext.Current.CancellationToken);
 
         Assert.Equal(AccountRegistrationOutcome.Invalid, result.Outcome);
         Assert.Contains(
@@ -172,8 +203,11 @@ public sealed class AccountRegistrationServiceTests
 
         await using (var firstDb = _fixture.NewDbContext())
         {
-            var firstResult = await new AccountRegistrationService(firstDb, passwordHasher, TestAccountProtection.CreateService())
-                .RegisterAsync(email, firstPassword);
+            var firstResult = await NewService(firstDb, passwordHasher)
+                .RegisterAsync(
+                    email,
+                    firstPassword,
+                    TestContext.Current.CancellationToken);
             Assert.Equal(AccountRegistrationOutcome.Registered, firstResult.Outcome);
             firstUserId = firstResult.UserId!.Value;
         }
@@ -181,8 +215,11 @@ public sealed class AccountRegistrationServiceTests
         AccountRegistrationResult duplicateResult;
         await using (var duplicateDb = _fixture.NewDbContext())
         {
-            duplicateResult = await new AccountRegistrationService(duplicateDb, passwordHasher, TestAccountProtection.CreateService())
-                .RegisterAsync(email.ToUpperInvariant(), secondPassword);
+            duplicateResult = await NewService(duplicateDb, passwordHasher)
+                .RegisterAsync(
+                    email.ToUpperInvariant(),
+                    secondPassword,
+                    TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -205,6 +242,12 @@ public sealed class AccountRegistrationServiceTests
         var entry = Assert.Single(entries);
         Assert.Equal(3, entry.Delta);
         Assert.Equal(3, user.CreditBalance);
+        Assert.Single(await verificationDb.EmailConfirmationTokens
+            .Where(token => token.UserId == user.Id)
+            .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Single(await verificationDb.AuthenticationEmailOutboxMessages
+            .Where(message => message.UserId == user.Id)
+            .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -239,14 +282,111 @@ public sealed class AccountRegistrationServiceTests
         Assert.Equal(CreditEntryKind.Grant, entry.Kind);
         Assert.Equal(3, entry.Delta);
         Assert.Equal(3, user.CreditBalance);
+        Assert.Single(await verificationDb.EmailConfirmationTokens
+            .Where(token => token.UserId == user.Id)
+            .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Single(await verificationDb.AuthenticationEmailOutboxMessages
+            .Where(message => message.UserId == user.Id)
+            .ToListAsync(TestContext.Current.CancellationToken));
 
         async Task<AccountRegistrationResult> RegisterAsync(
             string candidateEmail,
             string password)
         {
             await using var db = _fixture.NewDbContext();
-            return await new AccountRegistrationService(db, passwordHasher, TestAccountProtection.CreateService())
-                .RegisterAsync(candidateEmail, password);
+            return await NewService(db, passwordHasher)
+                .RegisterAsync(
+                    candidateEmail,
+                    password,
+                    TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenOutboxInsertFails_RollsBackAccountGrantAndToken()
+    {
+        var email = $"rollback-{Guid.NewGuid():N}@example.test";
+        var before = await ReadCountsAsync();
+
+        await using (var db = _fixture.NewDbContext(new ThrowOnOutboxInsertInterceptor()))
+        {
+            var exception = await Assert.ThrowsAsync<DbUpdateException>(() =>
+                NewService(db, new PasswordHasher<User>()).RegisterAsync(
+                    email,
+                    "Known-Test-Password-123!",
+                    TestContext.Current.CancellationToken));
+            Assert.IsType<InvalidOperationException>(exception.InnerException);
+        }
+
+        var after = await ReadCountsAsync();
+        Assert.Equal(before, after);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var lookup = Assert.Single(TestAccountProtection.CreateService()
+            .CreateReadableLookupValues(new AccountEmailAddress(email, email.ToUpperInvariant())));
+        Assert.False(await verificationDb.UserEmailLookups.AnyAsync(
+            item => item.KeyId == lookup.KeyId
+                && item.Value.SequenceEqual(lookup.Value),
+            TestContext.Current.CancellationToken));
+    }
+
+    private static AccountRegistrationService NewService(
+        IndieFi.Web.Data.AppDbContext db,
+        IPasswordHasher<User> passwordHasher)
+    {
+        var timeProvider = new FixedTimeProvider(Now);
+        return new AccountRegistrationService(
+            db,
+            passwordHasher,
+            TestAccountProtection.CreateService(),
+            new EmailConfirmationTokenService(db, timeProvider),
+            new AuthenticationEmailOutboxService(
+                db,
+                TestAccountProtection.CreateMessageProtectionService(),
+                timeProvider));
+    }
+
+    private async Task<(long Users, long Lookups, long Ledger, long Tokens, long Outbox)>
+        ReadCountsAsync()
+    {
+        await using var db = _fixture.NewDbContext();
+        return (
+            await db.Users.LongCountAsync(TestContext.Current.CancellationToken),
+            await db.UserEmailLookups.LongCountAsync(TestContext.Current.CancellationToken),
+            await db.CreditLedgerEntries.LongCountAsync(TestContext.Current.CancellationToken),
+            await db.EmailConfirmationTokens.LongCountAsync(TestContext.Current.CancellationToken),
+            await db.AuthenticationEmailOutboxMessages.LongCountAsync(
+                TestContext.Current.CancellationToken));
+    }
+
+    private sealed class FixedTimeProvider : TimeProvider
+    {
+        private readonly DateTimeOffset _utcNow;
+
+        public FixedTimeProvider(DateTimeOffset utcNow)
+        {
+            _utcNow = utcNow;
+        }
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+    }
+
+    private sealed class ThrowOnOutboxInsertInterceptor : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains(
+                    "INSERT INTO authentication_email_outbox_messages",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Forced Outbox insert failure.");
+            }
+
+            return new ValueTask<InterceptionResult<DbDataReader>>(result);
         }
     }
 }

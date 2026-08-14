@@ -41,20 +41,27 @@ public sealed class AccountRegistrationService
     private readonly AppDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly EmailProtectionService _emailProtection;
+    private readonly EmailConfirmationTokenService _emailConfirmationTokens;
+    private readonly AuthenticationEmailOutboxService _authenticationEmailOutbox;
 
     public AccountRegistrationService(
         AppDbContext db,
         IPasswordHasher<User> passwordHasher,
-        EmailProtectionService emailProtection)
+        EmailProtectionService emailProtection,
+        EmailConfirmationTokenService emailConfirmationTokens,
+        AuthenticationEmailOutboxService authenticationEmailOutbox)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _emailProtection = emailProtection;
+        _emailConfirmationTokens = emailConfirmationTokens;
+        _authenticationEmailOutbox = authenticationEmailOutbox;
     }
 
     public async Task<AccountRegistrationResult> RegisterAsync(
         string? email,
-        string? password)
+        string? password,
+        CancellationToken cancellationToken = default)
     {
         var violations = Validate(email, password, out var accountEmail);
         if (violations.Count > 0)
@@ -95,15 +102,29 @@ public sealed class AccountRegistrationService
             Delta = SignupGrant,
         });
 
+        await using var transaction = await _db.Database.BeginTransactionAsync(
+            cancellationToken);
+
         try
         {
-            // Saving both rows together prevents an intermediate state where the
-            // account exists but its signup grant does not.
-            await _db.SaveChangesAsync();
+            // The first save obtains the database-generated user ID needed to bind the
+            // encrypted Outbox payload to this account. The surrounding transaction keeps
+            // this intermediate state invisible until the token and message also exist.
+            await _db.SaveChangesAsync(cancellationToken);
+
+            var issue = _emailConfirmationTokens.StageForNewAccount(user.Id);
+            _authenticationEmailOutbox.StageEmailConfirmation(
+                user.Id,
+                issue.Token!,
+                issue.ExpiresAt!.Value);
+
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException { SqlState: UniqueViolation })
         {
+            await transaction.RollbackAsync(cancellationToken);
             // Two requests can both pass an application-side availability check.
             // The unique index is the final authority for which registration wins.
             return new AccountRegistrationResult(
