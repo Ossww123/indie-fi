@@ -50,10 +50,14 @@ builder.Services.AddKeyDistributionsModule();
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);
+var googleClientId = googleAuthenticationSection[
+    nameof(GoogleAuthenticationSettings.ClientId)] ?? string.Empty;
+var googleClientSecret = googleAuthenticationSection[
+    nameof(GoogleAuthenticationSettings.ClientSecret)] ?? string.Empty;
 
 // Successful app logins use one cookie. Google first writes only to the short-lived
 // external cookie so its claims can be validated before an IndieFi session is issued.
-builder.Services
+var authenticationBuilder = builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -74,13 +78,15 @@ builder.Services
         options.Cookie.MaxAge = ExternalAuthenticationDefaults.TemporaryLifetime;
         options.ExpireTimeSpan = ExternalAuthenticationDefaults.TemporaryLifetime;
         options.SlidingExpiration = false;
-    })
-    .AddGoogle(ExternalLoginPolicy.GoogleProvider, options =>
+    });
+
+if (!string.IsNullOrWhiteSpace(googleClientId)
+    && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    authenticationBuilder.AddGoogle(ExternalLoginPolicy.GoogleProvider, options =>
     {
-        options.ClientId = googleAuthenticationSection[
-            nameof(GoogleAuthenticationSettings.ClientId)] ?? string.Empty;
-        options.ClientSecret = googleAuthenticationSection[
-            nameof(GoogleAuthenticationSettings.ClientSecret)] ?? string.Empty;
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
         options.SignInScheme = ExternalAuthenticationDefaults.TemporaryScheme;
         options.SaveTokens = false;
         options.RemoteAuthenticationTimeout =
@@ -108,6 +114,7 @@ builder.Services
             context.Response.Redirect("/Login?googleError=remote");
         };
     });
+}
 
 var app = builder.Build();
 

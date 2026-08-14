@@ -115,8 +115,6 @@ internal static class TestAccountProtection
             ["AccountProtection:Purposes:account-request-ip-lookup:WriteKeyIds:0"] = "request-ip-test-v1",
             ["AccountProtection:Purposes:account-request-ip-lookup:Keys:request-ip-test-v1"] = Convert.ToBase64String(RequestIpKey),
             ["AuthenticationEmail:Enabled"] = "false",
-            ["Authentication:Google:ClientId"] = "google-test-client-id",
-            ["Authentication:Google:ClientSecret"] = "google-test-client-secret",
         };
     }
 

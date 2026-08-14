@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Claims;
+using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Domain;
@@ -87,7 +88,8 @@ public sealed class GoogleLoginPageTests
             $"/GoogleLogin?handler=Callback&returnUrl={Uri.EscapeDataString(returnUrl)}",
             subject,
             email: "linked@example.test",
-            emailVerified: true);
+            emailVerified: true,
+            includeProviderTokens: true);
 
         using var response = await client.SendAsync(
             request,
@@ -115,6 +117,7 @@ public sealed class GoogleLoginPageTests
             applicationTicket.Principal.Claims,
             claim => claim.Type == ClaimTypes.Email
                 || claim.Value.Contains("linked@example.test", StringComparison.Ordinal));
+        Assert.Empty(applicationTicket.Properties.GetTokens());
     }
 
     [Fact]
@@ -601,6 +604,106 @@ public sealed class GoogleLoginPageTests
     }
 
     [Fact]
+    public async Task Callback_WithExpiredTemporaryIdentity_DoesNotCreateOrSignInAccount()
+    {
+        var email = $"expired-google-{Guid.NewGuid():N}@example.test";
+        var subject = $"expired-google-subject-{Guid.NewGuid():N}";
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var request = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            subject,
+            email,
+            emailVerified: true,
+            expiresUtc: DateTimeOffset.UtcNow.AddMinutes(-1));
+
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/Login", response.Headers.Location?.OriginalString);
+        var setCookies = response.Headers.GetValues("Set-Cookie").ToArray();
+        Assert.DoesNotContain(
+            setCookies,
+            value => value.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal));
+        Assert.Contains(
+            setCookies,
+            value => value.StartsWith(
+                $"{ExternalAuthenticationDefaults.TemporaryCookieName}=",
+                StringComparison.Ordinal));
+
+        await using var db = _fixture.NewDbContext();
+        Assert.False(await db.ExternalLogins.AnyAsync(
+            item => item.Provider == ExternalLoginPolicy.GoogleProvider
+                && item.ProviderUserId == subject,
+            TestContext.Current.CancellationToken));
+        Assert.False(await EmailLookupExistsAsync(db, email));
+    }
+
+    [Fact]
+    public async Task ConcurrentCallbacks_WithDifferentSubjectsAndSameEmail_CreateOneRewardedAccount()
+    {
+        var email = $"competing-google-{Guid.NewGuid():N}@example.test";
+        var firstSubject = $"competing-google-first-{Guid.NewGuid():N}";
+        var secondSubject = $"competing-google-second-{Guid.NewGuid():N}";
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var firstClient = factory.CreateClient();
+        using var secondClient = factory.CreateClient();
+        using var firstRequest = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            firstSubject,
+            email,
+            emailVerified: true);
+        using var secondRequest = CreateCallbackRequest(
+            factory,
+            "/GoogleLogin?handler=Callback",
+            secondSubject,
+            email,
+            emailVerified: true);
+
+        var firstTask = firstClient.SendAsync(
+            firstRequest,
+            TestContext.Current.CancellationToken);
+        var secondTask = secondClient.SendAsync(
+            secondRequest,
+            TestContext.Current.CancellationToken);
+        var responses = await Task.WhenAll(firstTask, secondTask);
+        using var firstResponse = responses[0];
+        using var secondResponse = responses[1];
+
+        Assert.Single(
+            responses,
+            response => response.Headers.Location?.OriginalString == "/"
+                && response.Headers.GetValues("Set-Cookie").Any(
+                    value => value.StartsWith(
+                        ".AspNetCore.Cookies=",
+                        StringComparison.Ordinal)));
+        Assert.Single(
+            responses,
+            response => response.Headers.Location?.OriginalString == "/Login");
+
+        await using var db = _fixture.NewDbContext();
+        var user = await TestAccountProtection.FindUserAsync(
+            db,
+            email,
+            TestContext.Current.CancellationToken);
+        var login = await db.ExternalLogins.SingleAsync(
+            item => item.UserId == user.Id
+                && item.Provider == ExternalLoginPolicy.GoogleProvider,
+            TestContext.Current.CancellationToken);
+        Assert.Contains(login.ProviderUserId, new[] { firstSubject, secondSubject });
+        Assert.Equal(1, await db.CreditLedgerEntries.CountAsync(
+            item => item.UserId == user.Id
+                && item.Kind == CreditEntryKind.Grant
+                && item.Delta == CreditPolicy.NewAccountGrant,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(CreditPolicy.NewAccountGrant, user.CreditBalance);
+    }
+
+    [Fact]
     public async Task GetLogin_AfterGoogleRemoteFailure_ShowsSeparateGoogleMessage()
     {
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
@@ -653,12 +756,35 @@ public sealed class GoogleLoginPageTests
         return user.Id;
     }
 
+    private static async Task<bool> EmailLookupExistsAsync(
+        AppDbContext db,
+        string email)
+    {
+        Assert.True(AccountEmailAddressPolicy.TryCreate(email, out var address, out _));
+        foreach (var lookup in TestAccountProtection
+                     .CreateService()
+                     .CreateReadableLookupValues(address!))
+        {
+            if (await db.UserEmailLookups.AnyAsync(
+                    item => item.KeyId == lookup.KeyId
+                        && item.Value.SequenceEqual(lookup.Value),
+                    TestContext.Current.CancellationToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static HttpRequestMessage CreateCallbackRequest(
         WebAppFactory factory,
         string requestUri,
         string subject,
         string email,
-        bool emailVerified)
+        bool emailVerified,
+        DateTimeOffset? expiresUtc = null,
+        bool includeProviderTokens = false)
     {
         return CreateExternalRequest(
             factory,
@@ -666,7 +792,9 @@ public sealed class GoogleLoginPageTests
             requestUri,
             subject,
             email,
-            emailVerified);
+            emailVerified,
+            expiresUtc: expiresUtc,
+            includeProviderTokens: includeProviderTokens);
     }
 
     private static HttpRequestMessage CreateExternalRequest(
@@ -676,7 +804,9 @@ public sealed class GoogleLoginPageTests
         string subject,
         string email,
         bool emailVerified,
-        HttpContent? content = null)
+        HttpContent? content = null,
+        DateTimeOffset? expiresUtc = null,
+        bool includeProviderTokens = false)
     {
         var options = factory.Services
             .GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
@@ -689,16 +819,34 @@ public sealed class GoogleLoginPageTests
                 ExternalAuthenticationDefaults.GoogleEmailVerifiedClaim,
                 emailVerified.ToString()),
         };
+        var properties = new AuthenticationProperties
+        {
+            IssuedUtc = DateTimeOffset.UtcNow,
+            ExpiresUtc = expiresUtc ?? DateTimeOffset.UtcNow.Add(
+                ExternalAuthenticationDefaults.TemporaryLifetime),
+        };
+        if (includeProviderTokens)
+        {
+            properties.StoreTokens(
+            [
+                new AuthenticationToken
+                {
+                    Name = "access_token",
+                    Value = "provider-access-token-must-not-cross-boundary",
+                },
+                new AuthenticationToken
+                {
+                    Name = "refresh_token",
+                    Value = "provider-refresh-token-must-not-cross-boundary",
+                },
+            ]);
+        }
+
         var ticket = new AuthenticationTicket(
             new ClaimsPrincipal(new ClaimsIdentity(
                 claims,
                 ExternalAuthenticationDefaults.TemporaryScheme)),
-            new AuthenticationProperties
-            {
-                IssuedUtc = DateTimeOffset.UtcNow,
-                ExpiresUtc = DateTimeOffset.UtcNow.Add(
-                    ExternalAuthenticationDefaults.TemporaryLifetime),
-            },
+            properties,
             ExternalAuthenticationDefaults.TemporaryScheme);
         var protectedTicket = options.TicketDataFormat.Protect(ticket);
         var request = new HttpRequestMessage(method, requestUri)

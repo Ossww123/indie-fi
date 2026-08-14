@@ -3,6 +3,7 @@ using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages;
 
@@ -13,10 +14,12 @@ public class LoginModel : PageModel
 
     public LoginModel(
         AccountAuthenticationService accountAuthenticationService,
-        AccountSignInService accountSignInService)
+        AccountSignInService accountSignInService,
+        IOptions<GoogleAuthenticationSettings> googleAuthentication)
     {
         _accountAuthenticationService = accountAuthenticationService;
         _accountSignInService = accountSignInService;
+        GoogleLoginAvailable = googleAuthentication.Value.IsConfigured;
     }
 
     [BindProperty]
@@ -45,6 +48,8 @@ public class LoginModel : PageModel
         ?? (string.Equals(GoogleError, "remote", StringComparison.Ordinal)
             ? "Google 인증을 완료하지 못했습니다. 이메일 로그인은 계속 사용할 수 있습니다."
             : null);
+
+    public bool GoogleLoginAvailable { get; }
 
     public async Task<IActionResult> OnPostAsync()
     {

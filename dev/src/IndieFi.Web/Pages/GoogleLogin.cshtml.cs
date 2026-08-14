@@ -4,6 +4,7 @@ using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages;
 
@@ -17,13 +18,16 @@ public sealed class GoogleLoginModel : PageModel
 
     private readonly GoogleAccountService _googleAccounts;
     private readonly AccountSignInService _accountSignIn;
+    private readonly bool _googleLoginAvailable;
 
     public GoogleLoginModel(
         GoogleAccountService googleAccounts,
-        AccountSignInService accountSignIn)
+        AccountSignInService accountSignIn,
+        IOptions<GoogleAuthenticationSettings> googleAuthentication)
     {
         _googleAccounts = googleAccounts;
         _accountSignIn = accountSignIn;
+        _googleLoginAvailable = googleAuthentication.Value.IsConfigured;
     }
 
     [TempData]
@@ -39,6 +43,13 @@ public sealed class GoogleLoginModel : PageModel
     {
         SetPrivateResponseHeaders();
         await HttpContext.SignOutAsync(ExternalAuthenticationDefaults.TemporaryScheme);
+
+        if (!_googleLoginAvailable)
+        {
+            GoogleLoginError =
+                "Google 로그인이 설정되지 않았습니다. 이메일 로그인을 이용해 주세요.";
+            return RedirectToPage("/Login");
+        }
 
         var safeReturnUrl = GetSafeReturnUrl(returnUrl);
         var callbackUrl = Url.Page(
