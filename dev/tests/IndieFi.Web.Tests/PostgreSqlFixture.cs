@@ -43,8 +43,20 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 
     public AppDbContext NewDbContext(params IInterceptor[] interceptors)
     {
+        return NewDbContext(CreateApplicationConnectionString(), interceptors);
+    }
+
+    public AppDbContext NewOwnerDbContext(params IInterceptor[] interceptors)
+    {
+        return NewDbContext(_container.GetConnectionString(), interceptors);
+    }
+
+    private static AppDbContext NewDbContext(
+        string connectionString,
+        IInterceptor[] interceptors)
+    {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(CreateApplicationConnectionString())
+            .UseNpgsql(connectionString)
             .AddInterceptors(interceptors)
             .Options;
 
