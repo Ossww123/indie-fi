@@ -32,6 +32,9 @@ public class LoginModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    [TempData]
+    public string? StatusMessage { get; set; }
+
     public async Task<IActionResult> OnPostAsync()
     {
         if (!ModelState.IsValid)
