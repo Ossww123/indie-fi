@@ -11,6 +11,11 @@
     <div class="alert-success mb-6">@Model.StatusMessage</div>
 }
 
+@if (Model.GoogleErrorMessage is not null)
+{
+    <div class="alert-warning mb-6" role="alert">@Model.GoogleErrorMessage</div>
+}
+
 <form method="post" class="form-stack">
     <input type="hidden" asp-for="ReturnUrl" />
     <div asp-validation-summary="ModelOnly"></div>

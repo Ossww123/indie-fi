@@ -35,6 +35,17 @@ public class LoginModel : PageModel
     [TempData]
     public string? StatusMessage { get; set; }
 
+    [TempData]
+    public string? GoogleLoginError { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? GoogleError { get; set; }
+
+    public string? GoogleErrorMessage => GoogleLoginError
+        ?? (string.Equals(GoogleError, "remote", StringComparison.Ordinal)
+            ? "Google 인증을 완료하지 못했습니다. 이메일 로그인은 계속 사용할 수 있습니다."
+            : null);
+
     public async Task<IActionResult> OnPostAsync()
     {
         if (!ModelState.IsValid)

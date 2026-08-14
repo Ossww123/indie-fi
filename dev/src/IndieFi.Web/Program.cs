@@ -97,6 +97,16 @@ builder.Services
             ExternalAuthenticationDefaults.GoogleEmailVerifiedClaim,
             "email_verified",
             ClaimValueTypes.Boolean);
+        options.Events.OnRemoteFailure = async context =>
+        {
+            context.HandleResponse();
+            await context.HttpContext.SignOutAsync(
+                ExternalAuthenticationDefaults.TemporaryScheme);
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers.Pragma = "no-cache";
+            context.Response.Headers["Referrer-Policy"] = "no-referrer";
+            context.Response.Redirect("/Login?googleError=remote");
+        };
     });
 
 var app = builder.Build();
