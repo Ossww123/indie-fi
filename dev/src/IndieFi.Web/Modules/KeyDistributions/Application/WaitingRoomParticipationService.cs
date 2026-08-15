@@ -60,6 +60,15 @@ public sealed class WaitingRoomParticipationService
             return evaluation.Result;
         }
 
+        var finalization = await FinalizeIfOpenAsync(
+            dropId,
+            evaluation.State!,
+            cancellationToken);
+        if (finalization is not null)
+        {
+            return finalization;
+        }
+
         try
         {
             var entry = await _store.GetEntryAsync(dropId, userId, cancellationToken);
@@ -91,6 +100,14 @@ public sealed class WaitingRoomParticipationService
         var mode = state.DatabaseNow < state.OpensAt
             ? WaitingRoomJoinMode.PreOpen
             : WaitingRoomJoinMode.Open;
+        var finalization = await FinalizeIfOpenAsync(
+            dropId,
+            state,
+            cancellationToken);
+        if (finalization is not null)
+        {
+            return finalization;
+        }
         try
         {
             var joined = await _store.JoinAsync(
@@ -176,6 +193,31 @@ public sealed class WaitingRoomParticipationService
         }
 
         return Result(WaitingRoomParticipationOutcome.Available, state);
+    }
+
+    private async Task<WaitingRoomParticipationResult?> FinalizeIfOpenAsync(
+        long dropId,
+        DropState state,
+        CancellationToken cancellationToken)
+    {
+        if (state.DatabaseNow < state.OpensAt)
+        {
+            return null;
+        }
+
+        try
+        {
+            var result = await _store.FinalizeOrderAsync(dropId, cancellationToken);
+            return result.Outcome == WaitingRoomOrderFinalizationOutcome.Terminal
+                ? new WaitingRoomParticipationResult(
+                    WaitingRoomParticipationOutcome.Terminal)
+                : null;
+        }
+        catch (WaitingRoomUnavailableException)
+        {
+            return new WaitingRoomParticipationResult(
+                WaitingRoomParticipationOutcome.Unavailable);
+        }
     }
 
     private static GateEvaluation Result(

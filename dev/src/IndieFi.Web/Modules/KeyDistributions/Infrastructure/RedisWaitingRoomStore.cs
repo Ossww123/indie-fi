@@ -1,6 +1,7 @@
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
 using StackExchange.Redis;
 
 namespace IndieFi.Web.Modules.KeyDistributions.Infrastructure;
@@ -146,6 +147,80 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         return {1, entry}
         """;
 
+    private const string FinalizeOrderScript = """
+        local function split_entry(value)
+            local parts = {}
+            for part in string.gmatch(value .. '|', '(.-)|') do
+                table.insert(parts, part)
+            end
+            return parts
+        end
+
+        local function refresh_ttl(ttl)
+            for index = 1, #KEYS do
+                if redis.call('EXISTS', KEYS[index]) == 1 then
+                    redis.call('PEXPIRE', KEYS[index], ttl)
+                end
+            end
+        end
+
+        if redis.call('HGET', KEYS[1], 'terminal') == '1' then
+            return {3, 0}
+        end
+
+        if redis.call('HGET', KEYS[1], 'order_finalized') == '1' then
+            return {2, redis.call('ZCARD', KEYS[4])}
+        end
+
+        local pre_users = redis.call('ZRANGE', KEYS[3], 0, -1)
+        local tail_users = redis.call('ZRANGE', KEYS[4], 0, -1)
+        local randomized = {}
+        for _, user_id in ipairs(pre_users) do
+            local digest = redis.sha1hex(ARGV[1] .. ':' .. user_id)
+            table.insert(randomized, {
+                user_id = user_id,
+                score = tonumber(string.sub(digest, 1, 13), 16)
+            })
+        end
+        table.sort(randomized, function(left, right)
+            if left.score == right.score then
+                return left.user_id < right.user_id
+            end
+            return left.score < right.score
+        end)
+
+        redis.call('DEL', KEYS[4])
+        local seen = {}
+        local order = 0
+        local function append_user(user_id)
+            if seen[user_id] then
+                return
+            end
+            local existing = redis.call('HGET', KEYS[2], user_id)
+            if not existing then
+                return
+            end
+            seen[user_id] = true
+            order = order + 1
+            local parts = split_entry(existing)
+            local updated = '1|2|' .. order .. '|' .. parts[4] .. '|'
+            redis.call('HSET', KEYS[2], user_id, updated)
+            redis.call('ZADD', KEYS[4], order, user_id)
+        end
+
+        for _, ranked in ipairs(randomized) do
+            append_user(ranked.user_id)
+        end
+        for _, user_id in ipairs(tail_users) do
+            append_user(user_id)
+        end
+
+        redis.call('DEL', KEYS[3])
+        redis.call('HSET', KEYS[1], 'next_order', order, 'order_finalized', 1)
+        refresh_ttl(tonumber(ARGV[2]))
+        return {1, order}
+        """;
+
     private readonly WaitingRoomRedisConnection _connection;
     private readonly WaitingRoomRedisKeys _keys;
     private readonly WaitingRoomPolicyOptions _policy;
@@ -257,6 +332,31 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             ? null
             : WaitingRoomRedisValueCodec.Deserialize((RedisValue)parts[1]);
         return new WaitingRoomTransitionResult(outcome, entry);
+    }
+
+    public async Task<WaitingRoomOrderFinalizationResult> FinalizeOrderAsync(
+        long dropId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
+        var seed = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var result = await EvaluateAsync(
+            FinalizeOrderScript,
+            _keys.All(dropId),
+            [seed, ToMilliseconds(_policy.ActiveStateTtl)],
+            cancellationToken);
+        var parts = GetResultParts(result);
+        var outcome = (int)parts[0] switch
+        {
+            1 => WaitingRoomOrderFinalizationOutcome.Finalized,
+            2 => WaitingRoomOrderFinalizationOutcome.AlreadyFinalized,
+            3 => WaitingRoomOrderFinalizationOutcome.Terminal,
+            var value => throw new InvalidOperationException(
+                $"Redis returned an unknown waiting-room finalization outcome: {value}."),
+        };
+        return new WaitingRoomOrderFinalizationResult(
+            outcome,
+            checked((int)(long)parts[1]));
     }
 
     private async Task<RedisResult> EvaluateAsync(

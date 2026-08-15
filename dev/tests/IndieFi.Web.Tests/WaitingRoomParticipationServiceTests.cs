@@ -175,5 +175,12 @@ public sealed class WaitingRoomParticipationServiceTests
             WaitingRoomTransitionCommand command,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<WaitingRoomOrderFinalizationResult> FinalizeOrderAsync(
+            long dropId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WaitingRoomOrderFinalizationResult(
+                WaitingRoomOrderFinalizationOutcome.AlreadyFinalized,
+                0));
     }
 }

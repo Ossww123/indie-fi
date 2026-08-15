@@ -16,6 +16,10 @@ public interface IWaitingRoomStore
     Task<WaitingRoomTransitionResult> TransitionAsync(
         WaitingRoomTransitionCommand command,
         CancellationToken cancellationToken = default);
+
+    Task<WaitingRoomOrderFinalizationResult> FinalizeOrderAsync(
+        long dropId,
+        CancellationToken cancellationToken = default);
 }
 
 public enum WaitingRoomJoinMode
@@ -58,3 +62,14 @@ public enum WaitingRoomTransitionOutcome
 public sealed record WaitingRoomTransitionResult(
     WaitingRoomTransitionOutcome Outcome,
     WaitingRoomStoredEntry? Entry);
+
+public enum WaitingRoomOrderFinalizationOutcome
+{
+    Finalized,
+    AlreadyFinalized,
+    Terminal,
+}
+
+public sealed record WaitingRoomOrderFinalizationResult(
+    WaitingRoomOrderFinalizationOutcome Outcome,
+    int WaitingCount);

@@ -175,6 +175,13 @@ public sealed class WaitingRoomPageTests
             WaitingRoomTransitionCommand command,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<WaitingRoomOrderFinalizationResult> FinalizeOrderAsync(
+            long dropId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WaitingRoomOrderFinalizationResult(
+                WaitingRoomOrderFinalizationOutcome.AlreadyFinalized,
+                Entries.Count));
     }
 
     private sealed class UnavailableWaitingRoomStore : IWaitingRoomStore
@@ -192,6 +199,11 @@ public sealed class WaitingRoomPageTests
 
         public Task<WaitingRoomTransitionResult> TransitionAsync(
             WaitingRoomTransitionCommand command,
+            CancellationToken cancellationToken = default) =>
+            throw new WaitingRoomUnavailableException("test unavailable");
+
+        public Task<WaitingRoomOrderFinalizationResult> FinalizeOrderAsync(
+            long dropId,
             CancellationToken cancellationToken = default) =>
             throw new WaitingRoomUnavailableException("test unavailable");
     }

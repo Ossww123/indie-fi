@@ -148,6 +148,72 @@ public sealed class RedisWaitingRoomStoreTests
     }
 
     [Fact]
+    public async Task FinalizeOrderAsync_RandomizesPreWaitingOnceAndKeepsOpenJoinsBehindIt()
+    {
+        const int PreWaitingCount = 20;
+        var dropId = NextDropId();
+        var store = _fixture.NewStore();
+        await Task.WhenAll(Enumerable.Range(1, PreWaitingCount).Select(userId =>
+            store.JoinAsync(
+                new WaitingRoomJoinCommand(
+                    dropId,
+                    userId,
+                    WaitingRoomJoinMode.PreOpen),
+                TestContext.Current.CancellationToken)));
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 100, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+
+        var finalizations = await Task.WhenAll(Enumerable.Range(0, 10).Select(_ =>
+            store.FinalizeOrderAsync(
+                dropId,
+                TestContext.Current.CancellationToken)));
+        var entries = await Task.WhenAll(
+            Enumerable.Range(1, PreWaitingCount)
+                .Append(100)
+                .Select(userId => store.GetEntryAsync(
+                    dropId,
+                    userId,
+                    TestContext.Current.CancellationToken)));
+        var tail = entries[^1]!;
+        var firstOrders = entries.Select(entry => entry!.Order).ToArray();
+
+        var repeated = await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var postOpen = await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 101, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        var database = await _fixture.GetDatabaseAsync();
+
+        Assert.Equal(
+            1,
+            finalizations.Count(result =>
+                result.Outcome == WaitingRoomOrderFinalizationOutcome.Finalized));
+        Assert.Equal(
+            9,
+            finalizations.Count(result =>
+                result.Outcome == WaitingRoomOrderFinalizationOutcome.AlreadyFinalized));
+        Assert.All(entries, entry => Assert.Equal(
+            WaitingRoomEntryState.Waiting,
+            entry!.State));
+        Assert.Equal(
+            Enumerable.Range(1, PreWaitingCount + 1).Select(value => (long)value),
+            firstOrders.Order());
+        Assert.Equal(PreWaitingCount + 1, tail.Order);
+        Assert.Equal(
+            WaitingRoomOrderFinalizationOutcome.AlreadyFinalized,
+            repeated.Outcome);
+        Assert.Equal(PreWaitingCount + 2, postOpen.Entry!.Order);
+        Assert.Equal(
+            0,
+            await database.SortedSetLengthAsync(_fixture.GetKeys().PreWaiting(dropId)));
+        Assert.Equal(
+            PreWaitingCount + 2,
+            await database.SortedSetLengthAsync(_fixture.GetKeys().Waiting(dropId)));
+    }
+
+    [Fact]
     public async Task JoinAsync_RefreshesActiveStateTtlAndHealthCheckUsesRealRedis()
     {
         var dropId = NextDropId();
