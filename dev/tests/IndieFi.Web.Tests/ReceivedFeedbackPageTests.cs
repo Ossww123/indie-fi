@@ -208,13 +208,23 @@ public sealed class ReceivedFeedbackPageTests
         db.ReviewAssignments.Add(assignment);
         await db.SaveChangesAsync(cancellationToken);
 
+        var earnEntry = new CreditLedgerEntry
+        {
+            UserId = reviewer.Id,
+            Kind = CreditEntryKind.Earn,
+            Delta = 1,
+        };
+
         // The read page does not need queue arbitration, so inserting the final row directly
         // keeps setup deterministic while preserving every database relationship and constraint.
         db.FeedbackSubmissions.Add(new FeedbackSubmission
         {
             AssignmentId = assignment.Id,
+            ReviewerId = reviewer.Id,
+            EarnEntry = earnEntry,
             Body = body,
         });
+        db.CreditLedgerEntries.Add(earnEntry);
         await db.SaveChangesAsync(cancellationToken);
 
         return new FeedbackTestData(

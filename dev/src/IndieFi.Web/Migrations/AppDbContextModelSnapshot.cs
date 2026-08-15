@@ -47,10 +47,25 @@ namespace IndieFi.Web.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<long>("EarnEntryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("earn_entry_id");
+
+                    b.Property<long>("ReviewerId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reviewer_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AssignmentId")
                         .IsUnique();
+
+                    b.HasIndex("EarnEntryId")
+                        .IsUnique();
+
+                    b.HasIndex("AssignmentId", "ReviewerId");
+
+                    b.HasIndex("EarnEntryId", "ReviewerId");
 
                     b.ToTable("feedback_submissions", null, t =>
                         {
@@ -360,6 +375,10 @@ namespace IndieFi.Web.Migrations
 
                     b.HasIndex("SpendEntryId")
                         .IsUnique();
+
+                    b.HasIndex("RefundEntryId", "RequesterId");
+
+                    b.HasIndex("SpendEntryId", "RequesterId");
 
                     b.ToTable("review_requests", null, t =>
                         {
@@ -834,7 +853,8 @@ namespace IndieFi.Web.Migrations
 
                     b.Property<string>("Kind")
                         .IsRequired()
-                        .HasColumnType("text")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
                         .HasColumnName("kind");
 
                     b.Property<long>("UserId")
@@ -845,7 +865,12 @@ namespace IndieFi.Web.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("credit_ledger_entries", (string)null);
+                    b.ToTable("credit_ledger_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_credit_ledger_entries_kind", "kind IN ('Grant', 'Spend', 'Earn', 'Refund')");
+
+                            t.HasCheckConstraint("CK_credit_ledger_entries_kind_delta", "kind NOT IN ('Grant', 'Spend', 'Earn', 'Refund') OR (kind = 'Grant' AND delta > 0) OR (kind = 'Spend' AND delta = -1) OR (kind = 'Earn' AND delta = 1) OR (kind = 'Refund' AND delta = 1)");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
@@ -874,9 +899,19 @@ namespace IndieFi.Web.Migrations
                 {
                     b.HasOne("IndieFi.Web.Entities.ReviewAssignment", null)
                         .WithMany()
-                        .HasForeignKey("AssignmentId")
+                        .HasForeignKey("AssignmentId", "ReviewerId")
+                        .HasPrincipalKey("Id", "ReviewerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", "EarnEntry")
+                        .WithMany()
+                        .HasForeignKey("EarnEntryId", "ReviewerId")
+                        .HasPrincipalKey("Id", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("EarnEntry");
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.Game", b =>
@@ -957,19 +992,21 @@ namespace IndieFi.Web.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", "RefundEntry")
-                        .WithMany()
-                        .HasForeignKey("RefundEntryId");
-
                     b.HasOne("IndieFi.Web.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("RequesterId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", "RefundEntry")
+                        .WithMany()
+                        .HasForeignKey("RefundEntryId", "RequesterId")
+                        .HasPrincipalKey("Id", "UserId");
+
                     b.HasOne("IndieFi.Web.Modules.Credits.Domain.CreditLedgerEntry", "SpendEntry")
                         .WithMany()
-                        .HasForeignKey("SpendEntryId")
+                        .HasForeignKey("SpendEntryId", "RequesterId")
+                        .HasPrincipalKey("Id", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

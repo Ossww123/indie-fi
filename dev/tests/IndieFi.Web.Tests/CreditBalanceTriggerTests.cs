@@ -68,7 +68,7 @@ public sealed class CreditBalanceTriggerTests
             {
                 UserId = userId,
                 Kind = CreditEntryKind.Spend,
-                Delta = -2,
+                Delta = -1,
             });
             await spendDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -84,7 +84,7 @@ public sealed class CreditBalanceTriggerTests
                 entry => entry.Delta,
                 TestContext.Current.CancellationToken);
 
-        Assert.Equal(3, finalBalance);
+        Assert.Equal(4, finalBalance);
         Assert.Equal(ledgerSum, finalBalance);
     }
 }

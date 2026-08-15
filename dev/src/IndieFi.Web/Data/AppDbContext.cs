@@ -515,7 +515,19 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         // a user's balance is the sum of all of their delta values.
         modelBuilder.Entity<CreditLedgerEntry>(creditLedgerEntry =>
         {
-            creditLedgerEntry.ToTable("credit_ledger_entries");
+            creditLedgerEntry.ToTable("credit_ledger_entries", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_credit_ledger_entries_kind",
+                    "kind IN ('Grant', 'Spend', 'Earn', 'Refund')");
+                table.HasCheckConstraint(
+                    "CK_credit_ledger_entries_kind_delta",
+                    "kind NOT IN ('Grant', 'Spend', 'Earn', 'Refund') OR "
+                    + "(kind = 'Grant' AND delta > 0) OR "
+                    + "(kind = 'Spend' AND delta = -1) OR "
+                    + "(kind = 'Earn' AND delta = 1) OR "
+                    + "(kind = 'Refund' AND delta = 1)");
+            });
 
             creditLedgerEntry.HasKey(e => e.Id);
             creditLedgerEntry.Property(e => e.Id).HasColumnName("id");
@@ -529,6 +541,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             creditLedgerEntry.Property(e => e.Kind)
                 .HasColumnName("kind")
                 .HasConversion<string>()
+                .HasMaxLength(16)
                 .IsRequired();
 
             creditLedgerEntry.Property(e => e.Delta)
@@ -543,6 +556,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             creditLedgerEntry.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId);
+
+            // Origin rows carry their user ID as well as the ledger ID. Referencing this pair
+            // makes the database reject attaching one user's movement to another user's action.
+            creditLedgerEntry.HasAlternateKey(e => new { e.Id, e.UserId });
 
             // The ledger screen reads one user's history in this order.
             creditLedgerEntry.HasIndex(e => e.UserId);
@@ -615,12 +632,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             reviewRequest.HasOne(r => r.SpendEntry)
                 .WithMany()
-                .HasForeignKey(r => r.SpendEntryId)
+                .HasForeignKey(r => new { r.SpendEntryId, r.RequesterId })
+                .HasPrincipalKey(e => new { e.Id, e.UserId })
                 .OnDelete(DeleteBehavior.Cascade);
 
             reviewRequest.HasOne(r => r.RefundEntry)
                 .WithMany()
-                .HasForeignKey(r => r.RefundEntryId);
+                .HasForeignKey(r => new { r.RefundEntryId, r.RequesterId })
+                .HasPrincipalKey(e => new { e.Id, e.UserId });
 
             // One credit spend creates exactly one request, so the database rejects
             // a second request even if application code tries to create it.
@@ -704,6 +723,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(a => a.ReviewerId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            reviewAssignment.HasAlternateKey(a => new { a.Id, a.ReviewerId });
+
             // One request may have at most one assignment that is still alive, so a second
             // reviewer cannot be handed work that someone else already holds. Expired
             // assignments are excluded because expiry returns the request to the queue.
@@ -738,6 +759,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("assignment_id")
                 .IsRequired();
 
+            feedbackSubmission.Property(s => s.ReviewerId)
+                .HasColumnName("reviewer_id")
+                .IsRequired();
+
+            feedbackSubmission.Property(s => s.EarnEntryId)
+                .HasColumnName("earn_entry_id")
+                .IsRequired();
+
             feedbackSubmission.Property(s => s.Body)
                 .HasColumnName("body")
                 .HasMaxLength(4000)
@@ -750,12 +779,22 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             feedbackSubmission.HasOne<ReviewAssignment>()
                 .WithMany()
-                .HasForeignKey(s => s.AssignmentId)
+                .HasForeignKey(s => new { s.AssignmentId, s.ReviewerId })
+                .HasPrincipalKey(a => new { a.Id, a.ReviewerId })
                 .OnDelete(DeleteBehavior.Cascade);
+
+            feedbackSubmission.HasOne(s => s.EarnEntry)
+                .WithMany()
+                .HasForeignKey(s => new { s.EarnEntryId, s.ReviewerId })
+                .HasPrincipalKey(e => new { e.Id, e.UserId })
+                .OnDelete(DeleteBehavior.Restrict);
 
             // One assignment produces at most one submission, so a second submit cannot create a
             // second row even if the conditional update above is somehow bypassed.
             feedbackSubmission.HasIndex(s => s.AssignmentId).IsUnique();
+
+            // A ledger movement can pay for only one feedback submission.
+            feedbackSubmission.HasIndex(s => s.EarnEntryId).IsUnique();
         });
     }
 }
