@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -106,7 +107,7 @@ builder.Services.AddProfilesModule();
 builder.Services.AddGamesModule();
 builder.Services.AddCreditsModule();
 builder.Services.AddFeedbackModule();
-builder.Services.AddKeyDistributionsModule();
+builder.Services.AddKeyDistributionsModule(builder.Configuration);
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);
@@ -203,6 +204,10 @@ app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    AllowCachingResponses = false,
+});
 
 app.Run();
 
