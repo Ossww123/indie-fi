@@ -94,6 +94,65 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("games", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.GamePlayLink", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("display_name");
+
+                    b.Property<long>("GameId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("game_id");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("provider");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("TargetPlatform")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("target_platform");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("game_play_links", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_game_play_links_display_name_not_blank", "length(btrim(display_name)) > 0");
+
+                            t.HasCheckConstraint("CK_game_play_links_provider", "provider IN ('Steam', 'ItchIo', 'DeveloperWebsite', 'Other')");
+
+                            t.HasCheckConstraint("CK_game_play_links_sort_order", "sort_order >= 0 AND sort_order < 5");
+
+                            t.HasCheckConstraint("CK_game_play_links_target_platform", "target_platform IS NULL OR target_platform IN ('Windows', 'MacOS', 'Linux', 'Web', 'Android', 'Ios', 'Multiple', 'Other')");
+
+                            t.HasCheckConstraint("CK_game_play_links_url_not_blank", "length(btrim(url)) > 0");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.KeyDrop", b =>
                 {
                     b.Property<long>("Id")
@@ -598,7 +657,7 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("UserId", "Provider")
                         .IsUnique();
 
-                    b.ToTable("external_logins", (string)null, t =>
+                    b.ToTable("external_logins", null, t =>
                         {
                             t.HasCheckConstraint("CK_external_logins_provider_user_id_not_blank", "length(btrim(provider_user_id)) > 0");
 
@@ -797,6 +856,15 @@ namespace IndieFi.Web.Migrations
                     b.HasOne("IndieFi.Web.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.GamePlayLink", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.Game", null)
+                        .WithMany()
+                        .HasForeignKey("GameId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

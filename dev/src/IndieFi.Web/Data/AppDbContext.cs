@@ -1,6 +1,7 @@
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Games.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 
@@ -30,6 +31,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
     public DbSet<Game> Games => Set<Game>();
+    public DbSet<GamePlayLink> GamePlayLinks => Set<GamePlayLink>();
 
     public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
 
@@ -345,6 +347,59 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             game.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(g => g.OwnerId);
+        });
+
+        modelBuilder.Entity<GamePlayLink>(link =>
+        {
+            link.ToTable("game_play_links", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_play_links_display_name_not_blank",
+                    "length(btrim(display_name)) > 0");
+                table.HasCheckConstraint(
+                    "CK_game_play_links_provider",
+                    "provider IN ('Steam', 'ItchIo', 'DeveloperWebsite', 'Other')");
+                table.HasCheckConstraint(
+                    "CK_game_play_links_target_platform",
+                    "target_platform IS NULL OR target_platform IN " +
+                    "('Windows', 'MacOS', 'Linux', 'Web', 'Android', 'Ios', 'Multiple', 'Other')");
+                table.HasCheckConstraint(
+                    "CK_game_play_links_url_not_blank",
+                    "length(btrim(url)) > 0");
+                table.HasCheckConstraint(
+                    "CK_game_play_links_sort_order",
+                    $"sort_order >= 0 AND sort_order < {GamePlayLinkPolicy.MaxLinksPerGame}");
+            });
+
+            link.HasKey(item => item.Id);
+            link.Property(item => item.Id).HasColumnName("id");
+            link.Property(item => item.GameId).HasColumnName("game_id").IsRequired();
+            link.Property(item => item.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(GamePlayLinkPolicy.DisplayNameMaxLength)
+                .IsRequired();
+            link.Property(item => item.Provider)
+                .HasColumnName("provider")
+                .HasConversion<string>()
+                .HasMaxLength(32)
+                .IsRequired();
+            link.Property(item => item.TargetPlatform)
+                .HasColumnName("target_platform")
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            link.Property(item => item.Url)
+                .HasColumnName("url")
+                .HasMaxLength(GamePlayLinkPolicy.UrlMaxLength)
+                .IsRequired();
+            link.Property(item => item.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired();
+
+            link.HasIndex(item => new { item.GameId, item.SortOrder }).IsUnique();
+            link.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => item.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<KeyDrop>(keyDrop =>
