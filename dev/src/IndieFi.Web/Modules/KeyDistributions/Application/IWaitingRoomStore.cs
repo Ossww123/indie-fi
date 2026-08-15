@@ -27,8 +27,7 @@ public enum WaitingRoomJoinMode
 public sealed record WaitingRoomJoinCommand(
     long DropId,
     long UserId,
-    WaitingRoomJoinMode Mode,
-    long NowUnixTimeMilliseconds);
+    WaitingRoomJoinMode Mode);
 
 public enum WaitingRoomJoinOutcome
 {
@@ -45,9 +44,7 @@ public sealed record WaitingRoomTransitionCommand(
     long DropId,
     long UserId,
     WaitingRoomEntryState ExpectedState,
-    WaitingRoomEntryState TargetState,
-    long NowUnixTimeMilliseconds,
-    long? AdmissionExpiresUnixTimeMilliseconds = null);
+    WaitingRoomEntryState TargetState);
 
 public enum WaitingRoomTransitionOutcome
 {
