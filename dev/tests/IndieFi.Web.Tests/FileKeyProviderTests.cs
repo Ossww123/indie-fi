@@ -45,6 +45,32 @@ public sealed class FileKeyProviderTests
     }
 
     [Fact]
+    public void Constructor_WhenKeyIdExceedsDatabaseLimit_RejectsKeyFile()
+    {
+        var tooLongKeyId = new string('k', 101);
+        var path = Path.Combine(
+            Path.GetTempPath(),
+            $"indiefi-invalid-key-id-{Guid.NewGuid():N}.json");
+        File.WriteAllText(
+            path,
+            TestAccountProtection.CreateKeyFileJson()
+                .Replace("email-test-v1", tooLongKeyId, StringComparison.Ordinal));
+
+        try
+        {
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => new FileKeyProvider(path));
+
+            Assert.Contains("100 characters or fewer", exception.Message);
+            Assert.DoesNotContain(tooLongKeyId, exception.Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void ProductionStartup_WithoutDedicatedKeyFile_RejectsGeneralConfigurationKeys()
     {
         using var baseFactory = new WebAppFactory(_fixture.ConnectionString);
