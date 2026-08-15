@@ -46,6 +46,37 @@ else
     <p class="mt-6 text-slate-500">(소개 없음)</p>
 }
 
+<h2 class="subsection-title mt-8">플레이하기</h2>
+@if (Model.PlayLinks.Count == 0)
+{
+    <div class="alert-neutral">등록된 외부 플레이 링크 없음</div>
+}
+else
+{
+    <div class="alert-warning">
+        아래 링크는 외부 사이트로 이동합니다. IndieFi는 외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.
+    </div>
+    <div class="surface-list">
+        @foreach (var link in Model.PlayLinks)
+        {
+            <a href="@link.Url"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="surface-item surface-link flex items-center justify-between gap-4">
+                <span class="font-semibold text-slate-900">@link.DisplayName</span>
+                <span class="flex flex-wrap items-center justify-end gap-2">
+                    <span class="badge-neutral">@link.ProviderText</span>
+                    @if (link.TargetPlatformText is { } platform)
+                    {
+                        <span class="badge-neutral">@platform</span>
+                    }
+                    <span class="text-meta whitespace-nowrap">새 창에서 열기 ↗</span>
+                </span>
+            </a>
+        }
+    </div>
+}
+
 @if (Model.IsOwner)
 {
     <h2 class="subsection-title mt-8">피드백 요청</h2>
