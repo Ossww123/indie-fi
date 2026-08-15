@@ -23,6 +23,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Validate operation scripts
+        run: bash -n dev/ops/*.sh
+
       # Build the whole solution rather than letting `dotnet test` build only what
       # the tests need. That is what catches a project which stopped compiling but
       # is not referenced by any test - it happened once and went unnoticed for

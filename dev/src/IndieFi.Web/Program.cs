@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Net;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Infrastructure.Authentication;
@@ -13,8 +14,22 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Query strings on authentication links contain one-time tokens. Keep request-start
+// and SQL-command categories above Information even if a broad logging override is
+// enabled, and never allow EF parameter values into logs.
+builder.Logging.AddFilter(
+    "Microsoft.AspNetCore.Hosting.Diagnostics",
+    LogLevel.Warning);
+builder.Logging.AddFilter(
+    "Microsoft.AspNetCore.HttpLogging",
+    LogLevel.Warning);
+builder.Logging.AddFilter(
+    "Microsoft.EntityFrameworkCore.Database.Command",
+    LogLevel.Warning);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -40,7 +55,50 @@ builder.Services.AddSingleton<
     GoogleAuthenticationSettingsValidator>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Database"));
+    options.EnableSensitiveDataLogging(false);
+    if (!builder.Environment.IsDevelopment())
+    {
+        options.EnableDetailedErrors(false);
+    }
+});
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.RequireHeaderSymmetry = true;
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Add(IPAddress.Loopback);
+    options.KnownProxies.Add(IPAddress.IPv6Loopback);
+
+    foreach (var value in builder.Configuration
+                 .GetSection("ReverseProxy:KnownProxies")
+                 .Get<string[]>() ?? [])
+    {
+        if (!IPAddress.TryParse(value, out var address))
+        {
+            throw new InvalidOperationException(
+                $"ReverseProxy:KnownProxies contains an invalid IP address: '{value}'.");
+        }
+
+        options.KnownProxies.Add(address);
+    }
+});
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.HttpsPort = 443;
+    options.RedirectStatusCode = StatusCodes.Status308PermanentRedirect;
+});
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(180);
+});
+builder.Services.AddIndieFiDataProtection(
+    builder.Configuration,
+    builder.Environment);
 
 builder.Services.AddAccountsModule();
 builder.Services.AddGamesModule();
@@ -119,14 +177,20 @@ if (!string.IsNullOrWhiteSpace(googleClientId)
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+// This must run before HTTPS redirection and authentication. Only the explicitly
+// trusted loopback proxy (or configured addresses) may describe the public scheme.
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (app.Environment.IsProduction())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
 
 app.UseRouting();
 

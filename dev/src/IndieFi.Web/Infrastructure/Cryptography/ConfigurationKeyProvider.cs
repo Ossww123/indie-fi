@@ -10,20 +10,25 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
     private readonly IReadOnlyDictionary<KeyPurpose, PurposeKeys> _purposes;
 
     public ConfigurationKeyProvider(IConfiguration configuration)
+        : this(configuration.GetSection(RootSection))
+    {
+    }
+
+    internal ConfigurationKeyProvider(IConfigurationSection purposesSection)
     {
         _purposes = new Dictionary<KeyPurpose, PurposeKeys>
         {
             [KeyPurpose.AccountEmailEncryption] = LoadPurpose(
-                configuration,
+                purposesSection,
                 KeyPurpose.AccountEmailEncryption),
             [KeyPurpose.AccountEmailLookup] = LoadPurpose(
-                configuration,
+                purposesSection,
                 KeyPurpose.AccountEmailLookup),
             [KeyPurpose.AccountEmailMessageEncryption] = LoadPurpose(
-                configuration,
+                purposesSection,
                 KeyPurpose.AccountEmailMessageEncryption),
             [KeyPurpose.AccountRequestIpLookup] = LoadPurpose(
-                configuration,
+                purposesSection,
                 KeyPurpose.AccountRequestIpLookup),
         };
 
@@ -72,10 +77,10 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
     }
 
     private static PurposeKeys LoadPurpose(
-        IConfiguration configuration,
+        IConfigurationSection purposesSection,
         KeyPurpose purpose)
     {
-        var section = configuration.GetSection($"{RootSection}:{purpose.Value}");
+        var section = purposesSection.GetSection(purpose.Value);
         var currentKeyId = RequireValue(section, "CurrentKeyId", purpose);
         var readKeyIds = RequireDistinctList(section, "ReadKeyIds", purpose);
         var writeKeyIds = RequireDistinctList(section, "WriteKeyIds", purpose);

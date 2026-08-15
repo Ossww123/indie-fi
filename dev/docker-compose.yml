@@ -27,7 +27,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in dev/.env - copy dev/.env.example}
       POSTGRES_DB: indiefi
     ports:
-      - "5432:5432"
+      # Keep the development database off the LAN as well as the public internet.
+      # Applications on this machine still connect through localhost.
+      - "127.0.0.1:5432:5432"
     volumes:
       # PostgreSQL 18+ stores data in a version-specific subdirectory,
       # so the mount point is /var/lib/postgresql (not .../data).

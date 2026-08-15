@@ -2,13 +2,14 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 
 namespace IndieFi.Web.Data;
 
 /// <summary>
 /// Entry point for all database access.
 /// </summary>
-public class AppDbContext : DbContext
+public class AppDbContext : DbContext, IDataProtectionKeyContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -16,6 +17,7 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
     public DbSet<UserEmailLookup> UserEmailLookups => Set<UserEmailLookup>();
     public DbSet<EmailConfirmationToken> EmailConfirmationTokens => Set<EmailConfirmationToken>();
     public DbSet<AuthenticationEmailOutboxMessage> AuthenticationEmailOutboxMessages =>
@@ -47,6 +49,14 @@ public class AppDbContext : DbContext
     {
         // Names are mapped explicitly to snake_case: PostgreSQL folds unquoted
         // identifiers to lower case, and this project writes raw SQL by hand.
+        modelBuilder.Entity<DataProtectionKey>(key =>
+        {
+            key.ToTable("data_protection_keys");
+            key.Property(item => item.Id).HasColumnName("id");
+            key.Property(item => item.FriendlyName).HasColumnName("friendly_name");
+            key.Property(item => item.Xml).HasColumnName("xml");
+        });
+
         modelBuilder.Entity<User>(user =>
         {
             user.ToTable("users", table =>
