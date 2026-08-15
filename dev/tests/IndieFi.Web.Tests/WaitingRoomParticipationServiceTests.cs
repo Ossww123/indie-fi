@@ -78,8 +78,9 @@ public sealed class WaitingRoomParticipationServiceTests
             AdmitOnAdvance = true,
         };
 
+        var notifier = new RecordingWaitingRoomNotifier();
         await using var db = _fixture.NewDbContext();
-        var result = await NewService(db, store).JoinAsync(
+        var result = await NewService(db, store, notifier).JoinAsync(
             arranged.DropId,
             arranged.UserId,
             TestContext.Current.CancellationToken);
@@ -90,6 +91,8 @@ public sealed class WaitingRoomParticipationServiceTests
         Assert.NotNull(result.Entry.AdmissionExpiresUnixTimeMilliseconds);
         Assert.Equal(1, result.Snapshot!.AdmittedCount);
         Assert.Equal(0, result.Snapshot.WaitingCount);
+        Assert.True(notifier.DropNotifications >= 1);
+        Assert.Contains(arranged.UserId, notifier.UserNotifications);
     }
 
     [Fact]
@@ -164,12 +167,38 @@ public sealed class WaitingRoomParticipationServiceTests
 
     private static WaitingRoomParticipationService NewService(
         AppDbContext db,
-        IWaitingRoomStore store) =>
+        IWaitingRoomStore store,
+        IWaitingRoomNotifier? notifier = null) =>
         new(
             db,
             new KeyDropEligibilityService(db),
             store,
+            notifier ?? NullWaitingRoomNotifier.Instance,
             Options.Create(new WaitingRoomPolicyOptions()));
+
+    private sealed class RecordingWaitingRoomNotifier : IWaitingRoomNotifier
+    {
+        public int DropNotifications { get; private set; }
+
+        public List<long> UserNotifications { get; } = [];
+
+        public Task NotifyDropChangedAsync(
+            long dropId,
+            CancellationToken cancellationToken = default)
+        {
+            DropNotifications++;
+            return Task.CompletedTask;
+        }
+
+        public Task NotifyUsersChangedAsync(
+            long dropId,
+            IReadOnlyCollection<long> userIds,
+            CancellationToken cancellationToken = default)
+        {
+            UserNotifications.AddRange(userIds);
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class RecordingWaitingRoomStore : IWaitingRoomStore
     {
@@ -233,6 +262,7 @@ public sealed class WaitingRoomParticipationServiceTests
             CancellationToken cancellationToken = default)
         {
             AdvanceCalls++;
+            IReadOnlyList<long> promoted = [];
             if (AdmitOnAdvance && ExistingEntry?.State == WaitingRoomEntryState.Waiting)
             {
                 ExistingEntry = ExistingEntry with
@@ -242,11 +272,12 @@ public sealed class WaitingRoomParticipationServiceTests
                         .AddMinutes(2)
                         .ToUnixTimeMilliseconds(),
                 };
+                promoted = LastJoinCommand is null ? [] : [LastJoinCommand.UserId];
             }
 
             return Task.FromResult(new WaitingRoomAdmissionAdvanceResult(
                 WaitingRoomAdmissionAdvanceOutcome.Advanced,
-                [],
+                promoted,
                 [],
                 ExistingEntry?.State == WaitingRoomEntryState.Admitted ? 1 : 0));
         }

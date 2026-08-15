@@ -5,10 +5,14 @@ namespace IndieFi.Web.Modules.KeyDistributions.Application;
 public sealed class WaitingRoomKeyClaimAdmissionGate : IKeyClaimAdmissionGate
 {
     private readonly IWaitingRoomStore _store;
+    private readonly IWaitingRoomNotifier _notifier;
 
-    public WaitingRoomKeyClaimAdmissionGate(IWaitingRoomStore store)
+    public WaitingRoomKeyClaimAdmissionGate(
+        IWaitingRoomStore store,
+        IWaitingRoomNotifier notifier)
     {
         _store = store;
+        _notifier = notifier;
     }
 
     public async Task<KeyClaimAdmissionOutcome> ValidateAsync(
@@ -47,7 +51,27 @@ public sealed class WaitingRoomKeyClaimAdmissionGate : IKeyClaimAdmissionGate
         long userId,
         CancellationToken cancellationToken = default)
     {
-        await _store.CompleteAsync(dropId, userId, cancellationToken);
-        await _store.AdvanceAdmissionsAsync(dropId, cancellationToken);
+        var completion = await _store.CompleteAsync(
+            dropId,
+            userId,
+            cancellationToken);
+        var admission = await _store.AdvanceAdmissionsAsync(
+            dropId,
+            cancellationToken);
+        var changedUserIds = admission.PromotedUserIds
+            .Concat(admission.ExpiredUserIds)
+            .Append(userId)
+            .Distinct()
+            .ToArray();
+        if (completion.Outcome != WaitingRoomCompletionOutcome.AlreadyCompleted
+            || admission.PromotedUserIds.Count > 0
+            || admission.ExpiredUserIds.Count > 0)
+        {
+            await _notifier.NotifyDropChangedAsync(dropId, cancellationToken);
+            await _notifier.NotifyUsersChangedAsync(
+                dropId,
+                changedUserIds,
+                cancellationToken);
+        }
     }
 }

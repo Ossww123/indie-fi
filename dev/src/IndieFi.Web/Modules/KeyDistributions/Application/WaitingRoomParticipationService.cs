@@ -36,17 +36,20 @@ public sealed class WaitingRoomParticipationService
     private readonly AppDbContext _db;
     private readonly KeyDropEligibilityService _eligibilityService;
     private readonly IWaitingRoomStore _store;
+    private readonly IWaitingRoomNotifier _notifier;
     private readonly WaitingRoomPolicyOptions _policy;
 
     public WaitingRoomParticipationService(
         AppDbContext db,
         KeyDropEligibilityService eligibilityService,
         IWaitingRoomStore store,
+        IWaitingRoomNotifier notifier,
         IOptions<WaitingRoomPolicyOptions> policy)
     {
         _db = db;
         _eligibilityService = eligibilityService;
         _store = store;
+        _notifier = notifier;
         _policy = policy.Value;
     }
 
@@ -154,6 +157,16 @@ public sealed class WaitingRoomParticipationService
                 _ => throw new InvalidOperationException(
                     $"Unsupported waiting-room join outcome: {joined.Outcome}"),
             };
+            if (joined.Outcome is WaitingRoomJoinOutcome.Created
+                or WaitingRoomJoinOutcome.Rejoined)
+            {
+                await _notifier.NotifyDropChangedAsync(dropId, cancellationToken);
+                await _notifier.NotifyUsersChangedAsync(
+                    dropId,
+                    [userId],
+                    cancellationToken);
+            }
+
             return new WaitingRoomParticipationResult(
                 outcome,
                 snapshot?.Entry ?? joined.Entry,
@@ -237,6 +250,11 @@ public sealed class WaitingRoomParticipationService
         try
         {
             var result = await _store.FinalizeOrderAsync(dropId, cancellationToken);
+            if (result.Outcome == WaitingRoomOrderFinalizationOutcome.Finalized)
+            {
+                await _notifier.NotifyDropChangedAsync(dropId, cancellationToken);
+            }
+
             return result.Outcome == WaitingRoomOrderFinalizationOutcome.Terminal
                 ? new WaitingRoomParticipationResult(
                     WaitingRoomParticipationOutcome.Terminal)
@@ -260,6 +278,19 @@ public sealed class WaitingRoomParticipationService
         }
 
         var result = await _store.AdvanceAdmissionsAsync(dropId, cancellationToken);
+        var changedUserIds = result.PromotedUserIds
+            .Concat(result.ExpiredUserIds)
+            .Distinct()
+            .ToArray();
+        if (changedUserIds.Length > 0)
+        {
+            await _notifier.NotifyDropChangedAsync(dropId, cancellationToken);
+            await _notifier.NotifyUsersChangedAsync(
+                dropId,
+                changedUserIds,
+                cancellationToken);
+        }
+
         return result.Outcome == WaitingRoomAdmissionAdvanceOutcome.Terminal
             ? new WaitingRoomParticipationResult(
                 WaitingRoomParticipationOutcome.Terminal)
