@@ -174,6 +174,7 @@ public sealed class WaitingRoomParticipationServiceTests
             new KeyDropEligibilityService(db),
             store,
             notifier ?? NullWaitingRoomNotifier.Instance,
+            NullWaitingRoomLifecycle.Instance,
             Options.Create(new WaitingRoomPolicyOptions()));
 
     private sealed class RecordingWaitingRoomNotifier : IWaitingRoomNotifier

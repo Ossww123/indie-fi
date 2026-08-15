@@ -37,6 +37,7 @@ public sealed class WaitingRoomParticipationService
     private readonly KeyDropEligibilityService _eligibilityService;
     private readonly IWaitingRoomStore _store;
     private readonly IWaitingRoomNotifier _notifier;
+    private readonly IWaitingRoomLifecycle _waitingRoomLifecycle;
     private readonly WaitingRoomPolicyOptions _policy;
 
     public WaitingRoomParticipationService(
@@ -44,12 +45,14 @@ public sealed class WaitingRoomParticipationService
         KeyDropEligibilityService eligibilityService,
         IWaitingRoomStore store,
         IWaitingRoomNotifier notifier,
+        IWaitingRoomLifecycle waitingRoomLifecycle,
         IOptions<WaitingRoomPolicyOptions> policy)
     {
         _db = db;
         _eligibilityService = eligibilityService;
         _store = store;
         _notifier = notifier;
+        _waitingRoomLifecycle = waitingRoomLifecycle;
         _policy = policy.Value;
     }
 
@@ -207,11 +210,6 @@ public sealed class WaitingRoomParticipationService
             return Result(WaitingRoomParticipationOutcome.NotEligible, state);
         }
 
-        if (state.AlreadyClaimed)
-        {
-            return Result(WaitingRoomParticipationOutcome.Completed, state);
-        }
-
         var status = KeyDropStatusPolicy.Resolve(
             state.OpensAt,
             state.TotalKeys,
@@ -220,12 +218,33 @@ public sealed class WaitingRoomParticipationService
             state.DatabaseNow);
         if (status == KeyDropStatus.SoldOut)
         {
+            await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                dropId,
+                cancellationToken);
+            if (state.AlreadyClaimed)
+            {
+                return Result(WaitingRoomParticipationOutcome.Completed, state);
+            }
+
             return Result(WaitingRoomParticipationOutcome.SoldOut, state);
         }
 
         if (status == KeyDropStatus.ClosedEarly)
         {
+            await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                dropId,
+                cancellationToken);
+            if (state.AlreadyClaimed)
+            {
+                return Result(WaitingRoomParticipationOutcome.Completed, state);
+            }
+
             return Result(WaitingRoomParticipationOutcome.ClosedEarly, state);
+        }
+
+        if (state.AlreadyClaimed)
+        {
+            return Result(WaitingRoomParticipationOutcome.Completed, state);
         }
 
         if (status == KeyDropStatus.Scheduled

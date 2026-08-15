@@ -282,7 +282,7 @@ public sealed class WaitingRoomPageTests
         var token = PageTestSupport.ExtractAntiforgeryToken(admittedHtml);
 
         using var firstResponse = await PostClaimAsync(client, dropId, token);
-        Assert.Equal(WaitingRoomEntryState.Admitted, store.Entries.Single().Value.State);
+        Assert.Equal(WaitingRoomEntryState.Terminal, store.Entries.Single().Value.State);
         using var repeatedResponse = await PostClaimAsync(client, dropId, token);
 
         await using var verificationDb = _fixture.NewDbContext();

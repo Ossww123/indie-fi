@@ -79,6 +79,9 @@ public sealed class KeyDropCloseService
             await AccountMutationGuard.CommitIfOwnedAsync(
                 transaction,
                 cancellationToken);
+            await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                dropId,
+                cancellationToken);
             return new CloseKeyDropResult(CloseKeyDropOutcome.AlreadyClosed);
         }
 

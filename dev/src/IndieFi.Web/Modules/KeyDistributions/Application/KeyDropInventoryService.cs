@@ -96,6 +96,13 @@ public sealed class KeyDropInventoryService
             await AccountMutationGuard.CommitIfOwnedAsync(
                 transaction,
                 cancellationToken);
+            if (status is KeyDropStatus.SoldOut or KeyDropStatus.ClosedEarly)
+            {
+                await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                    dropId,
+                    cancellationToken);
+            }
+
             return new AddKeyInventoryResult(
                 AddKeyInventoryOutcome.InvalidStatus,
                 NoViolations,

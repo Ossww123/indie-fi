@@ -91,6 +91,14 @@ public class KeyClaimService
 
         if (state.AlreadyClaimed)
         {
+            var existingStatus = state.GetRequiredStatus();
+            if (existingStatus is KeyDropStatus.SoldOut or KeyDropStatus.ClosedEarly)
+            {
+                await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                    dropId,
+                    cancellationToken);
+            }
+
             return await CompleteAsync(
                 transaction,
                 ClaimOutcome.AlreadyClaimed,
