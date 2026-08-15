@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Text.Json;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
@@ -289,6 +290,71 @@ public sealed class WaitingRoomPageTests
         Assert.Equal(1, await verificationDb.KeyGrants.CountAsync(
             grant => grant.DropId == dropId,
             TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Snapshot_ReturnsOnlyCurrentUsersAuthoritativeStateAndInventory()
+    {
+        var first = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var second = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var dropId = await CreateActiveDropAsync();
+        var store = new InMemoryWaitingRoomStore
+        {
+            AdmitOnAdvance = true,
+        };
+
+        await using var factory = new WebAppFactory(
+            _fixture.ConnectionString,
+            waitingRoomStore: store);
+        using var firstClient = factory.CreateClient();
+        await PageTestSupport.LoginAsync(firstClient, first.Email, first.Password);
+        await JoinAndReadAsync(firstClient, dropId);
+        using var firstResponse = await firstClient.GetAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=WaitingRoomSnapshot",
+            TestContext.Current.CancellationToken);
+        using var firstJson = JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        using var secondClient = factory.CreateClient();
+        await PageTestSupport.LoginAsync(secondClient, second.Email, second.Password);
+        using var secondResponse = await secondClient.GetAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=WaitingRoomSnapshot",
+            TestContext.Current.CancellationToken);
+        using var secondJson = JsonDocument.Parse(await secondResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        Assert.True(firstResponse.Headers.CacheControl!.NoStore);
+        Assert.True(firstResponse.Headers.CacheControl.Private);
+        Assert.Equal("Admitted", firstJson.RootElement.GetProperty("entryState").GetString());
+        Assert.Equal(1, firstJson.RootElement.GetProperty("admittedCount").GetInt32());
+        Assert.Equal(1, firstJson.RootElement.GetProperty("remainingKeys").GetInt32());
+        Assert.True(firstJson.RootElement
+            .GetProperty("admissionExpiresUnixTimeMilliseconds")
+            .GetInt64() > 0);
+        Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+        Assert.Equal("Available", secondJson.RootElement
+            .GetProperty("participationOutcome")
+            .GetString());
+        Assert.Equal(JsonValueKind.Null, secondJson.RootElement
+            .GetProperty("entryState")
+            .ValueKind);
+    }
+
+    [Fact]
+    public async Task Snapshot_WithoutAuthentication_ReturnsUnauthorized()
+    {
+        var dropId = await CreateActiveDropAsync();
+        await using var factory = new WebAppFactory(
+            _fixture.ConnectionString,
+            waitingRoomStore: new InMemoryWaitingRoomStore());
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=WaitingRoomSnapshot",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

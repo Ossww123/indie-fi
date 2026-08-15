@@ -198,6 +198,41 @@ public class DetailModel : PageModel
         return RedirectToPage(new { id, waiting = code });
     }
 
+    public async Task<IActionResult> OnGetWaitingRoomSnapshotAsync(long id)
+    {
+        if (!_currentUser.IsAuthenticated)
+        {
+            return Unauthorized();
+        }
+
+        var drop = await _publicKeyDropReader.GetAsync(
+            id,
+            HttpContext.RequestAborted);
+        if (drop is null)
+        {
+            return NotFound();
+        }
+
+        var participation = await _waitingRoomParticipationService.GetAsync(
+            id,
+            _currentUser.GetRequiredUserId(),
+            HttpContext.RequestAborted);
+        if (participation.Outcome == WaitingRoomParticipationOutcome.AccountUnavailable)
+        {
+            return Unauthorized();
+        }
+
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers.Pragma = "no-cache";
+        var snapshot = WaitingRoomClientSnapshot.Create(drop, participation);
+        return new JsonResult(snapshot)
+        {
+            StatusCode = participation.Outcome == WaitingRoomParticipationOutcome.Unavailable
+                ? StatusCodes.Status503ServiceUnavailable
+                : StatusCodes.Status200OK,
+        };
+    }
+
     public string GetWaitingRoomStateText() => WaitingRoom?.Entry?.State switch
     {
         WaitingRoomEntryState.PreWaiting => "사전 대기 중",
@@ -215,5 +250,35 @@ public class DetailModel : PageModel
         return unixTimeMilliseconds is null
             ? null
             : DateTimeOffset.FromUnixTimeMilliseconds(unixTimeMilliseconds.Value);
+    }
+
+    public sealed record WaitingRoomClientSnapshot(
+        long DropId,
+        string DropStatus,
+        int RemainingKeys,
+        string ParticipationOutcome,
+        string? EntryState,
+        int? Position,
+        int? AheadCount,
+        int WaitingCount,
+        int PreWaitingCount,
+        int AdmittedCount,
+        long? AdmissionExpiresUnixTimeMilliseconds)
+    {
+        public static WaitingRoomClientSnapshot Create(
+            PublicKeyDropDetail drop,
+            WaitingRoomParticipationResult participation) =>
+            new(
+                drop.Id,
+                drop.Status.ToString(),
+                drop.RemainingKeys,
+                participation.Outcome.ToString(),
+                participation.Entry?.State.ToString(),
+                participation.Snapshot?.Position,
+                participation.Snapshot?.AheadCount,
+                participation.Snapshot?.WaitingCount ?? 0,
+                participation.Snapshot?.PreWaitingCount ?? 0,
+                participation.Snapshot?.AdmittedCount ?? 0,
+                participation.Entry?.AdmissionExpiresUnixTimeMilliseconds);
     }
 }
