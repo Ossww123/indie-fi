@@ -625,6 +625,7 @@ public sealed class ReviewClaimServiceTests
                 item => item.ReviewerId == reviewerId,
                 TestContext.Current.CancellationToken);
             assignment.Status = ReviewAssignmentStatus.Expired;
+            assignment.ExpiredAt = DateTimeOffset.UtcNow;
             await expirationDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -682,10 +683,11 @@ public sealed class ReviewClaimServiceTests
                 await attemptDb.Database.ExecuteSqlRawAsync(
                     """
                     INSERT INTO review_assignments
-                        (request_id, game_id, reviewer_id, status, leased_until)
-                    VALUES ({0}, {1}, {2}, 'Active', now() + INTERVAL '30 minutes')
+                        (request_id, game_id, reviewer_id, claim_operation_id,
+                         status, leased_until)
+                    VALUES ({0}, {1}, {2}, {3}, 'Active', now() + INTERVAL '30 minutes')
                     """,
-                    new object[] { secondRequestId, gameId, reviewerId },
+                    new object[] { secondRequestId, gameId, reviewerId, Guid.NewGuid() },
                     TestContext.Current.CancellationToken));
 
             Assert.Equal(UniqueViolation, exception.SqlState);
@@ -725,14 +727,69 @@ public sealed class ReviewClaimServiceTests
                 await attemptDb.Database.ExecuteSqlRawAsync(
                     """
                     INSERT INTO review_assignments
-                        (request_id, game_id, reviewer_id, status, leased_until)
-                    VALUES ({0}, {1}, {2}, 'Active', now() + INTERVAL '30 minutes')
+                        (request_id, game_id, reviewer_id, claim_operation_id,
+                         status, leased_until)
+                    VALUES ({0}, {1}, {2}, {3}, 'Active', now() + INTERVAL '30 minutes')
                     """,
-                    new object[] { requestId, secondGameId, reviewerId },
+                    new object[] { requestId, secondGameId, reviewerId, Guid.NewGuid() },
                     TestContext.Current.CancellationToken));
 
             Assert.Equal(ForeignKeyViolation, exception.SqlState);
         }
+    }
+
+    [Fact]
+    public async Task ClaimNextAsync_ReusesTheSameOperationAndKeepsADifferentOperationDistinct()
+    {
+        long reviewerId;
+        long firstRequestId;
+        long secondRequestId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, 2);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, 0)).Id;
+            var firstGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            var secondGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                firstGame.Id)).Id;
+            secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                secondGame.Id)).Id;
+        }
+
+        var operationId = Guid.NewGuid();
+        await using var serviceDb = _fixture.NewDbContext();
+        var service = NewService(serviceDb);
+        var first = await service.ClaimNextAsync(reviewerId, operationId);
+        var replay = await service.ClaimNextAsync(reviewerId, operationId);
+        var distinct = await service.ClaimNextAsync(reviewerId, Guid.NewGuid());
+
+        Assert.Equal(ReviewClaimOutcome.Claimed, first.Outcome);
+        Assert.Equal(firstRequestId, first.RequestId);
+        Assert.Equal(first.RequestId, replay.RequestId);
+        Assert.Equal(ReviewClaimOutcome.Claimed, distinct.Outcome);
+        Assert.Equal(secondRequestId, distinct.RequestId);
+        Assert.Equal(2, await serviceDb.ReviewAssignments.CountAsync(
+            assignment => assignment.ReviewerId == reviewerId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ClaimNextAsync_WhenOperationIdIsEmpty_WritesNothing()
+    {
+        await using var db = _fixture.NewDbContext();
+        var reviewer = await ReviewTestData.CreateUserWithCreditAsync(db, 0);
+
+        var result = await NewService(db).ClaimNextAsync(reviewer.Id, Guid.Empty);
+
+        Assert.Equal(ReviewClaimOutcome.InvalidOperationId, result.Outcome);
+        Assert.Empty(await db.ReviewAssignments
+            .Where(assignment => assignment.ReviewerId == reviewer.Id)
+            .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     // The service only uses its logger for outcome records; these tests assert database state.

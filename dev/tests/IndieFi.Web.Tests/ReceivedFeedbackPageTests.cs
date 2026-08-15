@@ -42,6 +42,7 @@ public sealed class ReceivedFeedbackPageTests
         Assert.Contains(
             UserDisplayIdentifier.Format(feedback.ReviewerId),
             decodedHtml);
+        Assert.Contains("· 제출 ", decodedHtml);
         Assert.DoesNotContain(feedback.ReviewerEmail, decodedHtml);
     }
 
@@ -193,25 +194,39 @@ public sealed class ReceivedFeedbackPageTests
             ownerId,
             game.Id);
 
+        var completedAt = DateTimeOffset.UtcNow;
         reviewRequest.Status = ReviewRequestStatus.Completed;
+        reviewRequest.CompletedAt = completedAt;
         var assignment = new ReviewAssignment
         {
             RequestId = reviewRequest.Id,
             GameId = game.Id,
             ReviewerId = reviewer.Id,
+            ClaimOperationId = Guid.NewGuid(),
             Status = ReviewAssignmentStatus.Completed,
             LeasedUntil = DateTimeOffset.UtcNow.AddHours(1),
+            CompletedAt = completedAt,
         };
         db.ReviewAssignments.Add(assignment);
         await db.SaveChangesAsync(cancellationToken);
+
+        var earnEntry = new CreditLedgerEntry
+        {
+            UserId = reviewer.Id,
+            Kind = CreditEntryKind.Earn,
+            Delta = 1,
+        };
 
         // The read page does not need queue arbitration, so inserting the final row directly
         // keeps setup deterministic while preserving every database relationship and constraint.
         db.FeedbackSubmissions.Add(new FeedbackSubmission
         {
             AssignmentId = assignment.Id,
+            ReviewerId = reviewer.Id,
+            EarnEntry = earnEntry,
             Body = body,
         });
+        db.CreditLedgerEntries.Add(earnEntry);
         await db.SaveChangesAsync(cancellationToken);
 
         return new FeedbackTestData(

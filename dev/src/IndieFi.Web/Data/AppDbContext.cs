@@ -515,7 +515,19 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         // a user's balance is the sum of all of their delta values.
         modelBuilder.Entity<CreditLedgerEntry>(creditLedgerEntry =>
         {
-            creditLedgerEntry.ToTable("credit_ledger_entries");
+            creditLedgerEntry.ToTable("credit_ledger_entries", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_credit_ledger_entries_kind",
+                    "kind IN ('Grant', 'Spend', 'Earn', 'Refund')");
+                table.HasCheckConstraint(
+                    "CK_credit_ledger_entries_kind_delta",
+                    "kind NOT IN ('Grant', 'Spend', 'Earn', 'Refund') OR "
+                    + "(kind = 'Grant' AND delta > 0) OR "
+                    + "(kind = 'Spend' AND delta = -1) OR "
+                    + "(kind = 'Earn' AND delta = 1) OR "
+                    + "(kind = 'Refund' AND delta = 1)");
+            });
 
             creditLedgerEntry.HasKey(e => e.Id);
             creditLedgerEntry.Property(e => e.Id).HasColumnName("id");
@@ -529,6 +541,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             creditLedgerEntry.Property(e => e.Kind)
                 .HasColumnName("kind")
                 .HasConversion<string>()
+                .HasMaxLength(16)
                 .IsRequired();
 
             creditLedgerEntry.Property(e => e.Delta)
@@ -544,13 +557,30 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .WithMany()
                 .HasForeignKey(e => e.UserId);
 
+            // Origin rows carry their user ID as well as the ledger ID. Referencing this pair
+            // makes the database reject attaching one user's movement to another user's action.
+            creditLedgerEntry.HasAlternateKey(e => new { e.Id, e.UserId });
+
             // The ledger screen reads one user's history in this order.
             creditLedgerEntry.HasIndex(e => e.UserId);
         });
 
         modelBuilder.Entity<ReviewRequest>(reviewRequest =>
         {
-            reviewRequest.ToTable("review_requests");
+            reviewRequest.ToTable("review_requests", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_review_requests_status",
+                    "status IN ('Queued', 'Assigned', 'Completed', 'Cancelled')");
+                table.HasCheckConstraint(
+                    "CK_review_requests_terminal_timestamps",
+                    "(status IN ('Queued', 'Assigned') AND completed_at IS NULL AND cancelled_at IS NULL) OR "
+                    + "(status = 'Completed' AND completed_at IS NOT NULL AND cancelled_at IS NULL) OR "
+                    + "(status = 'Cancelled' AND cancelled_at IS NOT NULL AND completed_at IS NULL)");
+                table.HasCheckConstraint(
+                    "CK_review_requests_creation_operation_id",
+                    "creation_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+            });
 
             reviewRequest.HasKey(r => r.Id);
             reviewRequest.Property(r => r.Id).HasColumnName("id");
@@ -563,6 +593,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("requester_id")
                 .IsRequired();
 
+            reviewRequest.Property(r => r.CreationOperationId)
+                .HasColumnName("creation_operation_id")
+                .IsRequired();
+
             reviewRequest.Property(r => r.SpendEntryId)
                 .HasColumnName("spend_entry_id")
                 .IsRequired();
@@ -573,8 +607,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             reviewRequest.Property(r => r.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
+                .HasMaxLength(16)
                 .IsRequired()
                 .HasDefaultValue(ReviewRequestStatus.Queued);
+
+            reviewRequest.Property(r => r.CompletedAt)
+                .HasColumnName("completed_at");
+
+            reviewRequest.Property(r => r.CancelledAt)
+                .HasColumnName("cancelled_at");
 
             reviewRequest.Property(r => r.CreatedAt)
                 .HasColumnName("created_at")
@@ -598,12 +639,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             reviewRequest.HasOne(r => r.SpendEntry)
                 .WithMany()
-                .HasForeignKey(r => r.SpendEntryId)
+                .HasForeignKey(r => new { r.SpendEntryId, r.RequesterId })
+                .HasPrincipalKey(e => new { e.Id, e.UserId })
                 .OnDelete(DeleteBehavior.Cascade);
 
             reviewRequest.HasOne(r => r.RefundEntry)
                 .WithMany()
-                .HasForeignKey(r => r.RefundEntryId);
+                .HasForeignKey(r => new { r.RefundEntryId, r.RequesterId })
+                .HasPrincipalKey(e => new { e.Id, e.UserId });
 
             // One credit spend creates exactly one request, so the database rejects
             // a second request even if application code tries to create it.
@@ -612,6 +655,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // One refund ledger row can settle only one request, so the database rejects
             // accidental reuse even if a future write path bypasses the cancellation service.
             reviewRequest.HasIndex(r => r.RefundEntryId).IsUnique();
+
+            reviewRequest.HasIndex(r => new { r.RequesterId, r.CreationOperationId })
+                .IsUnique();
 
             // Claiming reads the oldest waiting request. Holding only those rows keeps
             // assigned and completed history from being walked past on every claim,
@@ -625,7 +671,20 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<ReviewAssignment>(reviewAssignment =>
         {
-            reviewAssignment.ToTable("review_assignments");
+            reviewAssignment.ToTable("review_assignments", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_review_assignments_status",
+                    "status IN ('Active', 'Completed', 'Expired')");
+                table.HasCheckConstraint(
+                    "CK_review_assignments_terminal_timestamps",
+                    "(status = 'Active' AND completed_at IS NULL AND expired_at IS NULL) OR "
+                    + "(status = 'Completed' AND completed_at IS NOT NULL AND expired_at IS NULL) OR "
+                    + "(status = 'Expired' AND expired_at IS NOT NULL AND completed_at IS NULL)");
+                table.HasCheckConstraint(
+                    "CK_review_assignments_claim_operation_id",
+                    "claim_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+            });
 
             reviewAssignment.HasKey(a => a.Id);
             reviewAssignment.Property(a => a.Id).HasColumnName("id");
@@ -642,14 +701,25 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("reviewer_id")
                 .IsRequired();
 
+            reviewAssignment.Property(a => a.ClaimOperationId)
+                .HasColumnName("claim_operation_id")
+                .IsRequired();
+
             reviewAssignment.Property(a => a.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
+                .HasMaxLength(16)
                 .IsRequired();
 
             reviewAssignment.Property(a => a.LeasedUntil)
                 .HasColumnName("leased_until")
                 .IsRequired();
+
+            reviewAssignment.Property(a => a.CompletedAt)
+                .HasColumnName("completed_at");
+
+            reviewAssignment.Property(a => a.ExpiredAt)
+                .HasColumnName("expired_at");
 
             reviewAssignment.Property(a => a.CreatedAt)
                 .HasColumnName("created_at")
@@ -670,6 +740,8 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(a => a.ReviewerId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            reviewAssignment.HasAlternateKey(a => new { a.Id, a.ReviewerId });
+
             // One request may have at most one assignment that is still alive, so a second
             // reviewer cannot be handed work that someone else already holds. Expired
             // assignments are excluded because expiry returns the request to the queue.
@@ -684,6 +756,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             reviewAssignment.HasIndex(a => new { a.ReviewerId, a.GameId })
                 .IsUnique()
                 .HasFilter("status <> 'Expired'");
+
+            reviewAssignment.HasIndex(a => new { a.ReviewerId, a.ClaimOperationId })
+                .IsUnique();
         });
 
         modelBuilder.Entity<FeedbackSubmission>(feedbackSubmission =>
@@ -704,6 +779,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("assignment_id")
                 .IsRequired();
 
+            feedbackSubmission.Property(s => s.ReviewerId)
+                .HasColumnName("reviewer_id")
+                .IsRequired();
+
+            feedbackSubmission.Property(s => s.EarnEntryId)
+                .HasColumnName("earn_entry_id")
+                .IsRequired();
+
             feedbackSubmission.Property(s => s.Body)
                 .HasColumnName("body")
                 .HasMaxLength(4000)
@@ -716,12 +799,22 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             feedbackSubmission.HasOne<ReviewAssignment>()
                 .WithMany()
-                .HasForeignKey(s => s.AssignmentId)
+                .HasForeignKey(s => new { s.AssignmentId, s.ReviewerId })
+                .HasPrincipalKey(a => new { a.Id, a.ReviewerId })
                 .OnDelete(DeleteBehavior.Cascade);
+
+            feedbackSubmission.HasOne(s => s.EarnEntry)
+                .WithMany()
+                .HasForeignKey(s => new { s.EarnEntryId, s.ReviewerId })
+                .HasPrincipalKey(e => new { e.Id, e.UserId })
+                .OnDelete(DeleteBehavior.Restrict);
 
             // One assignment produces at most one submission, so a second submit cannot create a
             // second row even if the conditional update above is somehow bypassed.
             feedbackSubmission.HasIndex(s => s.AssignmentId).IsUnique();
+
+            // A ledger movement can pay for only one feedback submission.
+            feedbackSubmission.HasIndex(s => s.EarnEntryId).IsUnique();
         });
     }
 }

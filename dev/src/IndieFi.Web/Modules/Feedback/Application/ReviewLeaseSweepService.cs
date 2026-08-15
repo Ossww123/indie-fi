@@ -29,7 +29,7 @@ public class ReviewLeaseSweepService
     private const string SweepSql = """
         WITH expired AS (
             UPDATE review_assignments
-               SET status = 'Expired'
+               SET status = 'Expired', expired_at = now()
              WHERE status = 'Active'
                AND leased_until <= now()
             RETURNING request_id

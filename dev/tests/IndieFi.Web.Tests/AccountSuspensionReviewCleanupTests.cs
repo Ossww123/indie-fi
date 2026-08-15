@@ -160,9 +160,13 @@ public sealed class AccountSuspensionReviewCleanupTests
             await forcedDb.ReviewRequests
                 .Where(request => request.Id == assignment.RequestId)
                 .ExecuteUpdateAsync(
-                    setters => setters.SetProperty(
-                        request => request.Status,
-                        ReviewRequestStatus.Completed),
+                    setters => setters
+                        .SetProperty(
+                            request => request.Status,
+                            ReviewRequestStatus.Completed)
+                        .SetProperty(
+                            request => request.CompletedAt,
+                            DateTimeOffset.UtcNow),
                     TestContext.Current.CancellationToken);
         }
 

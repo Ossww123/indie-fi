@@ -21,33 +21,35 @@ public class FeedbackSubmissionService
     // Completing the assignment, storing the feedback, earning credit, and completing the request
     // share one statement so no other transaction can interleave and no explicit transaction is needed.
     // PostgreSQL executes a data-changing CTE exactly once even when no later query references it,
-    // so earned and finished are intentionally unreferenced. EF Core requires the Value alias for a scalar.
+    // so finished is intentionally unreferenced. EF Core requires the Value alias for a scalar.
     // The ledger trigger maintains users.credit_balance, which the application cannot update.
     private const string SubmitSql = """
         WITH completed AS (
             UPDATE review_assignments
-               SET status = 'Completed'
+               SET status = 'Completed', completed_at = now()
              WHERE id = @assignmentId
                AND reviewer_id = @reviewerId
                AND status = 'Active'
                AND leased_until > now()
-            RETURNING id, request_id
-        ),
-        submitted AS (
-            INSERT INTO feedback_submissions (assignment_id, body)
-            SELECT completed.id, @body
-              FROM completed
-            RETURNING assignment_id
+            RETURNING id, request_id, reviewer_id
         ),
         earned AS (
             INSERT INTO credit_ledger_entries (user_id, kind, delta)
-            SELECT @reviewerId, 'Earn', 1
+            SELECT reviewer_id, 'Earn', 1
               FROM completed
-            RETURNING id
+            RETURNING id, user_id
+        ),
+        submitted AS (
+            INSERT INTO feedback_submissions (
+                assignment_id, reviewer_id, body, earn_entry_id)
+            SELECT completed.id, completed.reviewer_id, @body, earned.id
+              FROM completed
+              JOIN earned ON earned.user_id = completed.reviewer_id
+            RETURNING assignment_id
         ),
         finished AS (
             UPDATE review_requests
-               SET status = 'Completed'
+               SET status = 'Completed', completed_at = now()
               FROM completed
              WHERE review_requests.id = completed.request_id
             RETURNING review_requests.id
@@ -61,6 +63,19 @@ public class FeedbackSubmissionService
           FROM review_assignments
          WHERE id = @assignmentId
            AND reviewer_id = @reviewerId
+        """;
+
+    private const string AlreadySubmittedSql = """
+        SELECT EXISTS (
+            SELECT 1
+              FROM feedback_submissions AS submission
+              JOIN review_assignments AS assignment
+                ON assignment.id = submission.assignment_id
+               AND assignment.reviewer_id = submission.reviewer_id
+             WHERE assignment.id = @assignmentId
+               AND assignment.reviewer_id = @reviewerId
+               AND assignment.status = 'Completed'
+        ) AS "Value"
         """;
 
     private readonly AppDbContext _db;
@@ -104,9 +119,21 @@ public class FeedbackSubmissionService
             return Result(FeedbackSubmissionOutcome.Submitted, assignmentId, reviewerId);
         }
 
-        // Only failures pay for this second round trip. Looking up only the reviewer's own
-        // assignment prevents callers from distinguishing another reviewer's assignment from a
-        // missing one; lease expiry is exposed because obtaining another assignment is actionable.
+        var alreadySubmitted = await _db.Database
+            .SqlQueryRaw<bool>(
+                AlreadySubmittedSql,
+                new NpgsqlParameter("assignmentId", assignmentId),
+                new NpgsqlParameter("reviewerId", reviewerId))
+            .SingleAsync();
+        if (alreadySubmitted)
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return Result(FeedbackSubmissionOutcome.Submitted, assignmentId, reviewerId);
+        }
+
+        // Only failures pay for the state lookups. Looking up only the reviewer's own assignment
+        // prevents callers from distinguishing another reviewer's assignment from a missing one;
+        // lease expiry is exposed because obtaining another assignment is actionable.
         var leaseExpired = await _db.Database
             .SqlQueryRaw<bool>(
                 LeaseExpiredSql,

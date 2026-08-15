@@ -63,6 +63,7 @@ internal static class ReviewTestData
         {
             GameId = gameId,
             RequesterId = requesterId,
+            CreationOperationId = Guid.NewGuid(),
             SpendEntry = spendEntry,
         };
 

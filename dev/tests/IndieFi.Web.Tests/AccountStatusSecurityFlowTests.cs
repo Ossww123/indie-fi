@@ -379,6 +379,7 @@ public sealed class AccountStatusSecurityFlowTests
             RequestId = request.Id,
             GameId = game.Id,
             ReviewerId = reviewer.Id,
+            ClaimOperationId = Guid.NewGuid(),
             Status = ReviewAssignmentStatus.Active,
             LeasedUntil = DateTimeOffset.UtcNow.AddMinutes(30),
         };

@@ -217,9 +217,14 @@ public sealed class ReviewRequestServiceTests
         }
 
         await using var verificationDb = _fixture.NewDbContext();
-        var requestStatus = await verificationDb.ReviewRequests
+        var requestState = await verificationDb.ReviewRequests
             .Where(request => request.Id == requestId)
-            .Select(request => request.Status)
+            .Select(request => new
+            {
+                request.Status,
+                request.CompletedAt,
+                request.CancelledAt,
+            })
             .SingleAsync(TestContext.Current.CancellationToken);
         var refundEntries = await verificationDb.CreditLedgerEntries
             .Where(entry => entry.UserId == userId && entry.Kind == CreditEntryKind.Refund)
@@ -230,7 +235,9 @@ public sealed class ReviewRequestServiceTests
             .SingleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(ReviewRequestOutcome.Cancelled, result.Outcome);
-        Assert.Equal(ReviewRequestStatus.Cancelled, requestStatus);
+        Assert.Equal(ReviewRequestStatus.Cancelled, requestState.Status);
+        Assert.Null(requestState.CompletedAt);
+        Assert.NotNull(requestState.CancelledAt);
         var refundEntry = Assert.Single(refundEntries);
         Assert.Equal(1, refundEntry.Delta);
         Assert.Equal(balanceBefore + 1, balanceAfter);
@@ -361,7 +368,7 @@ public sealed class ReviewRequestServiceTests
             .SingleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(ReviewRequestOutcome.Cancelled, firstResult.Outcome);
-        Assert.Equal(ReviewRequestOutcome.NotCancellable, secondResult.Outcome);
+        Assert.Equal(ReviewRequestOutcome.Cancelled, secondResult.Outcome);
         Assert.Single(refundEntries);
         Assert.Equal(1, balance);
     }
@@ -664,6 +671,101 @@ public sealed class ReviewRequestServiceTests
                 TimeSpan.FromMilliseconds(10),
                 TestContext.Current.CancellationToken);
         }
+    }
+
+    [Fact]
+    public async Task RequestAsync_ReusesTheSameOperationAndKeepsADifferentOperationDistinct()
+    {
+        long userId;
+        long gameId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var user = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            userId = user.Id;
+            gameId = (await CreateGameAsync(arrangeDb, userId)).Id;
+        }
+
+        var operationId = Guid.NewGuid();
+        ReviewRequestResult first;
+        ReviewRequestResult replay;
+        ReviewRequestResult distinct;
+        await using (var firstDb = _fixture.NewDbContext())
+        {
+            first = await NewService(firstDb).RequestAsync(gameId, userId, operationId);
+        }
+
+        await using (var replayDb = _fixture.NewDbContext())
+        {
+            replay = await NewService(replayDb).RequestAsync(gameId, userId, operationId);
+        }
+
+        await using (var distinctDb = _fixture.NewDbContext())
+        {
+            distinct = await NewService(distinctDb)
+                .RequestAsync(gameId, userId, Guid.NewGuid());
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ReviewRequestOutcome.Queued, first.Outcome);
+        Assert.Equal(first.RequestId, replay.RequestId);
+        Assert.True(replay.IsReplay);
+        Assert.Equal(ReviewRequestOutcome.Queued, distinct.Outcome);
+        Assert.NotEqual(first.RequestId, distinct.RequestId);
+        Assert.Equal(2, await verificationDb.ReviewRequests.CountAsync(
+            request => request.RequesterId == userId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(2, await verificationDb.CreditLedgerEntries.CountAsync(
+            entry => entry.UserId == userId && entry.Kind == CreditEntryKind.Spend,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RequestAsync_WhenOperationIsReusedForAnotherGame_ReturnsConflict()
+    {
+        long userId;
+        long firstGameId;
+        long secondGameId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var user = await CreateUserWithCreditAsync(arrangeDb, balance: 2);
+            userId = user.Id;
+            firstGameId = (await CreateGameAsync(arrangeDb, userId)).Id;
+            secondGameId = (await CreateGameAsync(arrangeDb, userId)).Id;
+        }
+
+        var operationId = Guid.NewGuid();
+        await using (var firstDb = _fixture.NewDbContext())
+        {
+            Assert.Equal(
+                ReviewRequestOutcome.Queued,
+                (await NewService(firstDb)
+                    .RequestAsync(firstGameId, userId, operationId)).Outcome);
+        }
+
+        await using var conflictDb = _fixture.NewDbContext();
+        var conflict = await NewService(conflictDb)
+            .RequestAsync(secondGameId, userId, operationId);
+
+        Assert.Equal(ReviewRequestOutcome.OperationConflict, conflict.Outcome);
+        Assert.Single(await conflictDb.ReviewRequests
+            .Where(request => request.RequesterId == userId)
+            .ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RequestAsync_WhenOperationIdIsEmpty_WritesNothing()
+    {
+        await using var arrangeDb = _fixture.NewDbContext();
+        var user = await CreateUserWithCreditAsync(arrangeDb, balance: 1);
+        var game = await CreateGameAsync(arrangeDb, user.Id);
+
+        var result = await NewService(arrangeDb)
+            .RequestAsync(game.Id, user.Id, Guid.Empty);
+
+        Assert.Equal(ReviewRequestOutcome.InvalidOperationId, result.Outcome);
+        Assert.Empty(await arrangeDb.ReviewRequests
+            .Where(request => request.RequesterId == user.Id)
+            .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     // The service only uses its logger for outcome records; these tests assert database state.

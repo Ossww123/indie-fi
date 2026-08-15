@@ -37,7 +37,8 @@
                 <div class="surface-item">
                     <div class="font-semibold">@assignment.GameTitle</div>
                     <div class="text-meta">
-                        마감시각 @assignment.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        배정 @assignment.AssignedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        · 마감 @assignment.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                     </div>
                     @if (assignment.LeasedUntil <= DateTimeOffset.UtcNow)
                     {
@@ -57,8 +58,37 @@
     </section>
 }
 
+<section class="mb-8">
+    <h2 class="section-title">내 작업 이력 @(Model.AssignmentHistory.Count)개</h2>
+    @if (Model.AssignmentHistory.Count == 0)
+    {
+        <div class="alert-neutral">완료하거나 만료된 작업이 없습니다.</div>
+    }
+    else
+    {
+        <div class="surface-list">
+            @foreach (var assignment in Model.AssignmentHistory)
+            {
+                <div class="surface-item">
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="font-semibold">@assignment.GameTitle</div>
+                        <span class="@(assignment.IsCompleted ? "badge-success" : "badge-neutral")">
+                            @assignment.StatusText
+                        </span>
+                    </div>
+                    <div class="text-meta mt-1">
+                        배정 @assignment.AssignedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        · @assignment.StatusText @assignment.EndedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>
+
 <div class="mb-8 flex flex-wrap gap-2">
     <form method="post" asp-page-handler="Claim">
+        <input type="hidden" name="operationId" value="@Model.ClaimOperationId" />
         <button type="submit" class="button-primary">리뷰 작업 받기</button>
     </form>
 

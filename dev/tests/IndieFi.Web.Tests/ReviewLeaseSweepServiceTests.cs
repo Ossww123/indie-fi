@@ -43,9 +43,9 @@ public sealed class ReviewLeaseSweepServiceTests
         }
 
         await using var verificationDb = _fixture.NewDbContext();
-        var assignmentStatus = await verificationDb.ReviewAssignments
+        var assignmentState = await verificationDb.ReviewAssignments
             .Where(item => item.Id == assignment.AssignmentId)
-            .Select(item => item.Status)
+            .Select(item => new { item.Status, item.CompletedAt, item.ExpiredAt })
             .SingleAsync(TestContext.Current.CancellationToken);
         var requestStatus = await verificationDb.ReviewRequests
             .Where(item => item.Id == assignment.RequestId)
@@ -53,7 +53,9 @@ public sealed class ReviewLeaseSweepServiceTests
             .SingleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, result.ExpiredCount);
-        Assert.Equal(ReviewAssignmentStatus.Expired, assignmentStatus);
+        Assert.Equal(ReviewAssignmentStatus.Expired, assignmentState.Status);
+        Assert.Null(assignmentState.CompletedAt);
+        Assert.NotNull(assignmentState.ExpiredAt);
         Assert.Equal(ReviewRequestStatus.Queued, requestStatus);
     }
 
@@ -145,7 +147,7 @@ public sealed class ReviewLeaseSweepServiceTests
             await forcedDb.Database.ExecuteSqlRawAsync(
                 """
                 UPDATE review_requests
-                   SET status = 'Completed'
+                   SET status = 'Completed', completed_at = now()
                  WHERE id = {0}
                 """,
                 [assignment.RequestId],

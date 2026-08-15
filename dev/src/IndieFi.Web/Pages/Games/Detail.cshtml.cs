@@ -63,6 +63,7 @@ public class DetailModel : PageModel
     public int PendingRequestCount { get; private set; }
     public List<RequestListItem> Requests { get; private set; } = [];
     public RequestNotice? RequestMessage { get; private set; }
+    public Guid RequestOperationId { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(long id, string? request)
     {
@@ -95,6 +96,7 @@ public class DetailModel : PageModel
 
         if (IsOwner)
         {
+            RequestOperationId = Guid.NewGuid();
             Requests = await _db.ReviewRequests
                 .Where(reviewRequest =>
                     reviewRequest.GameId == game.Id
@@ -103,7 +105,8 @@ public class DetailModel : PageModel
                 .Select(reviewRequest => new RequestListItem(
                     reviewRequest.Id,
                     reviewRequest.CreatedAt,
-                    reviewRequest.Status))
+                    reviewRequest.Status,
+                    reviewRequest.CompletedAt))
                 .ToListAsync();
         }
         else
@@ -123,7 +126,9 @@ public class DetailModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostRequestFeedbackAsync(long id)
+    public async Task<IActionResult> OnPostRequestFeedbackAsync(
+        long id,
+        Guid operationId)
     {
         // The page itself stays public, so requesting feedback is guarded here instead.
         // [Authorize] cannot do it: Razor Pages ignores the attribute on a handler.
@@ -133,7 +138,13 @@ public class DetailModel : PageModel
         }
 
         var userId = _currentUser.GetRequiredUserId();
-        var result = await _reviewRequestService.RequestAsync(id, userId);
+        var result = await _reviewRequestService.RequestAsync(id, userId, operationId);
+
+        if (result.Outcome is ReviewRequestOutcome.InvalidOperationId
+            or ReviewRequestOutcome.OperationConflict)
+        {
+            return BadRequest();
+        }
 
         if (result.Outcome == ReviewRequestOutcome.GameNotFound)
         {
@@ -187,7 +198,8 @@ public class DetailModel : PageModel
     public sealed record RequestListItem(
         long Id,
         DateTimeOffset CreatedAt,
-        ReviewRequestStatus Status)
+        ReviewRequestStatus Status,
+        DateTimeOffset? CompletedAt)
     {
         public bool IsCancellable => Status == ReviewRequestStatus.Queued;
 

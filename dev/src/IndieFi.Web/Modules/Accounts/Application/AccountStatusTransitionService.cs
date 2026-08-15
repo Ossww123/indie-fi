@@ -39,7 +39,7 @@ public sealed class AccountStatusTransitionService
     private const string ExpireActiveReviewAssignmentsSql = """
         WITH expired AS (
             UPDATE review_assignments
-               SET status = 'Expired'
+               SET status = 'Expired', expired_at = now()
              WHERE reviewer_id = @reviewerId
                AND status = 'Active'
             RETURNING request_id

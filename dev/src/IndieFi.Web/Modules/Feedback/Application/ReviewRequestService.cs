@@ -17,9 +17,14 @@ public enum ReviewRequestOutcome
     Cancelled,
     NotCancellable,
     AccountUnavailable,
+    InvalidOperationId,
+    OperationConflict,
 }
 
-public record ReviewRequestResult(ReviewRequestOutcome Outcome);
+public record ReviewRequestResult(
+    ReviewRequestOutcome Outcome,
+    long? RequestId = null,
+    bool IsReplay = false);
 
 public class ReviewRequestService
 {
@@ -34,25 +39,35 @@ public class ReviewRequestService
     // The request is updated only once in this statement because data-changing CTEs share the
     // statement's original snapshot. The ledger trigger maintains users.credit_balance.
     private const string CancelSql = """
-        WITH locked AS (
-            SELECT id, requester_id
+        WITH locked AS MATERIALIZED (
+            SELECT id, requester_id, status, refund_entry_id
               FROM review_requests
              WHERE id = @requestId
                AND requester_id = @userId
-               AND status = 'Queued'
              FOR UPDATE
         ),
         refunded AS (
             INSERT INTO credit_ledger_entries (user_id, kind, delta)
             SELECT requester_id, 'Refund', 1
               FROM locked
+             WHERE status = 'Queued'
             RETURNING id
+        ),
+        cancelled AS (
+            UPDATE review_requests
+               SET status = 'Cancelled',
+                   refund_entry_id = refunded.id,
+                   cancelled_at = now()
+              FROM refunded
+             WHERE review_requests.id = @requestId
+            RETURNING review_requests.id
         )
-        UPDATE review_requests
-           SET status = 'Cancelled', refund_entry_id = refunded.id
-          FROM refunded
-         WHERE review_requests.id = @requestId
-        RETURNING review_requests.id AS "Value"
+        SELECT id AS "Value" FROM cancelled
+        UNION ALL
+        SELECT id AS "Value"
+          FROM locked
+         WHERE status = 'Cancelled'
+           AND refund_entry_id IS NOT NULL
         """;
 
     private readonly AppDbContext _db;
@@ -64,8 +79,24 @@ public class ReviewRequestService
         _logger = logger;
     }
 
-    public async Task<ReviewRequestResult> RequestAsync(long gameId, long requesterId)
+    public Task<ReviewRequestResult> RequestAsync(long gameId, long requesterId)
     {
+        return RequestAsync(gameId, requesterId, Guid.NewGuid());
+    }
+
+    public async Task<ReviewRequestResult> RequestAsync(
+        long gameId,
+        long requesterId,
+        Guid operationId)
+    {
+        if (operationId == Guid.Empty)
+        {
+            return Result(
+                ReviewRequestOutcome.InvalidOperationId,
+                gameId,
+                requesterId);
+        }
+
         await using var transaction =
             await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
         if (!await AccountMutationGuard.LockActiveAsync(_db, requesterId))
@@ -75,6 +106,28 @@ public class ReviewRequestService
                 ReviewRequestOutcome.AccountUnavailable,
                 gameId,
                 requesterId);
+        }
+
+        var existingRequest = await _db.ReviewRequests
+            .AsNoTracking()
+            .Where(request => request.RequesterId == requesterId)
+            .Where(request => request.CreationOperationId == operationId)
+            .Select(request => new { request.Id, request.GameId })
+            .SingleOrDefaultAsync();
+        if (existingRequest is not null)
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return existingRequest.GameId == gameId
+                ? Result(
+                    ReviewRequestOutcome.Queued,
+                    gameId,
+                    requesterId,
+                    existingRequest.Id,
+                    isReplay: true)
+                : Result(
+                    ReviewRequestOutcome.OperationConflict,
+                    gameId,
+                    requesterId);
         }
 
         var game = await _db.Games
@@ -105,6 +158,7 @@ public class ReviewRequestService
         {
             GameId = gameId,
             RequesterId = requesterId,
+            CreationOperationId = operationId,
             SpendEntry = spendEntry,
         };
 
@@ -127,7 +181,11 @@ public class ReviewRequestService
         }
 
         await AccountMutationGuard.CommitIfOwnedAsync(transaction);
-        return Result(ReviewRequestOutcome.Queued, gameId, requesterId);
+        return Result(
+            ReviewRequestOutcome.Queued,
+            gameId,
+            requesterId,
+            reviewRequest.Id);
     }
 
     public async Task<ReviewRequestResult> CancelAsync(long requestId, long userId)
@@ -161,11 +219,13 @@ public class ReviewRequestService
     private ReviewRequestResult Result(
         ReviewRequestOutcome outcome,
         long gameId,
-        long requesterId)
+        long requesterId,
+        long? requestId = null,
+        bool isReplay = false)
     {
         _logger.LogInformation(
             "ReviewRequest outcome={Outcome} game={GameId} user={UserId}",
             outcome, gameId, requesterId);
-        return new ReviewRequestResult(outcome);
+        return new ReviewRequestResult(outcome, requestId, isReplay);
     }
 }
