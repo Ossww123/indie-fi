@@ -86,19 +86,38 @@ public sealed class ConfigurationKeyProviderTests
         Assert.DoesNotContain(Convert.ToBase64String(invalid), exception.Message);
     }
 
+    [Fact]
+    public void Constructor_WhenKeyIdExceedsDatabaseLimit_RejectsAtStartup()
+    {
+        var tooLongKeyId = new string('k', 101);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new ConfigurationKeyProvider(
+                BuildConfiguration(
+                    EmailKey: Bytes(1),
+                    LookupKey: Bytes(2),
+                    MessageKey: Bytes(3),
+                    RequestIpKey: Bytes(4),
+                    EmailKeyId: tooLongKeyId)));
+
+        Assert.Contains("100 characters or fewer", exception.Message);
+        Assert.DoesNotContain(tooLongKeyId, exception.Message);
+    }
+
     private static IConfiguration BuildConfiguration(
         byte[] EmailKey,
         byte[] LookupKey,
         byte[] MessageKey,
-        byte[] RequestIpKey)
+        byte[] RequestIpKey,
+        string EmailKeyId = "email-v1")
     {
         return new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["AccountProtection:Purposes:account-email-encryption:CurrentKeyId"] = "email-v1",
-                ["AccountProtection:Purposes:account-email-encryption:ReadKeyIds:0"] = "email-v1",
-                ["AccountProtection:Purposes:account-email-encryption:WriteKeyIds:0"] = "email-v1",
-                ["AccountProtection:Purposes:account-email-encryption:Keys:email-v1"] = Convert.ToBase64String(EmailKey),
+                ["AccountProtection:Purposes:account-email-encryption:CurrentKeyId"] = EmailKeyId,
+                ["AccountProtection:Purposes:account-email-encryption:ReadKeyIds:0"] = EmailKeyId,
+                ["AccountProtection:Purposes:account-email-encryption:WriteKeyIds:0"] = EmailKeyId,
+                [$"AccountProtection:Purposes:account-email-encryption:Keys:{EmailKeyId}"] = Convert.ToBase64String(EmailKey),
                 ["AccountProtection:Purposes:account-email-lookup:CurrentKeyId"] = "lookup-v1",
                 ["AccountProtection:Purposes:account-email-lookup:ReadKeyIds:0"] = "lookup-v1",
                 ["AccountProtection:Purposes:account-email-lookup:WriteKeyIds:0"] = "lookup-v1",

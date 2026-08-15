@@ -6,6 +6,7 @@ namespace IndieFi.Web.Infrastructure.Cryptography;
 public sealed class ConfigurationKeyProvider : IKeyProvider
 {
     private const string RootSection = "AccountProtection:Purposes";
+    private const int MaxKeyIdLength = 100;
 
     private readonly IReadOnlyDictionary<KeyPurpose, PurposeKeys> _purposes;
 
@@ -90,6 +91,13 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
             .Append(currentKeyId)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
+        if (requiredIds.Any(keyId => keyId.Length > MaxKeyIdLength))
+        {
+            throw new InvalidOperationException(
+                $"Key IDs for purpose '{purpose}' must be {MaxKeyIdLength} characters or fewer.");
+        }
+
         var keys = new Dictionary<string, KeyMaterial>(StringComparer.Ordinal);
 
         foreach (var keyId in requiredIds)

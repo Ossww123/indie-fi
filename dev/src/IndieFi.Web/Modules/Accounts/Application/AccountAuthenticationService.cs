@@ -21,6 +21,12 @@ public sealed record AccountAuthenticationResult(
 
 public sealed class AccountAuthenticationService
 {
+    private static readonly User DummyPasswordUser = new();
+    private static readonly string DummyPasswordHash =
+        new PasswordHasher<User>().HashPassword(
+            DummyPasswordUser,
+            "IndieFi dummy password verification value");
+
     private readonly AppDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly EmailProtectionService _emailProtection;
@@ -77,6 +83,10 @@ public sealed class AccountAuthenticationService
 
         if (userId is null)
         {
+            _ = _passwordHasher.VerifyHashedPassword(
+                DummyPasswordUser,
+                DummyPasswordHash,
+                password);
             return new AccountAuthenticationResult(
                 AccountAuthenticationOutcome.InvalidCredentials);
         }
