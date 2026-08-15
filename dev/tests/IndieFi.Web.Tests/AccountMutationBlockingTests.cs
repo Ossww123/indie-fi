@@ -246,7 +246,9 @@ public sealed class AccountMutationBlockingTests
 
         await using (var scheduleDb = _fixture.NewDbContext())
         {
-            var schedule = await new KeyDropSchedulingService(scheduleDb).ScheduleAsync(
+            var schedule = await new KeyDropSchedulingService(
+                scheduleDb,
+                TestAccountProtection.CreateGameKeyProtectionService()).ScheduleAsync(
                 gameId,
                 userId,
                 DateTimeOffset.UtcNow.AddHours(1),

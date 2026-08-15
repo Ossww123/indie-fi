@@ -1,5 +1,6 @@
 using System.Net;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -104,6 +105,37 @@ public sealed class KeyDropPageTests
     }
 
     [Fact]
+    public async Task Get_DropDetailPage_ShowsEncryptedKeyOnlyToRecipient()
+    {
+        const string Secret = "HTTP-ENCRYPTED-GRANTED-KEY";
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var dropId = await CreateEncryptedGrantAsync(email, Secret);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var anonymousClient = factory.CreateClient();
+        using var anonymousResponse = await anonymousClient.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var anonymousHtml = await anonymousResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        using var recipientClient = factory.CreateClient();
+        await PageTestSupport.LoginAsync(recipientClient, email, password);
+        using var recipientResponse = await recipientClient.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var recipientHtml = await recipientResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, anonymousResponse.StatusCode);
+        Assert.DoesNotContain(Secret, anonymousHtml);
+        Assert.Equal(HttpStatusCode.OK, recipientResponse.StatusCode);
+        Assert.Contains(Secret, recipientHtml);
+        Assert.True(recipientResponse.Headers.CacheControl?.NoStore);
+    }
+
+    [Fact]
     public async Task Get_NewDropPage_LoadsOnlyItsTypeScriptModule()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
@@ -191,6 +223,71 @@ public sealed class KeyDropPageTests
         await db.SaveChangesAsync(cancellationToken);
 
         return game.Id;
+    }
+
+    private async Task<long> CreateEncryptedGrantAsync(
+        string recipientEmail,
+        string secret)
+    {
+        await using var db = _fixture.NewDbContext();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var recipient = await TestAccountProtection.FindUserAsync(
+            db,
+            recipientEmail,
+            cancellationToken);
+        var owner = TestAccountProtection.AddUser(
+            db,
+            $"{Guid.NewGuid():N}@example.test");
+        await db.SaveChangesAsync(cancellationToken);
+        var game = new Game
+        {
+            OwnerId = owner.Id,
+            Title = $"Test Game {Guid.NewGuid():N}",
+        };
+        db.Games.Add(game);
+        await db.SaveChangesAsync(cancellationToken);
+        var drop = new KeyDrop
+        {
+            GameId = game.Id,
+            OwnerId = owner.Id,
+            OpensAt = DateTimeOffset.UtcNow.AddHours(-1),
+            TotalKeys = 1,
+        };
+        db.KeyDrops.Add(drop);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var parsed = GameKeyPolicy.ParseBatch(secret);
+        var gameKeyValue = Assert.Single(parsed.Keys);
+        var protection = TestAccountProtection.CreateGameKeyProtectionService();
+        var protectedKey = protection.Protect(gameKeyValue);
+        var gameKey = new GameKey
+        {
+            DropId = drop.Id,
+            Ciphertext = protectedKey.Ciphertext,
+            Nonce = protectedKey.Nonce,
+            AuthenticationTag = protectedKey.AuthenticationTag,
+            EncryptionKeyId = protectedKey.EncryptionKeyId,
+        };
+        db.GameKeys.Add(gameKey);
+        foreach (var fingerprint in protection.CreateWritableFingerprints(gameKeyValue))
+        {
+            db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
+            {
+                GameKey = gameKey,
+                KeyId = fingerprint.KeyId,
+                Value = fingerprint.Value,
+            });
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        db.KeyGrants.Add(new KeyGrant
+        {
+            DropId = drop.Id,
+            UserId = recipient.Id,
+            KeyId = gameKey.Id,
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        return drop.Id;
     }
 
     private async Task LoginAsync(HttpClient client)

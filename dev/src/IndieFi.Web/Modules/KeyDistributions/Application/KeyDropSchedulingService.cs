@@ -4,6 +4,8 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace IndieFi.Web.Modules.KeyDistributions.Application;
 
@@ -24,16 +26,24 @@ public sealed record ScheduleKeyDropResult(
 
 public sealed class KeyDropSchedulingService
 {
+    private const string UniqueViolation = "23505";
+    private const string FingerprintUniqueIndex =
+        "IX_game_key_fingerprints_key_id_value";
+
     public const string OpensAtField = "OpensAt";
     public const string KeysField = "KeysText";
 
     private static readonly IReadOnlyList<ValidationViolation> NoViolations = [];
 
     private readonly AppDbContext _db;
+    private readonly GameKeyProtectionService _gameKeyProtection;
 
-    public KeyDropSchedulingService(AppDbContext db)
+    public KeyDropSchedulingService(
+        AppDbContext db,
+        GameKeyProtectionService gameKeyProtection)
     {
         _db = db;
+        _gameKeyProtection = gameKeyProtection;
     }
 
     public async Task<ScheduleKeyDropResult> ScheduleAsync(
@@ -106,6 +116,12 @@ public sealed class KeyDropSchedulingService
             return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.Invalid, violations);
         }
 
+        if (await ContainsRegisteredKeyAsync(keys))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return DuplicateKeyResult();
+        }
+
         var keyDrop = new KeyDrop
         {
             GameId = gameId,
@@ -114,15 +130,50 @@ public sealed class KeyDropSchedulingService
             TotalKeys = keys.Count,
         };
 
-        var gameKeys = keys.Select(key => new GameKey
+        var gameKeys = keys.Select(key =>
         {
-            Drop = keyDrop,
-            KeyValue = key.Value,
-        });
+            var protectedKey = _gameKeyProtection.Protect(key);
+            var gameKey = new GameKey
+            {
+                Drop = keyDrop,
+                Ciphertext = protectedKey.Ciphertext,
+                Nonce = protectedKey.Nonce,
+                AuthenticationTag = protectedKey.AuthenticationTag,
+                EncryptionKeyId = protectedKey.EncryptionKeyId,
+            };
+
+            foreach (var fingerprint in
+                     _gameKeyProtection.CreateWritableFingerprints(key))
+            {
+                _db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
+                {
+                    GameKey = gameKey,
+                    KeyId = fingerprint.KeyId,
+                    Value = fingerprint.Value,
+                });
+            }
+
+            return gameKey;
+        }).ToArray();
 
         _db.KeyDrops.Add(keyDrop);
         _db.GameKeys.AddRange(gameKeys);
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: UniqueViolation,
+                ConstraintName: FingerprintUniqueIndex,
+            })
+        {
+            await AccountMutationGuard.RollbackIfOwnedAsync(transaction);
+            _db.ChangeTracker.Clear();
+            return DuplicateKeyResult();
+        }
+
         await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         return new ScheduleKeyDropResult(
@@ -131,6 +182,57 @@ public sealed class KeyDropSchedulingService
             keyDrop.Id,
             keys.Count);
     }
+
+    private async Task<bool> ContainsRegisteredKeyAsync(
+        IReadOnlyList<GameKeyValue> keys)
+    {
+        var plaintextValues = keys.Select(key => key.Value).ToArray();
+        if (await _db.GameKeys
+            .AsNoTracking()
+            .AnyAsync(key =>
+                key.KeyValue != null && plaintextValues.Contains(key.KeyValue)))
+        {
+            return true;
+        }
+
+        var readableFingerprints = keys
+            .SelectMany(_gameKeyProtection.CreateReadableFingerprints)
+            .GroupBy(fingerprint => fingerprint.KeyId, StringComparer.Ordinal);
+
+        foreach (var version in readableFingerprints)
+        {
+            var valuesParameter = new NpgsqlParameter(
+                "values",
+                version.Select(fingerprint => fingerprint.Value).ToArray())
+            {
+                NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Bytea,
+            };
+            var keyIdParameter = new NpgsqlParameter("keyId", version.Key);
+            var exists = await _db.Database
+                .SqlQueryRaw<bool>(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM game_key_fingerprints
+                        WHERE key_id = @keyId
+                          AND value = ANY(@values)) AS "Value"
+                    """,
+                    keyIdParameter,
+                    valuesParameter)
+                .SingleAsync();
+
+            if (exists)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static ScheduleKeyDropResult DuplicateKeyResult() => new(
+        ScheduleKeyDropOutcome.Invalid,
+        [new ValidationViolation(KeysField, "이미 등록된 게임 키가 포함되어 있습니다.")]);
 
     private static string GetKeyViolationMessage(GameKeyInputViolation violation)
     {

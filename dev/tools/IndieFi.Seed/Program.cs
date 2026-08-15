@@ -5,6 +5,8 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Infrastructure.Cryptography;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -43,8 +45,9 @@ internal sealed class Program
         var keyConfiguration = new ConfigurationManager();
         keyConfiguration.AddUserSecrets<Program>(optional: true);
         keyConfiguration.AddEnvironmentVariables();
-        var emailProtection = new EmailProtectionService(
-            new ConfigurationKeyProvider(keyConfiguration));
+        var keyProvider = new ConfigurationKeyProvider(keyConfiguration);
+        var emailProtection = new EmailProtectionService(keyProvider);
+        var gameKeyProtection = new GameKeyProtectionService(keyProvider);
 
         // Latecomers get their own accounts: reusing an account that already holds
         // a key would return AlreadyClaimed, which the page renders exactly like a
@@ -135,11 +138,30 @@ internal sealed class Program
 
         for (var index = 1; index <= options.KeyCount; index++)
         {
-            db.GameKeys.Add(new GameKey
+            var parsedKey = GameKeyPolicy.ParseBatch(
+                $"LOADTEST-{Guid.NewGuid():N}");
+            var gameKeyValue = parsedKey.Keys.Single();
+            var protectedKey = gameKeyProtection.Protect(gameKeyValue);
+            var gameKey = new GameKey
             {
                 Drop = drop,
-                KeyValue = $"LOADTEST-{Guid.NewGuid():N}"
-            });
+                Ciphertext = protectedKey.Ciphertext,
+                Nonce = protectedKey.Nonce,
+                AuthenticationTag = protectedKey.AuthenticationTag,
+                EncryptionKeyId = protectedKey.EncryptionKeyId,
+            };
+            db.GameKeys.Add(gameKey);
+
+            foreach (var fingerprint in
+                     gameKeyProtection.CreateWritableFingerprints(gameKeyValue))
+            {
+                db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
+                {
+                    GameKey = gameKey,
+                    KeyId = fingerprint.KeyId,
+                    Value = fingerprint.Value,
+                });
+            }
         }
 
         await db.SaveChangesAsync();

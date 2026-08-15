@@ -9,6 +9,7 @@ public static class KeyDistributionsModule
     {
         services.AddScoped<KeyClaimService>();
         services.AddScoped<KeyDropSchedulingService>();
+        services.AddScoped<GrantedGameKeyReader>();
         services.AddSingleton<GameKeyProtectionService>();
         return services;
     }

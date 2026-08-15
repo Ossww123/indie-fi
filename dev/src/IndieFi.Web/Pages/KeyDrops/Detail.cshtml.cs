@@ -22,15 +22,18 @@ public class DetailModel : PageModel
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly KeyClaimService _keyClaimService;
+    private readonly GrantedGameKeyReader _grantedGameKeyReader;
 
     public DetailModel(
         AppDbContext db,
         ICurrentUser currentUser,
-        KeyClaimService keyClaimService)
+        KeyClaimService keyClaimService,
+        GrantedGameKeyReader grantedGameKeyReader)
     {
         _db = db;
         _currentUser = currentUser;
         _keyClaimService = keyClaimService;
+        _grantedGameKeyReader = grantedGameKeyReader;
     }
 
     public KeyDrop Drop { get; private set; } = null!;
@@ -77,14 +80,12 @@ public class DetailModel : PageModel
         {
             var userId = _currentUser.GetRequiredUserId();
 
-            ClaimedKey = await _db.KeyGrants
-                .Where(grant => grant.DropId == id && grant.UserId == userId)
-                .Join(
-                    _db.GameKeys,
-                    grant => grant.KeyId,
-                    key => key.Id,
-                    (_, key) => key.KeyValue)
-                .SingleOrDefaultAsync();
+            ClaimedKey = await _grantedGameKeyReader.GetForUserAsync(id, userId);
+            if (ClaimedKey is not null)
+            {
+                Response.Headers.CacheControl = "private, no-store";
+                Response.Headers.Pragma = "no-cache";
+            }
         }
 
         return Page();
