@@ -1,0 +1,176 @@
+@using IndieFi.Web.Entities
+@using IndieFi.Web.Modules.Games.Domain
+@model GameFormPageModel
+
+<fieldset class="space-y-3"
+          data-play-links
+          data-max-links="@GamePlayLinkPolicy.MaxLinksPerGame">
+    <div>
+        <legend class="subsection-title mb-1">외부 플레이 링크</legend>
+        <p class="field-hint">
+            선택 사항입니다. 공개 HTTP(S) 주소를 최대 @(GamePlayLinkPolicy.MaxLinksPerGame)개까지 등록할 수 있습니다.
+        </p>
+        <span asp-validation-for="Links" class="field-error"></span>
+    </div>
+
+    <div class="space-y-4" data-play-link-list>
+        @for (var index = 0; index < Model.Links.Count; index++)
+        {
+            <article class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4"
+                     data-play-link-row>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="font-semibold text-slate-900" data-play-link-heading>
+                        링크 @(index + 1)
+                    </h3>
+                    <div class="flex flex-wrap gap-1">
+                        <button type="button"
+                                class="button-link"
+                                data-play-link-action="up">위로</button>
+                        <button type="button"
+                                class="button-link"
+                                data-play-link-action="down">아래로</button>
+                        <button type="button"
+                                class="button-danger px-2 py-1"
+                                data-play-link-action="remove">삭제</button>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label asp-for="Links[index].DisplayName" class="field-label">표시 이름</label>
+                    <input asp-for="Links[index].DisplayName"
+                           maxlength="@GamePlayLinkPolicy.DisplayNameMaxLength"
+                           placeholder="예: 브라우저에서 플레이"
+                           class="field-input" />
+                    <span asp-validation-for="Links[index].DisplayName" class="field-error"></span>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="field-group">
+                        <label asp-for="Links[index].Provider" class="field-label">제공처</label>
+                        <select asp-for="Links[index].Provider" class="field-input">
+                            <option value="Steam">Steam</option>
+                            <option value="ItchIo">itch.io</option>
+                            <option value="DeveloperWebsite">개발자 사이트</option>
+                            <option value="Other">기타</option>
+                        </select>
+                        <span asp-validation-for="Links[index].Provider" class="field-error"></span>
+                    </div>
+
+                    <div class="field-group">
+                        <label asp-for="Links[index].TargetPlatform" class="field-label">대상 플랫폼</label>
+                        <select asp-for="Links[index].TargetPlatform" class="field-input">
+                            <option value="">미지정</option>
+                            <option value="Windows">Windows</option>
+                            <option value="MacOS">macOS</option>
+                            <option value="Linux">Linux</option>
+                            <option value="Web">Web</option>
+                            <option value="Android">Android</option>
+                            <option value="Ios">iOS</option>
+                            <option value="Multiple">복수 플랫폼</option>
+                            <option value="Other">기타</option>
+                        </select>
+                        <span asp-validation-for="Links[index].TargetPlatform" class="field-error"></span>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label asp-for="Links[index].Url" class="field-label">외부 플레이 주소</label>
+                    <input asp-for="Links[index].Url"
+                           type="text"
+                           inputmode="url"
+                           maxlength="@GamePlayLinkPolicy.UrlMaxLength"
+                           placeholder="https://example.com/play"
+                           class="field-input" />
+                    <span asp-validation-for="Links[index].Url" class="field-error"></span>
+                </div>
+            </article>
+        }
+    </div>
+
+    <button type="button"
+            class="button-outline"
+            data-play-link-add>링크 추가</button>
+
+    <template data-play-link-template>
+        <article class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4"
+                 data-play-link-row>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="font-semibold text-slate-900" data-play-link-heading>새 링크</h3>
+                <div class="flex flex-wrap gap-1">
+                    <button type="button"
+                            class="button-link"
+                            data-play-link-action="up">위로</button>
+                    <button type="button"
+                            class="button-link"
+                            data-play-link-action="down">아래로</button>
+                    <button type="button"
+                            class="button-danger px-2 py-1"
+                            data-play-link-action="remove">삭제</button>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label for="Links___INDEX____DisplayName" class="field-label">표시 이름</label>
+                <input name="Links[__INDEX__].DisplayName"
+                       id="Links___INDEX____DisplayName"
+                       maxlength="@GamePlayLinkPolicy.DisplayNameMaxLength"
+                       placeholder="예: 브라우저에서 플레이"
+                       class="field-input" />
+                <span class="field-error field-validation-valid"
+                      data-valmsg-for="Links[__INDEX__].DisplayName"
+                      data-valmsg-replace="true"></span>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div class="field-group">
+                    <label for="Links___INDEX____Provider" class="field-label">제공처</label>
+                    <select name="Links[__INDEX__].Provider"
+                            id="Links___INDEX____Provider"
+                            class="field-input">
+                        <option value="Steam">Steam</option>
+                        <option value="ItchIo">itch.io</option>
+                        <option value="DeveloperWebsite">개발자 사이트</option>
+                        <option value="Other" selected>기타</option>
+                    </select>
+                    <span class="field-error field-validation-valid"
+                          data-valmsg-for="Links[__INDEX__].Provider"
+                          data-valmsg-replace="true"></span>
+                </div>
+
+                <div class="field-group">
+                    <label for="Links___INDEX____TargetPlatform" class="field-label">대상 플랫폼</label>
+                    <select name="Links[__INDEX__].TargetPlatform"
+                            id="Links___INDEX____TargetPlatform"
+                            class="field-input">
+                        <option value="" selected>미지정</option>
+                        <option value="Windows">Windows</option>
+                        <option value="MacOS">macOS</option>
+                        <option value="Linux">Linux</option>
+                        <option value="Web">Web</option>
+                        <option value="Android">Android</option>
+                        <option value="Ios">iOS</option>
+                        <option value="Multiple">복수 플랫폼</option>
+                        <option value="Other">기타</option>
+                    </select>
+                    <span class="field-error field-validation-valid"
+                          data-valmsg-for="Links[__INDEX__].TargetPlatform"
+                          data-valmsg-replace="true"></span>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label for="Links___INDEX____Url" class="field-label">외부 플레이 주소</label>
+                <input name="Links[__INDEX__].Url"
+                       id="Links___INDEX____Url"
+                       type="text"
+                       inputmode="url"
+                       maxlength="@GamePlayLinkPolicy.UrlMaxLength"
+                       placeholder="https://example.com/play"
+                       class="field-input" />
+                <span class="field-error field-validation-valid"
+                      data-valmsg-for="Links[__INDEX__].Url"
+                      data-valmsg-replace="true"></span>
+            </div>
+        </article>
+    </template>
+</fieldset>

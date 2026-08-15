@@ -58,6 +58,7 @@ public class DetailModel : PageModel
 
     public Game Game { get; private set; } = null!;
     public bool IsOwner { get; private set; }
+    public List<PlayLinkListItem> PlayLinks { get; private set; } = [];
     public List<DropListItem> Drops { get; private set; } = [];
     public int PendingRequestCount { get; private set; }
     public List<RequestListItem> Requests { get; private set; } = [];
@@ -82,6 +83,15 @@ public class DetailModel : PageModel
         // enforced when editing a game.
         Game = game;
         IsOwner = _currentUser.UserId is long ownerId && game.OwnerId == ownerId;
+        PlayLinks = await _db.GamePlayLinks
+            .Where(link => link.GameId == game.Id)
+            .OrderBy(link => link.SortOrder)
+            .Select(link => new PlayLinkListItem(
+                link.DisplayName,
+                link.Provider,
+                link.TargetPlatform,
+                link.Url))
+            .ToListAsync(HttpContext.RequestAborted);
 
         if (IsOwner)
         {
@@ -193,5 +203,33 @@ public class DetailModel : PageModel
     public sealed record DropListItem(long Id, DateTimeOffset OpensAt)
     {
         public bool IsOpen => OpensAt <= DateTimeOffset.Now;
+    }
+
+    public sealed record PlayLinkListItem(
+        string DisplayName,
+        GamePlayLinkProvider Provider,
+        GamePlayLinkPlatform? TargetPlatform,
+        string Url)
+    {
+        public string ProviderText => Provider switch
+        {
+            GamePlayLinkProvider.Steam => "Steam",
+            GamePlayLinkProvider.ItchIo => "itch.io",
+            GamePlayLinkProvider.DeveloperWebsite => "개발자 사이트",
+            _ => "기타",
+        };
+
+        public string? TargetPlatformText => TargetPlatform switch
+        {
+            GamePlayLinkPlatform.Windows => "Windows",
+            GamePlayLinkPlatform.MacOS => "macOS",
+            GamePlayLinkPlatform.Linux => "Linux",
+            GamePlayLinkPlatform.Web => "Web",
+            GamePlayLinkPlatform.Android => "Android",
+            GamePlayLinkPlatform.Ios => "iOS",
+            GamePlayLinkPlatform.Multiple => "복수 플랫폼",
+            GamePlayLinkPlatform.Other => "기타 플랫폼",
+            _ => null,
+        };
     }
 }

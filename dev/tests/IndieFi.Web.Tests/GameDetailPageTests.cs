@@ -132,6 +132,88 @@ public sealed class GameDetailPageTests
         Assert.DoesNotContain("완료", html);
     }
 
+    [Fact]
+    public async Task Get_GameDetail_Anonymously_ShowsOrderedProtectedExternalLinks()
+    {
+        long gameId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var owner = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0);
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, owner.Id);
+            gameId = game.Id;
+            arrangeDb.GamePlayLinks.AddRange(
+                new GamePlayLink
+                {
+                    GameId = gameId,
+                    DisplayName = "Second link",
+                    Provider = GamePlayLinkProvider.Steam,
+                    Url = "https://store.steampowered.com/app/123",
+                    SortOrder = 1,
+                },
+                new GamePlayLink
+                {
+                    GameId = gameId,
+                    DisplayName = "<script>alert(1)</script> First browser link",
+                    Provider = GamePlayLinkProvider.DeveloperWebsite,
+                    TargetPlatform = GamePlayLinkPlatform.Web,
+                    Url = "https://example.com/play?mode=demo&source=indiefi",
+                    SortOrder = 0,
+                });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync(
+            $"/Games/Detail/{gameId}",
+            TestContext.Current.CancellationToken);
+        var rawHtml = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(rawHtml);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("플레이하기", html);
+        Assert.Contains("외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.", html);
+        Assert.Contains("개발자 사이트", html);
+        Assert.Contains("Web", html);
+        Assert.Equal(2, CountOccurrences(rawHtml, "target=\"_blank\""));
+        Assert.Equal(2, CountOccurrences(rawHtml, "rel=\"noopener noreferrer\""));
+        Assert.Contains(
+            "href=\"https://example.com/play?mode=demo&amp;source=indiefi\"",
+            rawHtml);
+        Assert.Contains(
+            "&lt;script&gt;alert(1)&lt;/script&gt; First browser link",
+            rawHtml);
+        Assert.DoesNotContain("<script>alert(1)</script>", rawHtml);
+        Assert.True(
+            html.IndexOf("<script>alert(1)</script> First browser link", StringComparison.Ordinal)
+            < html.IndexOf("Second link", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Get_GameDetail_WithoutLinks_ShowsEmptyStateWithoutExternalWarning()
+    {
+        long gameId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var owner = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0);
+            gameId = (await ReviewTestData.CreateGameAsync(arrangeDb, owner.Id)).Id;
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync(
+            $"/Games/Detail/{gameId}",
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("등록된 외부 플레이 링크 없음", html);
+        Assert.DoesNotContain("외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.", html);
+        Assert.DoesNotContain("target=\"_blank\"", html);
+    }
+
     private static int CountOccurrences(string source, string value)
     {
         var count = 0;

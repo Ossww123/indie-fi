@@ -7,6 +7,7 @@ public static class GamesModule
     public static IServiceCollection AddGamesModule(this IServiceCollection services)
     {
         services.AddScoped<GameManagementService>();
+        services.AddScoped<GamePlayLinkManagementService>();
         return services;
     }
 }

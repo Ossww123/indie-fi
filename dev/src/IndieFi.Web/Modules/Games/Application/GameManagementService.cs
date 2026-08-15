@@ -41,28 +41,42 @@ public sealed class GameManagementService
     private static readonly IReadOnlyList<ValidationViolation> NoViolations = [];
 
     private readonly AppDbContext _db;
+    private readonly GamePlayLinkManagementService _gamePlayLinkManagementService;
 
     public GameManagementService(AppDbContext db)
     {
         _db = db;
+        _gamePlayLinkManagementService = new GamePlayLinkManagementService(db);
+    }
+
+    public Task<CreateGameResult> CreateAsync(
+        long ownerId,
+        string? title,
+        string? description)
+    {
+        return CreateAsync(ownerId, title, description, [], CancellationToken.None);
     }
 
     public async Task<CreateGameResult> CreateAsync(
         long ownerId,
         string? title,
-        string? description)
+        string? description,
+        IReadOnlyList<GamePlayLinkInput> links,
+        CancellationToken cancellationToken)
     {
         var violations = Validate(title, description);
+        var linkValidation = GamePlayLinkManagementService.Validate(links);
+        violations.AddRange(linkValidation.Violations);
         if (violations.Count > 0)
         {
             return new CreateGameResult(CreateGameOutcome.Invalid, violations);
         }
 
         await using var transaction =
-            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
-        if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId))
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db, cancellationToken);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId, cancellationToken))
         {
-            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
             return new CreateGameResult(
                 CreateGameOutcome.AccountUnavailable,
                 NoViolations);
@@ -76,8 +90,16 @@ public sealed class GameManagementService
         };
 
         _db.Games.Add(game);
-        await _db.SaveChangesAsync();
-        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+        await _db.SaveChangesAsync(cancellationToken);
+        if (linkValidation.Links.Count > 0)
+        {
+            await _gamePlayLinkManagementService.ReplaceValidatedAsync(
+                game.Id,
+                linkValidation.Links,
+                cancellationToken);
+        }
+
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
 
         return new CreateGameResult(
             CreateGameOutcome.Created,
@@ -86,43 +108,79 @@ public sealed class GameManagementService
             game.Title);
     }
 
-    public async Task<UpdateGameResult> UpdateAsync(
+    public Task<UpdateGameResult> UpdateAsync(
         long gameId,
         long ownerId,
         string? title,
         string? description)
     {
+        return UpdateAsync(
+            gameId,
+            ownerId,
+            title,
+            description,
+            links: null,
+            cancellationToken: CancellationToken.None);
+    }
+
+    public async Task<UpdateGameResult> UpdateAsync(
+        long gameId,
+        long ownerId,
+        string? title,
+        string? description,
+        IReadOnlyList<GamePlayLinkInput>? links,
+        CancellationToken cancellationToken)
+    {
         await using var transaction =
-            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
-        if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId))
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db, cancellationToken);
+        if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId, cancellationToken))
         {
-            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
             return new UpdateGameResult(
                 UpdateGameOutcome.AccountUnavailable,
                 NoViolations);
         }
 
-        var game = await _db.Games.FindAsync(gameId);
+        var game = await _db.Games.FindAsync([gameId], cancellationToken);
 
         // Checked before validation so an unauthorized caller cannot tell a missing
         // game apart from one they do not own by comparing error messages.
         if (game is null || game.OwnerId != ownerId)
         {
-            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
             return new UpdateGameResult(UpdateGameOutcome.NotFound, NoViolations);
         }
 
         var violations = Validate(title, description);
+        var linkValidation = links is null
+            ? null
+            : GamePlayLinkManagementService.Validate(links);
+        if (linkValidation is not null)
+        {
+            violations.AddRange(linkValidation.Violations);
+        }
+
         if (violations.Count > 0)
         {
-            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
             return new UpdateGameResult(UpdateGameOutcome.Invalid, violations);
         }
 
         game.Title = title!.Trim();
         game.Description = NormalizeDescription(description);
-        await _db.SaveChangesAsync();
-        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+        if (linkValidation is null)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            await _gamePlayLinkManagementService.ReplaceValidatedAsync(
+                gameId,
+                linkValidation.Links,
+                cancellationToken);
+        }
+
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
 
         return new UpdateGameResult(UpdateGameOutcome.Updated, NoViolations);
     }
