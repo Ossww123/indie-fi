@@ -18,7 +18,10 @@ else
         {
             <div class="surface-item">
                 <div class="text-meta">
-                    @item.ReviewerDisplayIdentifier · 제출 @item.SubmittedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    <a asp-page="/Profiles/Detail"
+                       asp-route-id="@item.ReviewerId"
+                       class="text-link">@item.ReviewerDisplayName</a>
+                    · 제출 @item.SubmittedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                 </div>
                 <div class="mt-2 whitespace-pre-wrap leading-7 text-slate-700">@item.Body</div>
             </div>

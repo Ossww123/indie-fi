@@ -112,7 +112,10 @@
                 <div class="surface-item">
                     <div class="font-semibold">@item.GameTitle</div>
                     <div class="text-meta">
-                        @item.RequesterDisplayIdentifier · @item.RequestedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        <a asp-page="/Profiles/Detail"
+                           asp-route-id="@item.RequesterId"
+                           class="text-link">@item.RequesterDisplayName</a>
+                        · @item.RequestedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                     </div>
                 </div>
             }

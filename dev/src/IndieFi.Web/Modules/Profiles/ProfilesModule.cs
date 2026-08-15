@@ -8,6 +8,7 @@ public static class ProfilesModule
     {
         services.AddScoped<UserProfileManagementService>();
         services.AddScoped<PublicUserProfileQueryService>();
+        services.AddScoped<UserDisplayNameResolver>();
         return services;
     }
 }

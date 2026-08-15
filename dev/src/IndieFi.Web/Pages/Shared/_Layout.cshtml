@@ -1,3 +1,4 @@
+@inject IndieFi.Web.Application.Abstractions.ICurrentUser CurrentUser
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -34,7 +35,12 @@
                         <a class="site-nav-link" asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>
                         <a class="site-nav-link" asp-area="" asp-page="/Account/Profile">내 프로필</a>
                         <a class="site-nav-link" asp-area="" asp-page="/Account/Password">비밀번호 변경</a>
-                        <span class="px-3 py-2 text-sm text-slate-500">@User.Identity.Name 님</span>
+                        @if (CurrentUser.UserId is long currentUserId)
+                        {
+                            <a asp-page="/Profiles/Detail"
+                               asp-route-id="@currentUserId"
+                               class="site-nav-link">@User.Identity.Name 님</a>
+                        }
                         <form method="post" asp-page="/Logout">
                             <button type="submit" class="site-nav-link w-full text-left">로그아웃</button>
                         </form>

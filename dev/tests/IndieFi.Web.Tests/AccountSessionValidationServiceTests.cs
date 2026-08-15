@@ -1,5 +1,6 @@
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -31,6 +32,40 @@ public sealed class AccountSessionValidationServiceTests
             TestContext.Current.CancellationToken);
 
         Assert.True(isValid);
+        Assert.Equal(1, roundTrips.Count);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_WithNickname_ReturnsCurrentDisplayNameInOneQuery()
+    {
+        var userId = await CreateUserAsync(
+            emailConfirmed: true,
+            AccountStatus.Active,
+            sessionVersion: 9);
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var changedAt = DateTimeOffset.UtcNow.AddDays(-8);
+            arrangeDb.UserProfiles.Add(new UserProfile
+            {
+                UserId = userId,
+                Nickname = "SessionPlayer",
+                NormalizedNickname = "SESSIONPLAYER",
+                NicknameChangedAt = changedAt,
+                CreatedAt = changedAt,
+                UpdatedAt = changedAt,
+            });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var roundTrips = new RoundTripCountingInterceptor();
+        await using var db = _fixture.NewDbContext(roundTrips);
+        var result = await new AccountSessionValidationService(db).ValidateAsync(
+            userId,
+            sessionVersion: 9,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal("SessionPlayer", result.DisplayName);
         Assert.Equal(1, roundTrips.Count);
     }
 

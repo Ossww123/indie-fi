@@ -76,7 +76,8 @@ public sealed class PublicProfilePageTests
             await gameResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, gameResponse.StatusCode);
-        Assert.Contains("개발자 프로필 보기", gameHtml);
+        Assert.Contains("개발자", gameHtml);
+        Assert.Contains("Public Gamer", gameHtml);
         Assert.Contains($"href=\"/Profiles/{userId}\"", gameHtml);
     }
 

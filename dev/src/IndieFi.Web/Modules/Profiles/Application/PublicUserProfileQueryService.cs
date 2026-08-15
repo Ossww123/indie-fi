@@ -70,7 +70,7 @@ public sealed class PublicUserProfileQueryService
 
         return new PublicUserProfile(
             header.UserId,
-            header.Nickname ?? UserDisplayIdentifier.Format(header.UserId),
+            UserDisplayName.Resolve(header.UserId, header.Nickname),
             header.Biography,
             completedReviewCount,
             games);

@@ -2,6 +2,7 @@ using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -45,18 +46,22 @@ public class DetailModel : PageModel
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly ReviewRequestService _reviewRequestService;
+    private readonly UserDisplayNameResolver _displayNames;
 
     public DetailModel(
         AppDbContext db,
         ICurrentUser currentUser,
-        ReviewRequestService reviewRequestService)
+        ReviewRequestService reviewRequestService,
+        UserDisplayNameResolver displayNames)
     {
         _db = db;
         _currentUser = currentUser;
         _reviewRequestService = reviewRequestService;
+        _displayNames = displayNames;
     }
 
     public Game Game { get; private set; } = null!;
+    public string OwnerDisplayName { get; private set; } = string.Empty;
     public bool IsOwner { get; private set; }
     public List<PlayLinkListItem> PlayLinks { get; private set; } = [];
     public List<DropListItem> Drops { get; private set; } = [];
@@ -83,6 +88,9 @@ public class DetailModel : PageModel
         // because feedback added later is left by other people. Ownership is only
         // enforced when editing a game.
         Game = game;
+        OwnerDisplayName = await _displayNames.ResolveAsync(
+            game.OwnerId,
+            HttpContext.RequestAborted);
         IsOwner = _currentUser.UserId is long ownerId && game.OwnerId == ownerId;
         PlayLinks = await _db.GamePlayLinks
             .Where(link => link.GameId == game.Id)

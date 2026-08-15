@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Claims;
 using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
@@ -94,6 +95,89 @@ public sealed class SessionCookieAuthenticationTests
         }
 
         await AssertRejectedAndDeletedAsync(factory, client, account.UserId);
+    }
+
+    [Fact]
+    public async Task Get_AfterNicknameChanges_RenewsCookieWithCurrentDisplayName()
+    {
+        var account = await CreateAccountAsync();
+        var suffix = $"{Guid.NewGuid():N}"[..6];
+        var firstNickname = $"First{suffix}";
+        var secondNickname = $"Second{suffix}";
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, account.Email, account.Password);
+
+        await using (var db = _fixture.NewDbContext())
+        {
+            var changedAt = DateTimeOffset.UtcNow;
+            db.UserProfiles.Add(new UserProfile
+            {
+                UserId = account.UserId,
+                Nickname = firstNickname,
+                NormalizedNickname = firstNickname.ToUpperInvariant(),
+                NicknameChangedAt = changedAt,
+                CreatedAt = changedAt,
+                UpdatedAt = changedAt,
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        using (var firstResponse = await client.GetAsync(
+                   "/",
+                   TestContext.Current.CancellationToken))
+        {
+            var html = await firstResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken);
+            Assert.Contains($"{firstNickname} 님", WebUtility.HtmlDecode(html));
+            Assert.DoesNotContain(UserDisplayIdentifier.Format(account.UserId), html);
+            AssertCookieRenewed(factory, firstResponse);
+        }
+
+        await using (var db = _fixture.NewDbContext())
+        {
+            var profile = await db.UserProfiles.SingleAsync(
+                item => item.UserId == account.UserId,
+                TestContext.Current.CancellationToken);
+            profile.Nickname = secondNickname;
+            profile.NormalizedNickname = secondNickname.ToUpperInvariant();
+            profile.NicknameChangedAt = DateTimeOffset.UtcNow;
+            profile.UpdatedAt = profile.NicknameChangedAt.Value;
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        using (var secondResponse = await client.GetAsync(
+                   "/",
+                   TestContext.Current.CancellationToken))
+        {
+            var html = await secondResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken);
+            Assert.Contains($"{secondNickname} 님", WebUtility.HtmlDecode(html));
+            Assert.DoesNotContain(firstNickname, html);
+            AssertCookieRenewed(factory, secondResponse);
+        }
+
+        await using (var db = _fixture.NewDbContext())
+        {
+            var profile = await db.UserProfiles.SingleAsync(
+                item => item.UserId == account.UserId,
+                TestContext.Current.CancellationToken);
+            profile.Nickname = null;
+            profile.NormalizedNickname = null;
+            profile.NicknameChangedAt = DateTimeOffset.UtcNow;
+            profile.UpdatedAt = profile.NicknameChangedAt.Value;
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        using var fallbackResponse = await client.GetAsync(
+            "/",
+            TestContext.Current.CancellationToken);
+        var fallbackHtml = await fallbackResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Contains(UserDisplayIdentifier.Format(account.UserId), fallbackHtml);
+        Assert.DoesNotContain(secondNickname, fallbackHtml);
+        AssertCookieRenewed(factory, fallbackResponse);
     }
 
     [Fact]
@@ -292,6 +376,17 @@ public sealed class SessionCookieAuthenticationTests
         Assert.Contains(
             response.Headers.GetValues("Set-Cookie"),
             value => value.StartsWith($"{cookieName}=;", StringComparison.Ordinal));
+    }
+
+    private static void AssertCookieRenewed(
+        WebAppFactory factory,
+        HttpResponseMessage response)
+    {
+        var cookieName = Assert.IsType<string>(GetCookieOptions(factory).Cookie.Name);
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith($"{cookieName}=", StringComparison.Ordinal)
+                && !value.StartsWith($"{cookieName}=;", StringComparison.Ordinal));
     }
 
     private sealed record Account(string Email, string Password, long UserId);
