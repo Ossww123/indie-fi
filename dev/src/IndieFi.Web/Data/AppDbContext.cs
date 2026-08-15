@@ -42,6 +42,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<GameKey> GameKeys => Set<GameKey>();
 
+    public DbSet<StoredGameKeyFingerprint> GameKeyFingerprints =>
+        Set<StoredGameKeyFingerprint>();
+
     public DbSet<KeyGrant> KeyGrants => Set<KeyGrant>();
 
     public DbSet<CreditLedgerEntry> CreditLedgerEntries => Set<CreditLedgerEntry>();
@@ -547,7 +550,23 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<GameKey>(gameKey =>
         {
-            gameKey.ToTable("game_keys");
+            gameKey.ToTable("game_keys", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_keys_storage_present",
+                    "key_value IS NOT NULL OR ciphertext IS NOT NULL");
+                table.HasCheckConstraint(
+                    "CK_game_keys_encryption_shape",
+                    "num_nonnulls(ciphertext, nonce, authentication_tag, "
+                    + "encryption_key_id) = 0 OR ("
+                    + "num_nonnulls(ciphertext, nonce, authentication_tag, "
+                    + "encryption_key_id) = 4 AND "
+                    + "octet_length(ciphertext) BETWEEN 1 AND 800 AND "
+                    + "octet_length(nonce) = 12 AND "
+                    + "octet_length(authentication_tag) = 16 AND "
+                    + "char_length(encryption_key_id) BETWEEN 1 AND 100 AND "
+                    + "encryption_key_id = btrim(encryption_key_id))");
+            });
 
             gameKey.HasKey(key => key.Id);
             gameKey.Property(key => key.Id).HasColumnName("id");
@@ -557,8 +576,20 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .IsRequired();
 
             gameKey.Property(key => key.KeyValue)
-                .HasColumnName("key_value")
-                .IsRequired();
+                .HasColumnName("key_value");
+
+            gameKey.Property(key => key.Ciphertext)
+                .HasColumnName("ciphertext");
+
+            gameKey.Property(key => key.Nonce)
+                .HasColumnName("nonce");
+
+            gameKey.Property(key => key.AuthenticationTag)
+                .HasColumnName("authentication_tag");
+
+            gameKey.Property(key => key.EncryptionKeyId)
+                .HasColumnName("encryption_key_id")
+                .HasMaxLength(100);
 
             gameKey.Property(key => key.CreatedAt)
                 .HasColumnName("created_at")
@@ -570,6 +601,35 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             gameKey.HasOne(key => key.Drop)
                 .WithMany()
                 .HasForeignKey(key => key.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StoredGameKeyFingerprint>(fingerprint =>
+        {
+            fingerprint.ToTable("game_key_fingerprints", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_key_fingerprints_key_id_shape",
+                    "char_length(key_id) BETWEEN 1 AND 100 AND key_id = btrim(key_id)");
+                table.HasCheckConstraint(
+                    "CK_game_key_fingerprints_value_length",
+                    "octet_length(value) = 32");
+            });
+
+            fingerprint.HasKey(item => new { item.GameKeyId, item.KeyId });
+            fingerprint.Property(item => item.GameKeyId)
+                .HasColumnName("game_key_id");
+            fingerprint.Property(item => item.KeyId)
+                .HasColumnName("key_id")
+                .HasMaxLength(100);
+            fingerprint.Property(item => item.Value)
+                .HasColumnName("value");
+
+            fingerprint.HasIndex(item => new { item.KeyId, item.Value })
+                .IsUnique();
+            fingerprint.HasOne(item => item.GameKey)
+                .WithMany()
+                .HasForeignKey(item => item.GameKeyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

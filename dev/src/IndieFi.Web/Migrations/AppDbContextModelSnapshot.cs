@@ -118,6 +118,14 @@ namespace IndieFi.Web.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<byte[]>("AuthenticationTag")
+                        .HasColumnType("bytea")
+                        .HasColumnName("authentication_tag");
+
+                    b.Property<byte[]>("Ciphertext")
+                        .HasColumnType("bytea")
+                        .HasColumnName("ciphertext");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -128,16 +136,29 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("drop_id");
 
+                    b.Property<string>("EncryptionKeyId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("encryption_key_id");
+
                     b.Property<string>("KeyValue")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("key_value");
+
+                    b.Property<byte[]>("Nonce")
+                        .HasColumnType("bytea")
+                        .HasColumnName("nonce");
 
                     b.HasKey("Id");
 
                     b.HasIndex("DropId");
 
-                    b.ToTable("game_keys", (string)null);
+                    b.ToTable("game_keys", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_game_keys_encryption_shape", "num_nonnulls(ciphertext, nonce, authentication_tag, encryption_key_id) = 0 OR (num_nonnulls(ciphertext, nonce, authentication_tag, encryption_key_id) = 4 AND octet_length(ciphertext) BETWEEN 1 AND 800 AND octet_length(nonce) = 12 AND octet_length(authentication_tag) = 16 AND char_length(encryption_key_id) BETWEEN 1 AND 100 AND encryption_key_id = btrim(encryption_key_id))");
+
+                            t.HasCheckConstraint("CK_game_keys_storage_present", "key_value IS NOT NULL OR ciphertext IS NOT NULL");
+                        });
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.GamePlayLink", b =>
@@ -434,6 +455,35 @@ namespace IndieFi.Web.Migrations
                             t.HasCheckConstraint("CK_review_requests_status", "status IN ('Queued', 'Assigned', 'Completed', 'Cancelled')");
 
                             t.HasCheckConstraint("CK_review_requests_terminal_timestamps", "(status IN ('Queued', 'Assigned') AND completed_at IS NULL AND cancelled_at IS NULL) OR (status = 'Completed' AND completed_at IS NOT NULL AND cancelled_at IS NULL) OR (status = 'Cancelled' AND cancelled_at IS NOT NULL AND completed_at IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.StoredGameKeyFingerprint", b =>
+                {
+                    b.Property<long>("GameKeyId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("game_key_id");
+
+                    b.Property<string>("KeyId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("key_id");
+
+                    b.Property<byte[]>("Value")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("value");
+
+                    b.HasKey("GameKeyId", "KeyId");
+
+                    b.HasIndex("KeyId", "Value")
+                        .IsUnique();
+
+                    b.ToTable("game_key_fingerprints", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_game_key_fingerprints_key_id_shape", "char_length(key_id) BETWEEN 1 AND 100 AND key_id = btrim(key_id)");
+
+                            t.HasCheckConstraint("CK_game_key_fingerprints_value_length", "octet_length(value) = 32");
                         });
                 });
 
@@ -1147,6 +1197,17 @@ namespace IndieFi.Web.Migrations
                     b.Navigation("RefundEntry");
 
                     b.Navigation("SpendEntry");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Entities.StoredGameKeyFingerprint", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.GameKey", "GameKey")
+                        .WithMany()
+                        .HasForeignKey("GameKeyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GameKey");
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.AuthenticationEmailOutboxMessage", b =>

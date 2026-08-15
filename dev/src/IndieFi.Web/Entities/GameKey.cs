@@ -9,7 +9,15 @@ public class GameKey
 
     public long DropId { get; set; }
 
-    public string KeyValue { get; set; } = string.Empty;
+    public string? KeyValue { get; set; }
+
+    public byte[]? Ciphertext { get; set; }
+
+    public byte[]? Nonce { get; set; }
+
+    public byte[]? AuthenticationTag { get; set; }
+
+    public string? EncryptionKeyId { get; set; }
 
     public KeyDrop Drop { get; set; } = null!;
 
