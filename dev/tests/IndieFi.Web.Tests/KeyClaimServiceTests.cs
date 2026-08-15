@@ -37,7 +37,10 @@ public sealed class KeyClaimServiceTests
         await using (var serviceDb = _fixture.NewDbContext())
         {
             var service = NewService(serviceDb);
-            result = await service.ClaimAsync(dropId, userId);
+            result = await service.ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -71,7 +74,10 @@ public sealed class KeyClaimServiceTests
         ClaimResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await NewService(serviceDb).ClaimAsync(dropId, userId);
+            result = await NewService(serviceDb).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -103,14 +109,20 @@ public sealed class KeyClaimServiceTests
         await using (var firstServiceDb = _fixture.NewDbContext())
         {
             var service = NewService(firstServiceDb);
-            firstResult = await service.ClaimAsync(dropId, userId);
+            firstResult = await service.ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         ClaimResult secondResult;
         await using (var secondServiceDb = _fixture.NewDbContext())
         {
             var service = NewService(secondServiceDb);
-            secondResult = await service.ClaimAsync(dropId, userId);
+            secondResult = await service.ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -144,7 +156,10 @@ public sealed class KeyClaimServiceTests
         await using (var firstServiceDb = _fixture.NewDbContext())
         {
             var service = NewService(firstServiceDb);
-            firstResult = await service.ClaimAsync(dropId, userId);
+            firstResult = await service.ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         long firstKeyId;
@@ -160,7 +175,10 @@ public sealed class KeyClaimServiceTests
         await using (var secondServiceDb = _fixture.NewDbContext())
         {
             var service = NewService(secondServiceDb);
-            secondResult = await service.ClaimAsync(dropId, userId);
+            secondResult = await service.ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -205,7 +223,10 @@ public sealed class KeyClaimServiceTests
         {
             await using var serviceDb = _fixture.NewDbContext();
             var service = NewService(serviceDb);
-            outcomes.Add((await service.ClaimAsync(dropId, userId)).Outcome);
+            outcomes.Add((await service.ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)).Outcome);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -252,7 +273,10 @@ public sealed class KeyClaimServiceTests
         var outcomes = await Task.WhenAll(userIds.Select(async userId =>
         {
             await using var serviceDb = _fixture.NewDbContext();
-            return (await NewService(serviceDb).ClaimAsync(dropId, userId)).Outcome;
+            return (await NewService(serviceDb).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)).Outcome;
         }));
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -286,7 +310,10 @@ public sealed class KeyClaimServiceTests
         var outcomes = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
         {
             await using var serviceDb = _fixture.NewDbContext();
-            return (await NewService(serviceDb).ClaimAsync(dropId, userId)).Outcome;
+            return (await NewService(serviceDb).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)).Outcome;
         }));
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -306,7 +333,8 @@ public sealed class KeyClaimServiceTests
     [Fact]
     public async Task ClaimAsync_WhenGrantingAKey_MakesTheExpectedNumberOfDatabaseRoundTrips()
     {
-        const int ExpectedRoundTrips = 2;
+        // Explicit serialization needs BEGIN + lock/precheck + mutation + COMMIT.
+        const int ExpectedRoundTrips = 4;
         long userId;
         long dropId;
 
@@ -324,7 +352,10 @@ public sealed class KeyClaimServiceTests
         await using (var serviceDb = _fixture.NewDbContext(interceptor))
         {
             var service = NewService(serviceDb);
-            result = await service.ClaimAsync(dropId, userId);
+            result = await service.ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         Assert.Equal(ClaimOutcome.Granted, result.Outcome);
@@ -347,7 +378,10 @@ public sealed class KeyClaimServiceTests
         await using (var serviceDb = _fixture.NewDbContext())
         {
             var service = NewService(serviceDb);
-            result = await service.ClaimAsync(DropId, userId);
+            result = await service.ClaimAsync(
+                DropId,
+                userId,
+                TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -363,7 +397,10 @@ public sealed class KeyClaimServiceTests
     // The service takes a logger it uses for one line per claim; tests do not assert on
     // logs, so a no-op logger keeps the call sites readable.
     private static KeyClaimService NewService(AppDbContext db) =>
-        new(db, NullLogger<KeyClaimService>.Instance);
+        new(
+            db,
+            new KeyDropMutationLock(db),
+            NullLogger<KeyClaimService>.Instance);
 
     private static async Task<User> CreateUserAsync(AppDbContext db)
     {

@@ -13,6 +13,7 @@ public enum AddKeyInventoryOutcome
     NotOwner,
     Invalid,
     InvalidStatus,
+    Conflict,
     AccountUnavailable,
 }
 
@@ -30,13 +31,16 @@ public sealed class KeyDropInventoryService
 
     private readonly AppDbContext _db;
     private readonly GameKeyRegistrationWriter _gameKeyRegistrationWriter;
+    private readonly KeyDropMutationLock _keyDropMutationLock;
 
     public KeyDropInventoryService(
         AppDbContext db,
-        GameKeyRegistrationWriter gameKeyRegistrationWriter)
+        GameKeyRegistrationWriter gameKeyRegistrationWriter,
+        KeyDropMutationLock keyDropMutationLock)
     {
         _db = db;
         _gameKeyRegistrationWriter = gameKeyRegistrationWriter;
+        _keyDropMutationLock = keyDropMutationLock;
     }
 
     public async Task<AddKeyInventoryResult> AddAsync(
@@ -49,10 +53,11 @@ public sealed class KeyDropInventoryService
             await AccountMutationGuard.BeginTransactionIfNeededAsync(
                 _db,
                 cancellationToken);
-        if (!await AccountMutationGuard.LockActiveAsync(
-                _db,
-                ownerId,
-                cancellationToken))
+        var state = await _keyDropMutationLock.LockAsync(
+            dropId,
+            ownerId,
+            cancellationToken);
+        if (!state.AccountAvailable)
         {
             await AccountMutationGuard.CommitIfOwnedAsync(
                 transaction,
@@ -62,31 +67,7 @@ public sealed class KeyDropInventoryService
                 NoViolations);
         }
 
-        var states = await _db.Database
-            .SqlQuery<LockedDropState>($$"""
-                SELECT key_drop.owner_id AS "OwnerId",
-                       key_drop.opens_at AS "OpensAt",
-                       key_drop.total_keys AS "TotalKeys",
-                       (
-                           SELECT COUNT(*)::integer
-                           FROM game_keys AS game_key
-                           WHERE game_key.drop_id = key_drop.id
-                             AND NOT EXISTS (
-                                 SELECT 1
-                                 FROM key_grants AS grant_record
-                                 WHERE grant_record.key_id = game_key.id
-                                   AND grant_record.drop_id = key_drop.id)
-                       ) AS "RemainingKeys",
-                       key_drop.closed_at AS "ClosedAt",
-                       now() AS "DatabaseNow"
-                FROM key_drops AS key_drop
-                WHERE key_drop.id = {{dropId}}
-                FOR UPDATE
-                """)
-            .ToListAsync(cancellationToken);
-        var state = states.SingleOrDefault();
-
-        if (state is null)
+        if (!state.DropExists)
         {
             await AccountMutationGuard.CommitIfOwnedAsync(
                 transaction,
@@ -106,12 +87,7 @@ public sealed class KeyDropInventoryService
                 NoViolations);
         }
 
-        var status = KeyDropStatusPolicy.Resolve(
-            state.OpensAt,
-            state.TotalKeys,
-            state.RemainingKeys,
-            state.ClosedAt,
-            state.DatabaseNow);
+        var status = state.GetRequiredStatus();
         if (!KeyDropStatusPolicy.CanAddInventory(status))
         {
             await AccountMutationGuard.CommitIfOwnedAsync(
@@ -120,7 +96,7 @@ public sealed class KeyDropInventoryService
             return new AddKeyInventoryResult(
                 AddKeyInventoryOutcome.InvalidStatus,
                 NoViolations,
-                TotalKeys: state.TotalKeys);
+                TotalKeys: state.TotalKeys!.Value);
         }
 
         var parsedKeys = GameKeyPolicy.ParseBatch(keysText);
@@ -136,7 +112,7 @@ public sealed class KeyDropInventoryService
                         KeysField,
                         GetKeyViolationMessage(violation)))
                     .ToArray(),
-                TotalKeys: state.TotalKeys);
+                TotalKeys: state.TotalKeys!.Value);
         }
 
         if (await _gameKeyRegistrationWriter.ContainsRegisteredKeyAsync(
@@ -146,7 +122,7 @@ public sealed class KeyDropInventoryService
             await AccountMutationGuard.CommitIfOwnedAsync(
                 transaction,
                 cancellationToken);
-            return DuplicateKeyResult(state.TotalKeys);
+            return DuplicateKeyResult(state.TotalKeys!.Value);
         }
 
         _gameKeyRegistrationWriter.StageForExistingDrop(
@@ -155,13 +131,28 @@ public sealed class KeyDropInventoryService
 
         try
         {
-            await _db.Database.ExecuteSqlInterpolatedAsync(
+            var updatedDropCount = await _db.Database.ExecuteSqlInterpolatedAsync(
                 $"""
                 UPDATE key_drops
-                SET total_keys = total_keys + {parsedKeys.Keys.Count}
+                SET total_keys = total_keys + {parsedKeys.Keys.Count},
+                    state_version = state_version + 1
                 WHERE id = {dropId}
+                  AND state_version = {state.StateVersion!.Value}
+                  AND closed_at IS NULL
                 """,
                 cancellationToken);
+            if (updatedDropCount != 1)
+            {
+                await AccountMutationGuard.RollbackIfOwnedAsync(
+                    transaction,
+                    cancellationToken);
+                _db.ChangeTracker.Clear();
+                return new AddKeyInventoryResult(
+                    AddKeyInventoryOutcome.Conflict,
+                    NoViolations,
+                    TotalKeys: state.TotalKeys!.Value);
+            }
+
             await _db.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException exception)
@@ -172,7 +163,7 @@ public sealed class KeyDropInventoryService
                 transaction,
                 cancellationToken);
             _db.ChangeTracker.Clear();
-            return DuplicateKeyResult(state.TotalKeys);
+            return DuplicateKeyResult(state.TotalKeys!.Value);
         }
 
         await AccountMutationGuard.CommitIfOwnedAsync(
@@ -183,7 +174,7 @@ public sealed class KeyDropInventoryService
             AddKeyInventoryOutcome.Added,
             NoViolations,
             parsedKeys.Keys.Count,
-            state.TotalKeys + parsedKeys.Keys.Count);
+            state.TotalKeys!.Value + parsedKeys.Keys.Count);
     }
 
     private static AddKeyInventoryResult DuplicateKeyResult(int totalKeys) => new(
@@ -205,20 +196,5 @@ public sealed class KeyDropInventoryService
             _ => throw new InvalidOperationException(
                 $"Unsupported game key input error: {violation.Error}"),
         };
-    }
-
-    private sealed record LockedDropState
-    {
-        public long OwnerId { get; init; }
-
-        public DateTimeOffset OpensAt { get; init; }
-
-        public int TotalKeys { get; init; }
-
-        public int RemainingKeys { get; init; }
-
-        public DateTimeOffset? ClosedAt { get; init; }
-
-        public DateTimeOffset DatabaseNow { get; init; }
     }
 }

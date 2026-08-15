@@ -70,6 +70,12 @@ public sealed class AddKeysModel : PageModel
                 string.Empty,
                 "예정 또는 진행 중인 배포에만 키를 추가할 수 있습니다.");
         }
+        else if (result.Outcome == AddKeyInventoryOutcome.Conflict)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "배포 상태가 변경되었습니다. 최신 상태를 확인한 뒤 다시 시도해 주세요.");
+        }
 
         foreach (var violation in result.Violations)
         {

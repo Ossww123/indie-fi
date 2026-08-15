@@ -26,6 +26,8 @@ public sealed record PublicKeyDropDetail(
     public bool CanClaim => KeyDropStatusPolicy.CanClaim(Status);
 
     public bool CanAddInventory => KeyDropStatusPolicy.CanAddInventory(Status);
+
+    public bool CanCloseEarly => KeyDropStatusPolicy.CanCloseEarly(Status);
 }
 
 public sealed class PublicKeyDropReader

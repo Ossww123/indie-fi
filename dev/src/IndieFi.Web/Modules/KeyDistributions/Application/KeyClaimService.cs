@@ -1,6 +1,8 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
@@ -25,169 +27,211 @@ public class KeyClaimService
     private const string UniqueViolation = "23505";
     private const string OneKeyPerUserIndex = "IX_key_grants_drop_id_user_id";
 
-    private sealed record ClaimPrecheck
-    {
-        public DateTimeOffset OpensAt { get; init; }
-        public int TotalKeys { get; init; }
-        public int RemainingKeys { get; init; }
-        public DateTimeOffset? ClosedAt { get; init; }
-        public DateTimeOffset DatabaseNow { get; init; }
-        public bool AlreadyClaimed { get; init; }
-    }
-
     private readonly AppDbContext _db;
+    private readonly KeyDropMutationLock _keyDropMutationLock;
     private readonly ILogger<KeyClaimService> _logger;
 
-    public KeyClaimService(AppDbContext db, ILogger<KeyClaimService> logger)
+    public KeyClaimService(
+        AppDbContext db,
+        KeyDropMutationLock keyDropMutationLock,
+        ILogger<KeyClaimService> logger)
     {
         _db = db;
+        _keyDropMutationLock = keyDropMutationLock;
         _logger = logger;
     }
 
-    public async Task<ClaimResult> ClaimAsync(long dropId, long userId)
+    public async Task<ClaimResult> ClaimAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default)
     {
-        // Evaluate the open boundary inside the database so every app server uses
-        // the same clock. This also combines all independent pre-checks in one trip.
-        var precheck = await _db.Database
-            .SqlQuery<ClaimPrecheck>($@"
-                SELECT d.opens_at AS ""OpensAt"",
-                       d.total_keys AS ""TotalKeys"",
-                       (
-                           SELECT COUNT(*)::integer
-                           FROM game_keys AS game_key
-                           WHERE game_key.drop_id = d.id
-                             AND NOT EXISTS (
-                                 SELECT 1
-                                 FROM key_grants AS grant_record
-                                 WHERE grant_record.key_id = game_key.id
-                                   AND grant_record.drop_id = d.id)
-                       ) AS ""RemainingKeys"",
-                       d.closed_at AS ""ClosedAt"",
-                       now() AS ""DatabaseNow"",
-                       EXISTS (
-                           SELECT 1
-                           FROM key_grants AS g
-                           WHERE g.drop_id = d.id AND g.user_id = {userId}
-                       ) AS ""AlreadyClaimed""
-                FROM key_drops AS d
-                WHERE d.id = {dropId}")
-            .SingleOrDefaultAsync();
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(
+                _db,
+                cancellationToken);
+        var state = await _keyDropMutationLock.LockAsync(
+            dropId,
+            userId,
+            cancellationToken);
 
-        if (precheck is null)
+        if (!state.AccountAvailable)
         {
-            return Result(ClaimOutcome.DropNotFound, dropId, userId);
+            return await CompleteAsync(
+                transaction,
+                ClaimOutcome.AccountUnavailable,
+                dropId,
+                userId,
+                cancellationToken);
         }
 
-        if (precheck.AlreadyClaimed)
+        if (!state.DropExists)
         {
-            return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
+            return await CompleteAsync(
+                transaction,
+                ClaimOutcome.DropNotFound,
+                dropId,
+                userId,
+                cancellationToken);
         }
 
-        var status = KeyDropStatusPolicy.Resolve(
-            precheck.OpensAt,
-            precheck.TotalKeys,
-            precheck.RemainingKeys,
-            precheck.ClosedAt,
-            precheck.DatabaseNow);
+        if (state.AlreadyClaimed)
+        {
+            return await CompleteAsync(
+                transaction,
+                ClaimOutcome.AlreadyClaimed,
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
+        var status = state.GetRequiredStatus();
         if (status != KeyDropStatus.Active)
         {
+            var outcome = status switch
+            {
+                KeyDropStatus.Scheduled => ClaimOutcome.NotOpen,
+                KeyDropStatus.SoldOut => ClaimOutcome.SoldOut,
+                KeyDropStatus.ClosedEarly => ClaimOutcome.ClosedEarly,
+                _ => throw new InvalidOperationException(
+                    $"Unsupported key drop status: {status}"),
+            };
+            return await CompleteAsync(
+                transaction,
+                outcome,
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
+        try
+        {
+            var claimMarkers = await _db.Database
+                .SqlQuery<long>($$"""
+                    WITH picked AS MATERIALIZED (
+                        SELECT game_key.id
+                        FROM game_keys AS game_key
+                        WHERE game_key.drop_id = {{dropId}}
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM key_grants AS grant_record
+                              WHERE grant_record.key_id = game_key.id)
+                        ORDER BY game_key.id
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    ),
+                    granted AS (
+                        INSERT INTO key_grants (drop_id, user_id, key_id)
+                        SELECT {{dropId}}, {{userId}}, picked.id
+                        FROM picked
+                        RETURNING key_id
+                    ),
+                    advanced AS (
+                        UPDATE key_drops AS key_drop
+                        SET state_version = key_drop.state_version + 1
+                        FROM granted
+                        WHERE key_drop.id = {{dropId}}
+                          AND key_drop.state_version = {{state.StateVersion!.Value}}
+                          AND key_drop.closed_at IS NULL
+                        RETURNING key_drop.state_version
+                    )
+                    SELECT CASE
+                        WHEN EXISTS (SELECT 1 FROM granted)
+                         AND EXISTS (SELECT 1 FROM advanced)
+                            THEN (SELECT key_id FROM granted)
+                        WHEN EXISTS (SELECT 1 FROM granted) THEN -2
+                        ELSE -1
+                    END AS "Value"
+                    """)
+                .ToListAsync(cancellationToken);
+            var claimMarker = claimMarkers.Single();
+
+            if (claimMarker == -1)
+            {
+                return await CompleteAsync(
+                    transaction,
+                    ClaimOutcome.SoldOut,
+                    dropId,
+                    userId,
+                    cancellationToken);
+            }
+
+            if (claimMarker == -2)
+            {
+                return await RollbackConflictAsync(
+                    transaction,
+                    dropId,
+                    userId,
+                    cancellationToken);
+            }
+
+            return await CompleteAsync(
+                transaction,
+                ClaimOutcome.Granted,
+                dropId,
+                userId,
+                cancellationToken);
+        }
+        catch (PostgresException exception)
+            when (exception.SqlState == UniqueViolation)
+        {
+            if (transaction is null)
+            {
+                throw;
+            }
+
+            await AccountMutationGuard.RollbackIfOwnedAsync(
+                transaction,
+                cancellationToken);
             return Result(
-                status switch
-                {
-                    KeyDropStatus.Scheduled => ClaimOutcome.NotOpen,
-                    KeyDropStatus.SoldOut => ClaimOutcome.SoldOut,
-                    KeyDropStatus.ClosedEarly => ClaimOutcome.ClosedEarly,
-                    _ => throw new InvalidOperationException(
-                        $"Unsupported key drop status: {status}"),
-                },
+                exception.ConstraintName == OneKeyPerUserIndex
+                    ? ClaimOutcome.AlreadyClaimed
+                    : ClaimOutcome.Conflict,
                 dropId,
                 userId);
         }
+    }
 
-        // One PostgreSQL statement is one transaction, so the FOR UPDATE lock survives
-        // through the INSERT and no explicit transaction is needed. A residual race remains:
-        // the lock covers game_keys, while "taken" lives in key_grants; under READ COMMITTED,
-        // another claimer can commit between our snapshot and lock acquisition. The unique
-        // index rejects that collision, so retries are still required.
-        const int maxAttempts = 5;
+    private async Task<ClaimResult> CompleteAsync(
+        IDbContextTransaction? transaction,
+        ClaimOutcome outcome,
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        await AccountMutationGuard.CommitIfOwnedAsync(
+            transaction,
+            cancellationToken);
+        return Result(outcome, dropId, userId);
+    }
 
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    private async Task<ClaimResult> RollbackConflictAsync(
+        IDbContextTransaction? transaction,
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        if (transaction is null)
         {
-            try
-            {
-                var claimMarkers = await _db.Database
-                    .SqlQuery<long>($@"
-                        WITH active_user AS MATERIALIZED (
-                            SELECT id
-                            FROM users
-                            WHERE id = {userId}
-                              AND account_status = 'Active'
-                              AND suspended_until IS NULL
-                            FOR UPDATE
-                        ),
-                        picked AS (
-                            SELECT s.id
-                            FROM game_keys AS s
-                            CROSS JOIN active_user
-                            WHERE s.drop_id = {dropId}
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM key_grants AS g WHERE g.key_id = s.id)
-                            ORDER BY s.id
-                            FOR UPDATE SKIP LOCKED
-                            LIMIT 1
-                        ),
-                        granted AS (
-                            INSERT INTO key_grants (drop_id, user_id, key_id)
-                            SELECT {dropId}, {userId}, picked.id FROM picked
-                            RETURNING key_id
-                        )
-                        SELECT COALESCE(
-                            (SELECT key_id FROM granted),
-                            CASE
-                                WHEN EXISTS (SELECT 1 FROM active_user) THEN -1
-                                ELSE -2
-                            END) AS ""Value""")
-                    .ToListAsync();
-
-                var claimMarker = claimMarkers.Single();
-                if (claimMarker == -2)
-                {
-                    return Result(ClaimOutcome.AccountUnavailable, dropId, userId);
-                }
-
-                if (claimMarker == -1)
-                {
-                    // No key is free for us: every key is granted or held by someone else.
-                    return Result(ClaimOutcome.SoldOut, dropId, userId);
-                }
-
-                return Result(ClaimOutcome.Granted, dropId, userId);
-            }
-            catch (PostgresException exception) when (exception.SqlState == UniqueViolation)
-            {
-                // The two unique indexes mean opposites: a key collision can be retried,
-                // while a one-key-per-user violation can never succeed on retry.
-                // This name comes from EF Core's convention; if a migration renames it,
-                // this branch silently stops matching, so the concurrency test guards it.
-                if (exception.ConstraintName == OneKeyPerUserIndex)
-                {
-                    return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
-                }
-            }
+            throw new DbUpdateConcurrencyException(
+                "The key-drop state version changed while granting a key.");
         }
 
-        // Exhausted retries - lost the race every time. Practically unreachable.
+        await AccountMutationGuard.RollbackIfOwnedAsync(
+            transaction,
+            cancellationToken);
         return Result(ClaimOutcome.Conflict, dropId, userId);
     }
 
     // One structured line per claim. Under load the screen message (redirect +
-    // one-shot TempData cookie) is an unreliable signal, so the outcome - especially
-    // Conflict vs SoldOut - is counted from these logs instead.
+    // one-shot TempData cookie) is an unreliable signal, so outcomes are counted here.
     private ClaimResult Result(ClaimOutcome outcome, long dropId, long userId)
     {
         _logger.LogInformation(
             "KeyClaim outcome={Outcome} drop={DropId} user={UserId}",
-            outcome, dropId, userId);
+            outcome,
+            dropId,
+            userId);
         return new ClaimResult(outcome);
     }
 }

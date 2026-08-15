@@ -116,7 +116,7 @@ public sealed class KeyDropPageTests
 
         const string injected = "totally-made-up-code";
         using var response = await client.GetAsync(
-            $"/KeyDrops/Detail/{dropId}?claim={injected}&inventory={injected}",
+            $"/KeyDrops/Detail/{dropId}?claim={injected}&inventory={injected}&closure={injected}",
             TestContext.Current.CancellationToken);
         var html = await response.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
@@ -206,6 +206,7 @@ public sealed class KeyDropPageTests
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, gameResponse.StatusCode);
         Assert.Contains($"/KeyDrops/AddKeys/{dropId}", gameHtml);
+        Assert.Contains($"/KeyDrops/Close/{dropId}", gameHtml);
 
         using var formResponse = await client.GetAsync(
             $"/KeyDrops/AddKeys/{dropId}",
@@ -257,6 +258,67 @@ public sealed class KeyDropPageTests
     }
 
     [Fact]
+    public async Task Post_Close_AsOwner_ClosesDropAndShowsFixedSuccessNotice()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var (gameId, dropId) = await CreateDropOwnedByAsync(email);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var gameResponse = await client.GetAsync(
+            $"/Games/Detail/{gameId}",
+            TestContext.Current.CancellationToken);
+        var gameHtml = await gameResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, gameResponse.StatusCode);
+        Assert.Contains($"/KeyDrops/Close/{dropId}", gameHtml);
+
+        using var formResponse = await client.GetAsync(
+            $"/KeyDrops/Close/{dropId}",
+            TestContext.Current.CancellationToken);
+        var formHtml = await formResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, formResponse.StatusCode);
+        Assert.Contains("이미 발급된 키는 그대로 유지됩니다.", formHtml);
+
+        using var closeForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(formHtml),
+        });
+        using var closeResponse = await client.PostAsync(
+            $"/KeyDrops/Close/{dropId}",
+            closeForm,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, closeResponse.StatusCode);
+        var location = closeResponse.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Contains("closure=closed", location.OriginalString);
+
+        using var detailResponse = await client.GetAsync(
+            location,
+            TestContext.Current.CancellationToken);
+        var detailHtml = WebUtility.HtmlDecode(
+            await detailResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        Assert.Contains("배포를 조기 마감했습니다.", detailHtml);
+        Assert.Contains("조기 마감", detailHtml);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var stored = await verificationDb.KeyDrops
+            .Where(drop => drop.Id == dropId)
+            .Select(drop => new { drop.ClosedAt, drop.StateVersion })
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(stored.ClosedAt);
+        Assert.Equal(1, stored.StateVersion);
+    }
+
+    [Fact]
     public async Task Get_AddKeys_AsNonOwner_ReturnsNotFound()
     {
         var (ownerEmail, _) = await PageTestSupport
@@ -271,8 +333,12 @@ public sealed class KeyDropPageTests
         using var response = await client.GetAsync(
             $"/KeyDrops/AddKeys/{dropId}",
             TestContext.Current.CancellationToken);
+        using var closeResponse = await client.GetAsync(
+            $"/KeyDrops/Close/{dropId}",
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, closeResponse.StatusCode);
     }
 
     [Fact]

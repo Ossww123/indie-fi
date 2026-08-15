@@ -38,11 +38,13 @@ public class DetailModel : PageModel
     public string? ClaimedKey { get; private set; }
     public string? ClaimMessage { get; private set; }
     public string? InventoryMessage { get; private set; }
+    public string? ClosureMessage { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(
         long id,
         string? claim,
-        string? inventory)
+        string? inventory,
+        string? closure)
     {
         // Query strings are user-controlled, so only known codes may select displayed text.
         ClaimMessage = ClaimNotices
@@ -51,6 +53,12 @@ public class DetailModel : PageModel
         InventoryMessage = inventory == "added"
             ? "게임 키 재고를 추가했습니다."
             : null;
+        ClosureMessage = closure switch
+        {
+            "closed" => "배포를 조기 마감했습니다.",
+            "already" => "이미 조기 마감된 배포입니다.",
+            _ => null,
+        };
 
         var drop = await _publicKeyDropReader.GetAsync(
             id,
@@ -88,7 +96,10 @@ public class DetailModel : PageModel
         }
 
         var userId = _currentUser.GetRequiredUserId();
-        var result = await _keyClaimService.ClaimAsync(id, userId);
+        var result = await _keyClaimService.ClaimAsync(
+            id,
+            userId,
+            HttpContext.RequestAborted);
 
         if (result.Outcome == ClaimOutcome.DropNotFound)
         {

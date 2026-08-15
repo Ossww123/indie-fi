@@ -518,6 +518,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 table.HasCheckConstraint(
                     "CK_key_drops_total_keys_nonnegative",
                     "total_keys >= 0");
+                table.HasCheckConstraint(
+                    "CK_key_drops_state_version_nonnegative",
+                    "state_version >= 0");
             });
 
             keyDrop.HasKey(d => d.Id);
@@ -541,6 +544,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             keyDrop.Property(d => d.ClosedAt)
                 .HasColumnName("closed_at");
+
+            keyDrop.Property(d => d.StateVersion)
+                .HasColumnName("state_version")
+                .HasDefaultValue(0L)
+                .IsConcurrencyToken()
+                .IsRequired();
 
             keyDrop.Property(d => d.CreatedAt)
                 .HasColumnName("created_at")

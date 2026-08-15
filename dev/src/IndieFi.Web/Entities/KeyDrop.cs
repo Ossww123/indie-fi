@@ -17,6 +17,8 @@ public class KeyDrop
 
     public DateTimeOffset? ClosedAt { get; set; }
 
+    public long StateVersion { get; set; }
+
     /// <summary>
     /// Set by the database (<c>now()</c>), never by the application.
     /// </summary>

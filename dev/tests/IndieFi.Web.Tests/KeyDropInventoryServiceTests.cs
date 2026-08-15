@@ -59,6 +59,7 @@ public sealed class KeyDropInventoryServiceTests
         Assert.Equal(2, result.AddedCount);
         Assert.Equal(3, result.TotalKeys);
         Assert.Equal(3, drop.TotalKeys);
+        Assert.Equal(1, drop.StateVersion);
         Assert.Equal(3, storedKeys.Count);
         Assert.Equal(3, fingerprintCount);
         Assert.Equal(
@@ -89,9 +90,9 @@ public sealed class KeyDropInventoryServiceTests
         }
 
         await using var verificationDb = _fixture.NewDbContext();
-        var totalKeys = await verificationDb.KeyDrops
+        var storedDrop = await verificationDb.KeyDrops
             .Where(drop => drop.Id == target.DropId)
-            .Select(drop => drop.TotalKeys)
+            .Select(drop => new { drop.TotalKeys, drop.StateVersion })
             .SingleAsync(TestContext.Current.CancellationToken);
         var inventoryCount = await verificationDb.GameKeys.CountAsync(
             key => key.DropId == target.DropId,
@@ -101,7 +102,8 @@ public sealed class KeyDropInventoryServiceTests
         var violation = Assert.Single(result.Violations);
         Assert.DoesNotContain(DuplicateSecret, violation.Message);
         Assert.DoesNotContain(NewSecret, violation.Message);
-        Assert.Equal(1, totalKeys);
+        Assert.Equal(1, storedDrop.TotalKeys);
+        Assert.Equal(0, storedDrop.StateVersion);
         Assert.Equal(1, inventoryCount);
     }
 
@@ -208,9 +210,9 @@ public sealed class KeyDropInventoryServiceTests
             AddWithNewContextAsync(data, "CONCURRENT-TWO"));
 
         await using var verificationDb = _fixture.NewDbContext();
-        var totalKeys = await verificationDb.KeyDrops
+        var storedDrop = await verificationDb.KeyDrops
             .Where(drop => drop.Id == data.DropId)
-            .Select(drop => drop.TotalKeys)
+            .Select(drop => new { drop.TotalKeys, drop.StateVersion })
             .SingleAsync(TestContext.Current.CancellationToken);
         var inventoryCount = await verificationDb.GameKeys.CountAsync(
             key => key.DropId == data.DropId,
@@ -219,7 +221,8 @@ public sealed class KeyDropInventoryServiceTests
         Assert.All(
             results,
             result => Assert.Equal(AddKeyInventoryOutcome.Added, result.Outcome));
-        Assert.Equal(3, totalKeys);
+        Assert.Equal(3, storedDrop.TotalKeys);
+        Assert.Equal(2, storedDrop.StateVersion);
         Assert.Equal(3, inventoryCount);
     }
 
@@ -312,7 +315,8 @@ public sealed class KeyDropInventoryServiceTests
         db,
         new GameKeyRegistrationWriter(
             db,
-            TestAccountProtection.CreateGameKeyProtectionService()));
+            TestAccountProtection.CreateGameKeyProtectionService()),
+        new KeyDropMutationLock(db));
 
     private sealed record DropData(long OwnerId, long DropId, long InitialKeyId);
 }

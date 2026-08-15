@@ -188,11 +188,22 @@ else
                     {
                         <span class="badge-neutral">@drop.StatusText</span>
                     }
-                    @if (Model.IsOwner && drop.CanAddInventory)
+                    @if (Model.IsOwner && (drop.CanAddInventory || drop.CanCloseEarly))
                     {
-                        <a asp-page="/KeyDrops/AddKeys"
-                           asp-route-id="@drop.Id"
-                           class="button-link">키 추가</a>
+                        <span class="flex flex-wrap items-center gap-2">
+                            @if (drop.CanAddInventory)
+                            {
+                                <a asp-page="/KeyDrops/AddKeys"
+                                   asp-route-id="@drop.Id"
+                                   class="button-link">키 추가</a>
+                            }
+                            @if (drop.CanCloseEarly)
+                            {
+                                <a asp-page="/KeyDrops/Close"
+                                   asp-route-id="@drop.Id"
+                                   class="button-danger px-3 py-1.5">조기 마감</a>
+                            }
+                        </span>
                     }
                 </div>
             </div>

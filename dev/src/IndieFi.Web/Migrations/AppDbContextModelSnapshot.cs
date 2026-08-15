@@ -249,6 +249,13 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("owner_id");
 
+                    b.Property<long>("StateVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("state_version");
+
                     b.Property<int>("TotalKeys")
                         .HasColumnType("integer")
                         .HasColumnName("total_keys");
@@ -261,6 +268,8 @@ namespace IndieFi.Web.Migrations
 
                     b.ToTable("key_drops", null, t =>
                         {
+                            t.HasCheckConstraint("CK_key_drops_state_version_nonnegative", "state_version >= 0");
+
                             t.HasCheckConstraint("CK_key_drops_total_keys_nonnegative", "total_keys >= 0");
                         });
                 });

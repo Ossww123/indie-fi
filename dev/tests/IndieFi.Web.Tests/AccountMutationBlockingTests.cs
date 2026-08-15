@@ -261,8 +261,12 @@ public sealed class AccountMutationBlockingTests
         {
             var claim = await new KeyClaimService(
                     claimDb,
+                    new KeyDropMutationLock(claimDb),
                     NullLogger<KeyClaimService>.Instance)
-                .ClaimAsync(dropId, userId);
+                .ClaimAsync(
+                    dropId,
+                    userId,
+                    TestContext.Current.CancellationToken);
             Assert.Equal(ClaimOutcome.AccountUnavailable, claim.Outcome);
         }
 
@@ -272,7 +276,8 @@ public sealed class AccountMutationBlockingTests
                     inventoryDb,
                     new GameKeyRegistrationWriter(
                         inventoryDb,
-                        TestAccountProtection.CreateGameKeyProtectionService()))
+                        TestAccountProtection.CreateGameKeyProtectionService()),
+                    new KeyDropMutationLock(inventoryDb))
                 .AddAsync(
                     dropId,
                     userId,
@@ -281,6 +286,20 @@ public sealed class AccountMutationBlockingTests
             Assert.Equal(
                 AddKeyInventoryOutcome.AccountUnavailable,
                 inventory.Outcome);
+        }
+
+        await using (var closeDb = _fixture.NewDbContext())
+        {
+            var close = await new KeyDropCloseService(
+                    closeDb,
+                    new KeyDropMutationLock(closeDb))
+                .CloseAsync(
+                    dropId,
+                    userId,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(
+                CloseKeyDropOutcome.AccountUnavailable,
+                close.Outcome);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
