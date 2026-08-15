@@ -65,6 +65,19 @@ public class FeedbackSubmissionService
            AND reviewer_id = @reviewerId
         """;
 
+    private const string AlreadySubmittedSql = """
+        SELECT EXISTS (
+            SELECT 1
+              FROM feedback_submissions AS submission
+              JOIN review_assignments AS assignment
+                ON assignment.id = submission.assignment_id
+               AND assignment.reviewer_id = submission.reviewer_id
+             WHERE assignment.id = @assignmentId
+               AND assignment.reviewer_id = @reviewerId
+               AND assignment.status = 'Completed'
+        ) AS "Value"
+        """;
+
     private readonly AppDbContext _db;
     private readonly ILogger<FeedbackSubmissionService> _logger;
 
@@ -106,9 +119,21 @@ public class FeedbackSubmissionService
             return Result(FeedbackSubmissionOutcome.Submitted, assignmentId, reviewerId);
         }
 
-        // Only failures pay for this second round trip. Looking up only the reviewer's own
-        // assignment prevents callers from distinguishing another reviewer's assignment from a
-        // missing one; lease expiry is exposed because obtaining another assignment is actionable.
+        var alreadySubmitted = await _db.Database
+            .SqlQueryRaw<bool>(
+                AlreadySubmittedSql,
+                new NpgsqlParameter("assignmentId", assignmentId),
+                new NpgsqlParameter("reviewerId", reviewerId))
+            .SingleAsync();
+        if (alreadySubmitted)
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return Result(FeedbackSubmissionOutcome.Submitted, assignmentId, reviewerId);
+        }
+
+        // Only failures pay for the state lookups. Looking up only the reviewer's own assignment
+        // prevents callers from distinguishing another reviewer's assignment from a missing one;
+        // lease expiry is exposed because obtaining another assignment is actionable.
         var leaseExpired = await _db.Database
             .SqlQueryRaw<bool>(
                 LeaseExpiredSql,

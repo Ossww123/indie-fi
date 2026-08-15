@@ -257,6 +257,10 @@ namespace IndieFi.Web.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<Guid>("ClaimOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_operation_id");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
@@ -301,12 +305,17 @@ namespace IndieFi.Web.Migrations
 
                     b.HasIndex("RequestId", "GameId");
 
+                    b.HasIndex("ReviewerId", "ClaimOperationId")
+                        .IsUnique();
+
                     b.HasIndex("ReviewerId", "GameId")
                         .IsUnique()
                         .HasFilter("status <> 'Expired'");
 
                     b.ToTable("review_assignments", null, t =>
                         {
+                            t.HasCheckConstraint("CK_review_assignments_claim_operation_id", "claim_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
                             t.HasCheckConstraint("CK_review_assignments_status", "status IN ('Active', 'Completed', 'Expired')");
 
                             t.HasCheckConstraint("CK_review_assignments_terminal_timestamps", "(status = 'Active' AND completed_at IS NULL AND expired_at IS NULL) OR (status = 'Completed' AND completed_at IS NOT NULL AND expired_at IS NULL) OR (status = 'Expired' AND expired_at IS NOT NULL AND completed_at IS NULL)");
@@ -335,6 +344,10 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreationOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("creation_operation_id");
 
                     b.Property<long>("GameId")
                         .HasColumnType("bigint")
@@ -371,17 +384,20 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("RefundEntryId")
                         .IsUnique();
 
-                    b.HasIndex("RequesterId");
-
                     b.HasIndex("SpendEntryId")
                         .IsUnique();
 
                     b.HasIndex("RefundEntryId", "RequesterId");
 
+                    b.HasIndex("RequesterId", "CreationOperationId")
+                        .IsUnique();
+
                     b.HasIndex("SpendEntryId", "RequesterId");
 
                     b.ToTable("review_requests", null, t =>
                         {
+                            t.HasCheckConstraint("CK_review_requests_creation_operation_id", "creation_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
                             t.HasCheckConstraint("CK_review_requests_status", "status IN ('Queued', 'Assigned', 'Completed', 'Cancelled')");
 
                             t.HasCheckConstraint("CK_review_requests_terminal_timestamps", "(status IN ('Queued', 'Assigned') AND completed_at IS NULL AND cancelled_at IS NULL) OR (status = 'Completed' AND completed_at IS NOT NULL AND cancelled_at IS NULL) OR (status = 'Cancelled' AND cancelled_at IS NOT NULL AND completed_at IS NULL)");

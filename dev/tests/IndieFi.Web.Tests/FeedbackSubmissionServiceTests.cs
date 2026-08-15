@@ -233,7 +233,7 @@ public sealed class FeedbackSubmissionServiceTests
     }
 
     [Fact]
-    public async Task SubmitAsync_WhenCalledTwice_TheSecondIsRefusedAndTheFirstFeedbackStays()
+    public async Task SubmitAsync_WhenCalledTwice_ReturnsSuccessAndKeepsTheFirstFeedback()
     {
         const string FirstBody = "Keep the first submission exactly as it was.";
         var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
@@ -259,9 +259,13 @@ public sealed class FeedbackSubmissionServiceTests
             .ToListAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(FeedbackSubmissionOutcome.Submitted, firstResult.Outcome);
-        Assert.Equal(FeedbackSubmissionOutcome.NotSubmittable, secondResult.Outcome);
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, secondResult.Outcome);
         var submission = Assert.Single(submissions);
         Assert.Equal(FirstBody, submission.Body);
+        Assert.Equal(1, await verificationDb.CreditLedgerEntries.CountAsync(
+            entry => entry.UserId == assignment.ReviewerId
+                && entry.Kind == CreditEntryKind.Earn,
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]

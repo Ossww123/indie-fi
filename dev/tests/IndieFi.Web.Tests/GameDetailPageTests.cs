@@ -89,6 +89,10 @@ public sealed class GameDetailPageTests
         Assert.Contains(queuedCreatedAt, html);
         Assert.DoesNotContain("Cancelled", html);
         Assert.Contains("handler=CancelRequest", html);
+        Assert.True(Guid.TryParse(
+            PageTestSupport.ExtractHiddenInput(html, "operationId"),
+            out var requestOperationId));
+        Assert.NotEqual(Guid.Empty, requestOperationId);
         Assert.Contains($"requestId={queuedRequestId}", html);
         Assert.DoesNotContain($"requestId={cancelledRequestId}", html);
         Assert.Equal(1, CountOccurrences(html, ">취소</button>"));
@@ -214,6 +218,54 @@ public sealed class GameDetailPageTests
         Assert.Contains("등록된 외부 플레이 링크 없음", html);
         Assert.DoesNotContain("외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.", html);
         Assert.DoesNotContain("target=\"_blank\"", html);
+    }
+
+    [Fact]
+    public async Task Post_RequestFeedback_WithoutOperationId_IsRejected()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        long gameId;
+        long ownerId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            ownerId = (await TestAccountProtection.FindUserAsync(
+                arrangeDb,
+                email,
+                TestContext.Current.CancellationToken)).Id;
+            arrangeDb.CreditLedgerEntries.Add(new CreditLedgerEntry
+            {
+                UserId = ownerId,
+                Kind = CreditEntryKind.Grant,
+                Delta = 1,
+            });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            gameId = (await ReviewTestData.CreateGameAsync(arrangeDb, ownerId)).Id;
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        using var detailResponse = await client.GetAsync(
+            $"/Games/Detail/{gameId}",
+            TestContext.Current.CancellationToken);
+        var detailHtml = await detailResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(detailHtml),
+        });
+
+        using var response = await client.PostAsync(
+            $"/Games/Detail/{gameId}?handler=RequestFeedback",
+            form,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.ReviewRequests.AnyAsync(
+            request => request.RequesterId == ownerId,
+            TestContext.Current.CancellationToken));
     }
 
     private static int CountOccurrences(string source, string value)

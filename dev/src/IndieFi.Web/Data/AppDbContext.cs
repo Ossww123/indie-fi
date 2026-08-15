@@ -577,6 +577,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                     "(status IN ('Queued', 'Assigned') AND completed_at IS NULL AND cancelled_at IS NULL) OR "
                     + "(status = 'Completed' AND completed_at IS NOT NULL AND cancelled_at IS NULL) OR "
                     + "(status = 'Cancelled' AND cancelled_at IS NOT NULL AND completed_at IS NULL)");
+                table.HasCheckConstraint(
+                    "CK_review_requests_creation_operation_id",
+                    "creation_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
             });
 
             reviewRequest.HasKey(r => r.Id);
@@ -588,6 +591,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             reviewRequest.Property(r => r.RequesterId)
                 .HasColumnName("requester_id")
+                .IsRequired();
+
+            reviewRequest.Property(r => r.CreationOperationId)
+                .HasColumnName("creation_operation_id")
                 .IsRequired();
 
             reviewRequest.Property(r => r.SpendEntryId)
@@ -649,6 +656,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // accidental reuse even if a future write path bypasses the cancellation service.
             reviewRequest.HasIndex(r => r.RefundEntryId).IsUnique();
 
+            reviewRequest.HasIndex(r => new { r.RequesterId, r.CreationOperationId })
+                .IsUnique();
+
             // Claiming reads the oldest waiting request. Holding only those rows keeps
             // assigned and completed history from being walked past on every claim,
             // which a filter on the primary key index could not avoid. Expressing the
@@ -671,6 +681,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                     "(status = 'Active' AND completed_at IS NULL AND expired_at IS NULL) OR "
                     + "(status = 'Completed' AND completed_at IS NOT NULL AND expired_at IS NULL) OR "
                     + "(status = 'Expired' AND expired_at IS NOT NULL AND completed_at IS NULL)");
+                table.HasCheckConstraint(
+                    "CK_review_assignments_claim_operation_id",
+                    "claim_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
             });
 
             reviewAssignment.HasKey(a => a.Id);
@@ -686,6 +699,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             reviewAssignment.Property(a => a.ReviewerId)
                 .HasColumnName("reviewer_id")
+                .IsRequired();
+
+            reviewAssignment.Property(a => a.ClaimOperationId)
+                .HasColumnName("claim_operation_id")
                 .IsRequired();
 
             reviewAssignment.Property(a => a.Status)
@@ -739,6 +756,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             reviewAssignment.HasIndex(a => new { a.ReviewerId, a.GameId })
                 .IsUnique()
                 .HasFilter("status <> 'Expired'");
+
+            reviewAssignment.HasIndex(a => new { a.ReviewerId, a.ClaimOperationId })
+                .IsUnique();
         });
 
         modelBuilder.Entity<FeedbackSubmission>(feedbackSubmission =>

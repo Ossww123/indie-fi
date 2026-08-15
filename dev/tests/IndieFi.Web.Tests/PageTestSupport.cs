@@ -24,6 +24,22 @@ internal static class PageTestSupport
         return WebUtility.HtmlDecode(match.Groups[1].Value);
     }
 
+    public static string ExtractHiddenInput(string html, string name)
+    {
+        var match = Regex.Match(
+            html,
+            $"""<input\b(?=[^>]*\btype="hidden")(?=[^>]*\bname="{Regex.Escape(name)}")[^>]*\bvalue="([^"]+)"[^>]*>""",
+            RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+        {
+            throw new InvalidOperationException(
+                $"The response HTML did not contain the '{name}' hidden input.");
+        }
+
+        return WebUtility.HtmlDecode(match.Groups[1].Value);
+    }
+
     public static async Task<(string Email, string Password)> CreateUserWithKnownPasswordAsync(
         PostgreSqlFixture fixture,
         bool emailConfirmed = true,

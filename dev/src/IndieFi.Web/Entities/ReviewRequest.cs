@@ -13,6 +13,8 @@ public class ReviewRequest
 
     public long RequesterId { get; set; }
 
+    public Guid CreationOperationId { get; set; }
+
     public long SpendEntryId { get; set; }
 
     /// <summary>

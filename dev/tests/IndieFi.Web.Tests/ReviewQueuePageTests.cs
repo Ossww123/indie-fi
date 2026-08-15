@@ -83,6 +83,10 @@ public sealed class ReviewQueuePageTests
             UserDisplayIdentifier.Format(request.RequesterId),
             decodedHtml);
         Assert.DoesNotContain(request.RequesterEmail, decodedHtml);
+        Assert.True(Guid.TryParse(
+            PageTestSupport.ExtractHiddenInput(html, "operationId"),
+            out var claimOperationId));
+        Assert.NotEqual(Guid.Empty, claimOperationId);
     }
 
     [Fact]
@@ -173,6 +177,39 @@ public sealed class ReviewQueuePageTests
         Assert.Equal("/Reviews", reviewsPath);
     }
 
+    [Fact]
+    public async Task Post_Claim_WithoutOperationId_IsRejected()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var reviewerId = await FindUserIdAsync(email);
+        await CreateReviewRequestAsync(null, "Missing operation ID game");
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        using var reviewsResponse = await client.GetAsync(
+            "/Reviews",
+            TestContext.Current.CancellationToken);
+        var reviewsHtml = await reviewsResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(reviewsHtml),
+        });
+
+        using var response = await client.PostAsync(
+            "/Reviews?handler=Claim",
+            form,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.ReviewAssignments.AnyAsync(
+            assignment => assignment.ReviewerId == reviewerId,
+            TestContext.Current.CancellationToken));
+    }
+
     private async Task<long> FindUserIdAsync(string email)
     {
         await using var db = _fixture.NewDbContext();
@@ -222,6 +259,7 @@ public sealed class ReviewQueuePageTests
         {
             GameId = game.Id,
             RequesterId = requesterId,
+            CreationOperationId = Guid.NewGuid(),
             SpendEntry = spendEntry,
         };
 

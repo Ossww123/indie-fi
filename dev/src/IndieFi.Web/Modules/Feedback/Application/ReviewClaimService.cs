@@ -11,6 +11,7 @@ public enum ReviewClaimOutcome
     NoneAvailable,
     AlreadyHasThatGame,
     AccountUnavailable,
+    InvalidOperationId,
 }
 
 public record ReviewClaimResult(ReviewClaimOutcome Outcome, long? RequestId);
@@ -21,6 +22,8 @@ public class ReviewClaimService
     private const int LeaseMinutes = 30;
     private const string UniqueViolation = "23505";
     private const string ReviewerGameIndex = "IX_review_assignments_reviewer_id_game_id";
+    private const string ReviewerOperationIndex =
+        "IX_review_assignments_reviewer_id_claim_operation_id";
 
     // SKIP LOCKED lets concurrent reviewers bypass rows another claim is already locking,
     // avoiding waits between claims. Ordering by ID keeps the oldest request first, gives
@@ -34,10 +37,17 @@ public class ReviewClaimService
     // against suspension. A suspension that wins makes active_user empty; a claim that wins is
     // visible when suspension subsequently collects that user's assignments.
     private const string ClaimSql = """
-        WITH picked AS MATERIALIZED (
+        WITH existing AS MATERIALIZED (
+            SELECT request_id
+              FROM review_assignments
+             WHERE reviewer_id = @reviewerId
+               AND claim_operation_id = @operationId
+        ),
+        picked AS MATERIALIZED (
             SELECT r.id, r.game_id
               FROM review_requests r
              WHERE r.status = 'Queued'
+               AND NOT EXISTS (SELECT 1 FROM existing)
                AND r.requester_id <> @reviewerId
                AND NOT EXISTS (
                        SELECT 1
@@ -74,21 +84,25 @@ public class ReviewClaimService
                 request_id,
                 game_id,
                 reviewer_id,
+                claim_operation_id,
                 status,
                 leased_until)
-            SELECT assigned.id, assigned.game_id, @reviewerId, 'Active',
+            SELECT assigned.id, assigned.game_id, @reviewerId, @operationId, 'Active',
                    now() + (@leaseMinutes * INTERVAL '1 minute')
               FROM assigned
             RETURNING request_id
         ),
         outcome AS (
+            SELECT request_id FROM existing
+            UNION ALL
             SELECT request_id FROM inserted
             UNION ALL
             SELECT CASE
                        WHEN EXISTS (SELECT 1 FROM active_user) THEN -1
                        ELSE -2
                    END
-             WHERE NOT EXISTS (SELECT 1 FROM inserted)
+             WHERE NOT EXISTS (SELECT 1 FROM existing)
+               AND NOT EXISTS (SELECT 1 FROM inserted)
         )
         SELECT request_id AS "Value" FROM outcome
         """;
@@ -102,8 +116,20 @@ public class ReviewClaimService
         _logger = logger;
     }
 
-    public async Task<ReviewClaimResult> ClaimNextAsync(long reviewerId)
+    public Task<ReviewClaimResult> ClaimNextAsync(long reviewerId)
     {
+        return ClaimNextAsync(reviewerId, Guid.NewGuid());
+    }
+
+    public async Task<ReviewClaimResult> ClaimNextAsync(
+        long reviewerId,
+        Guid operationId)
+    {
+        if (operationId == Guid.Empty)
+        {
+            return Result(ReviewClaimOutcome.InvalidOperationId, reviewerId, null);
+        }
+
         List<long> claimMarkers;
 
         try
@@ -112,12 +138,24 @@ public class ReviewClaimService
                 .SqlQueryRaw<long>(
                     ClaimSql,
                     new NpgsqlParameter("reviewerId", reviewerId),
+                    new NpgsqlParameter("operationId", operationId),
                     new NpgsqlParameter("leaseMinutes", LeaseMinutes))
                 .ToListAsync();
         }
         // The prefilter sees only its own snapshot, so two claims from one reviewer can both
         // pass and lock different request rows that SKIP LOCKED cannot coordinate; only that
         // reviewer-game backstop is an expected race here.
+        catch (PostgresException exception)
+            when (exception.SqlState == UniqueViolation
+                && exception.ConstraintName == ReviewerOperationIndex)
+        {
+            var existingRequestId = await _db.ReviewAssignments
+                .Where(assignment => assignment.ReviewerId == reviewerId)
+                .Where(assignment => assignment.ClaimOperationId == operationId)
+                .Select(assignment => assignment.RequestId)
+                .SingleAsync();
+            return Result(ReviewClaimOutcome.Claimed, reviewerId, existingRequestId);
+        }
         catch (PostgresException exception)
             when (exception.SqlState == UniqueViolation
                 && exception.ConstraintName == ReviewerGameIndex)

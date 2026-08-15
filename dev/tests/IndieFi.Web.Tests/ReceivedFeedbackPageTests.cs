@@ -201,6 +201,7 @@ public sealed class ReceivedFeedbackPageTests
             RequestId = reviewRequest.Id,
             GameId = game.Id,
             ReviewerId = reviewer.Id,
+            ClaimOperationId = Guid.NewGuid(),
             Status = ReviewAssignmentStatus.Completed,
             LeasedUntil = DateTimeOffset.UtcNow.AddHours(1),
             CompletedAt = completedAt,

@@ -89,6 +89,7 @@ public class IndexModel : PageModel
     public ClaimNotice? ClaimMessage { get; private set; }
     public SubmitNotice? SubmitMessage { get; private set; }
     public SweepNotice? SweepMessage { get; private set; }
+    public Guid ClaimOperationId { get; private set; }
 
     public async Task OnGetAsync(
         string? claim,
@@ -111,6 +112,7 @@ public class IndexModel : PageModel
         }
 
         var userId = _currentUser.GetRequiredUserId();
+        ClaimOperationId = Guid.NewGuid();
 
         MyAssignments = await (
             from assignment in _db.ReviewAssignments
@@ -150,10 +152,14 @@ public class IndexModel : PageModel
             .ToList();
     }
 
-    public async Task<IActionResult> OnPostClaimAsync()
+    public async Task<IActionResult> OnPostClaimAsync(Guid operationId)
     {
         var userId = _currentUser.GetRequiredUserId();
-        var result = await _reviewClaimService.ClaimNextAsync(userId);
+        var result = await _reviewClaimService.ClaimNextAsync(userId, operationId);
+        if (result.Outcome == ReviewClaimOutcome.InvalidOperationId)
+        {
+            return BadRequest();
+        }
         if (result.Outcome == ReviewClaimOutcome.AccountUnavailable)
         {
             return Challenge();

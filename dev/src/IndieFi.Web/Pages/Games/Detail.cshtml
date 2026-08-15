@@ -31,6 +31,7 @@
         <form method="post"
               asp-page-handler="RequestFeedback"
               asp-route-id="@Model.Game.Id">
+            <input type="hidden" name="operationId" value="@Model.RequestOperationId" />
             <button type="submit" class="button-outline px-3 py-1.5">피드백 요청</button>
         </form>
     }
