@@ -37,6 +37,11 @@
     }
 </div>
 <p class="mt-2 text-meta">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
+<p class="mt-2">
+    <a asp-page="/Profiles/Detail"
+       asp-route-id="@Model.Game.OwnerId"
+       class="text-link">개발자 프로필 보기</a>
+</p>
 
 @if (Model.Game.Description is not null)
 {

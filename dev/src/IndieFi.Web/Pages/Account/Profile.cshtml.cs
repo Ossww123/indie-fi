@@ -34,6 +34,7 @@ public sealed class ProfileModel : PageModel
     public bool CanChangeNickname { get; private set; }
     public DateTimeOffset? NicknameChangeAvailableAt { get; private set; }
     public string FallbackDisplayIdentifier { get; private set; } = string.Empty;
+    public long PublicProfileUserId { get; private set; }
 
     [TempData]
     public string? StatusMessage { get; set; }
@@ -118,6 +119,7 @@ public sealed class ProfileModel : PageModel
         DateTimeOffset? resultAvailableAt = null)
     {
         FallbackDisplayIdentifier = UserDisplayIdentifier.Format(userId);
+        PublicProfileUserId = userId;
         CanChangeNickname = state.CanChangeNickname;
         NicknameChangeAvailableAt = resultAvailableAt
             ?? state.NicknameChangeAvailableAt;

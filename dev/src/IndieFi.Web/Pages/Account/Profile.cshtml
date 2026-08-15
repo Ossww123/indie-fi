@@ -8,6 +8,11 @@
 <p class="mb-6 text-sm text-slate-600">
     다른 사용자에게 공개할 닉네임과 소개를 설정할 수 있습니다.
 </p>
+<p class="mb-6">
+    <a asp-page="/Profiles/Detail"
+       asp-route-id="@Model.PublicProfileUserId"
+       class="text-link">공개 프로필 보기</a>
+</p>
 
 @if (Model.StatusMessage is not null)
 {

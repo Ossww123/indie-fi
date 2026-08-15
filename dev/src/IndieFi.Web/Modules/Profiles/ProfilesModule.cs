@@ -7,6 +7,7 @@ public static class ProfilesModule
     public static IServiceCollection AddProfilesModule(this IServiceCollection services)
     {
         services.AddScoped<UserProfileManagementService>();
+        services.AddScoped<PublicUserProfileQueryService>();
         return services;
     }
 }
