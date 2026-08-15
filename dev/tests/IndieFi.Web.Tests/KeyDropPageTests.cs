@@ -37,6 +37,28 @@ public sealed class KeyDropPageTests
         Assert.Contains("총 3개 중 3개 남음", html);
     }
 
+    [Fact]
+    public async Task Get_DropDetailPage_WhenClosed_ShowsOnlyPublicStatusAndCounts()
+    {
+        const string Secret = "CLOSED-DROP-PRIVATE-KEY";
+        var (dropId, ownerEmail, closedAt) = await CreateClosedDropAsync(Secret);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("조기 마감", html);
+        Assert.Contains("총 1개 중 1개 남음", html);
+        Assert.DoesNotContain(ownerEmail, html);
+        Assert.DoesNotContain(Secret, html);
+        Assert.DoesNotContain(closedAt.ToString("O"), html);
+    }
+
     // The claim notice survives the redirect because the URL, rather than a cookie, carries its code.
     [Fact]
     public async Task Post_Claim_WhenSoldOut_ShowsMessageAfterRedirect()
@@ -294,6 +316,38 @@ public sealed class KeyDropPageTests
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
         await PageTestSupport.LoginAsync(client, email, password);
+    }
+
+    private async Task<(long DropId, string OwnerEmail, DateTimeOffset ClosedAt)>
+        CreateClosedDropAsync(string secret)
+    {
+        await using var db = _fixture.NewDbContext();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var ownerEmail = $"{Guid.NewGuid():N}@example.test";
+        var owner = TestAccountProtection.AddUser(db, ownerEmail);
+        await db.SaveChangesAsync(cancellationToken);
+        var game = new Game
+        {
+            OwnerId = owner.Id,
+            Title = $"Closed drop game {Guid.NewGuid():N}",
+        };
+        db.Games.Add(game);
+        await db.SaveChangesAsync(cancellationToken);
+        var closedAt = DateTimeOffset.UtcNow;
+        var drop = new KeyDrop
+        {
+            GameId = game.Id,
+            OwnerId = owner.Id,
+            OpensAt = DateTimeOffset.UtcNow.AddHours(-1),
+            TotalKeys = 1,
+            ClosedAt = closedAt,
+        };
+        db.KeyDrops.Add(drop);
+        await db.SaveChangesAsync(cancellationToken);
+        TestAccountProtection.AddGameKey(db, drop, secret);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return (drop.Id, ownerEmail, closedAt);
     }
 
     private async Task<(long DropId, string GameTitle)> CreateOpenDropAsync(int keyCount)

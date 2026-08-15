@@ -56,17 +56,23 @@ public sealed class GameKeyFinalizationMigrationTests
             };
             db.Games.Add(game);
             await db.SaveChangesAsync(cancellationToken);
-            var drop = new KeyDrop
-            {
-                GameId = game.Id,
-                OwnerId = owner.Id,
-                OpensAt = DateTimeOffset.UtcNow.AddHours(1),
-                TotalKeys = 1,
-            };
-            db.KeyDrops.Add(drop);
-            await db.SaveChangesAsync(cancellationToken);
+            // This database intentionally stops before later key-drop columns exist,
+            // so seed it through the schema at that migration rather than today's model.
+            var opensAt = DateTimeOffset.UtcNow.AddHours(1);
+            await db.Database.OpenConnectionAsync(cancellationToken);
+            await using var insertDrop = new NpgsqlCommand(
+                """
+                INSERT INTO key_drops (game_id, owner_id, opens_at, total_keys)
+                VALUES ($1, $2, $3, 1)
+                RETURNING id
+                """,
+                (NpgsqlConnection)db.Database.GetDbConnection());
+            insertDrop.Parameters.AddWithValue(game.Id);
+            insertDrop.Parameters.AddWithValue(owner.Id);
+            insertDrop.Parameters.AddWithValue(opensAt);
+            var dropId = (long)(await insertDrop.ExecuteScalarAsync(cancellationToken))!;
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"INSERT INTO game_keys (drop_id, key_value) VALUES ({drop.Id}, {secret})",
+                $"INSERT INTO game_keys (drop_id, key_value) VALUES ({dropId}, {secret})",
                 cancellationToken);
             var gameKeyId = await db.Database
                 .SqlQueryRaw<long>(

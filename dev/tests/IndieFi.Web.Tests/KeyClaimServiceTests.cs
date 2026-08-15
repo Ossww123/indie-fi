@@ -50,6 +50,39 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(0, grantCount);
     }
 
+    [Fact]
+    public async Task ClaimAsync_WhenDropClosedEarly_ReturnsClosedEarlyWithoutCreatingGrant()
+    {
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            var drop = await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1);
+            drop.ClosedAt = DateTimeOffset.UtcNow;
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            dropId = drop.Id;
+        }
+
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb).ClaimAsync(dropId, userId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var grantCount = await verificationDb.KeyGrants.CountAsync(
+            grant => grant.DropId == dropId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ClaimOutcome.ClosedEarly, result.Outcome);
+        Assert.Equal(0, grantCount);
+    }
+
     // A user can receive only one key from the same drop.
     [Fact]
     public async Task ClaimAsync_WhenSameUserClaimsTwice_GrantsOnceThenReturnsAlreadyClaimed()

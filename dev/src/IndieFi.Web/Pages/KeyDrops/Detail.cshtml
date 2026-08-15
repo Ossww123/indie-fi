@@ -6,7 +6,7 @@
 
 <h1 class="page-title">드롭 상세</h1>
 <p class="mb-6 mt-1 text-slate-500">
-    <a asp-page="/Games/Detail" asp-route-id="@Model.Game.Id" class="text-link">@Model.Game.Title</a>
+    <a asp-page="/Games/Detail" asp-route-id="@Model.Drop.GameId" class="text-link">@Model.Drop.GameTitle</a>
 </p>
 
 @if (Model.ClaimMessage is string claimMessage)
@@ -21,18 +21,18 @@
     </div>
     <div class="grid gap-1 border-b border-slate-200 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
         <dt class="font-medium text-slate-700">키 수</dt>
-        <dd>총 @(Model.Drop.TotalKeys)개 중 @(Model.RemainingKeys)개 남음</dd>
+        <dd>총 @(Model.Drop.TotalKeys)개 중 @(Model.Drop.RemainingKeys)개 남음</dd>
     </div>
     <div class="grid gap-1 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
         <dt class="font-medium text-slate-700">상태</dt>
         <dd>
-            @if (Model.IsOpen)
+            @if (Model.Drop.CanClaim)
             {
-                <span class="badge-success">진행 중</span>
+                <span class="badge-success">@Model.Drop.StatusText</span>
             }
             else
             {
-                <span class="badge-neutral">오픈 예정</span>
+                <span class="badge-neutral">@Model.Drop.StatusText</span>
             }
         </dd>
     </div>
@@ -44,6 +44,10 @@
         받은 키: <strong>@Model.ClaimedKey</strong>
     </div>
 }
+else if (!Model.Drop.CanClaim)
+{
+    <button type="button" class="button-primary" disabled>@Model.Drop.StatusText</button>
+}
 else if (User.Identity?.IsAuthenticated != true)
 {
     <p>
@@ -51,10 +55,6 @@ else if (User.Identity?.IsAuthenticated != true)
                        asp-route-returnUrl="@Url.Page("/KeyDrops/Detail", new { id = Model.Drop.Id })"
                        class="text-link">로그인</a>해 주세요.
     </p>
-}
-else if (!Model.IsOpen)
-{
-    <button type="button" class="button-primary" disabled>오픈 예정</button>
 }
 else
 {
@@ -64,5 +64,5 @@ else
 }
 
 <a asp-page="/Games/Detail"
-   asp-route-id="@Model.Game.Id"
+   asp-route-id="@Model.Drop.GameId"
    class="text-link mt-6 inline-block">← 게임으로</a>

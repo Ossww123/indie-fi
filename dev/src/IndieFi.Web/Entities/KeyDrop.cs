@@ -15,6 +15,8 @@ public class KeyDrop
 
     public int TotalKeys { get; set; }
 
+    public DateTimeOffset? ClosedAt { get; set; }
+
     /// <summary>
     /// Set by the database (<c>now()</c>), never by the application.
     /// </summary>

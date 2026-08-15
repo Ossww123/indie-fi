@@ -227,6 +227,10 @@ namespace IndieFi.Web.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -255,7 +259,10 @@ namespace IndieFi.Web.Migrations
 
                     b.HasIndex("OwnerId");
 
-                    b.ToTable("key_drops", (string)null);
+                    b.ToTable("key_drops", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_key_drops_total_keys_nonnegative", "total_keys >= 0");
+                        });
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.KeyGrant", b =>

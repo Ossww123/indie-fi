@@ -513,7 +513,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<KeyDrop>(keyDrop =>
         {
-            keyDrop.ToTable("key_drops");
+            keyDrop.ToTable("key_drops", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_key_drops_total_keys_nonnegative",
+                    "total_keys >= 0");
+            });
 
             keyDrop.HasKey(d => d.Id);
             keyDrop.Property(d => d.Id).HasColumnName("id");
@@ -533,6 +538,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             keyDrop.Property(d => d.TotalKeys)
                 .HasColumnName("total_keys")
                 .IsRequired();
+
+            keyDrop.Property(d => d.ClosedAt)
+                .HasColumnName("closed_at");
 
             keyDrop.Property(d => d.CreatedAt)
                 .HasColumnName("created_at")

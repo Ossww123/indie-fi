@@ -1,4 +1,5 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -11,6 +12,7 @@ public enum ClaimOutcome
     AlreadyClaimed,
     NotOpen,
     SoldOut,
+    ClosedEarly,
     Conflict,
     DropNotFound,
     AccountUnavailable,
@@ -25,7 +27,11 @@ public class KeyClaimService
 
     private sealed record ClaimPrecheck
     {
-        public bool IsOpen { get; init; }
+        public DateTimeOffset OpensAt { get; init; }
+        public int TotalKeys { get; init; }
+        public int RemainingKeys { get; init; }
+        public DateTimeOffset? ClosedAt { get; init; }
+        public DateTimeOffset DatabaseNow { get; init; }
         public bool AlreadyClaimed { get; init; }
     }
 
@@ -44,7 +50,20 @@ public class KeyClaimService
         // the same clock. This also combines all independent pre-checks in one trip.
         var precheck = await _db.Database
             .SqlQuery<ClaimPrecheck>($@"
-                SELECT (d.opens_at <= now()) AS ""IsOpen"",
+                SELECT d.opens_at AS ""OpensAt"",
+                       d.total_keys AS ""TotalKeys"",
+                       (
+                           SELECT COUNT(*)::integer
+                           FROM game_keys AS game_key
+                           WHERE game_key.drop_id = d.id
+                             AND NOT EXISTS (
+                                 SELECT 1
+                                 FROM key_grants AS grant_record
+                                 WHERE grant_record.key_id = game_key.id
+                                   AND grant_record.drop_id = d.id)
+                       ) AS ""RemainingKeys"",
+                       d.closed_at AS ""ClosedAt"",
+                       now() AS ""DatabaseNow"",
                        EXISTS (
                            SELECT 1
                            FROM key_grants AS g
@@ -59,14 +78,30 @@ public class KeyClaimService
             return Result(ClaimOutcome.DropNotFound, dropId, userId);
         }
 
-        if (!precheck.IsOpen)
-        {
-            return Result(ClaimOutcome.NotOpen, dropId, userId);
-        }
-
         if (precheck.AlreadyClaimed)
         {
             return Result(ClaimOutcome.AlreadyClaimed, dropId, userId);
+        }
+
+        var status = KeyDropStatusPolicy.Resolve(
+            precheck.OpensAt,
+            precheck.TotalKeys,
+            precheck.RemainingKeys,
+            precheck.ClosedAt,
+            precheck.DatabaseNow);
+        if (status != KeyDropStatus.Active)
+        {
+            return Result(
+                status switch
+                {
+                    KeyDropStatus.Scheduled => ClaimOutcome.NotOpen,
+                    KeyDropStatus.SoldOut => ClaimOutcome.SoldOut,
+                    KeyDropStatus.ClosedEarly => ClaimOutcome.ClosedEarly,
+                    _ => throw new InvalidOperationException(
+                        $"Unsupported key drop status: {status}"),
+                },
+                dropId,
+                userId);
         }
 
         // One PostgreSQL statement is one transaction, so the FOR UPDATE lock survives

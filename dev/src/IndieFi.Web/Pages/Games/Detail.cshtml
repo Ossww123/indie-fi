@@ -175,13 +175,16 @@ else
                class="surface-item surface-link">
                 <div class="flex items-center justify-between gap-4">
                     <span>@drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
-                    @if (drop.IsOpen)
+                    <span class="text-sm text-slate-500">
+                        @drop.RemainingKeys/@drop.TotalKeys 남음
+                    </span>
+                    @if (drop.CanClaim)
                     {
-                        <span class="badge-success">진행 중</span>
+                        <span class="badge-success">@drop.StatusText</span>
                     }
                     else
                     {
-                        <span class="badge-neutral">오픈 예정</span>
+                        <span class="badge-neutral">@drop.StatusText</span>
                     }
                 </div>
             </a>

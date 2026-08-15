@@ -2,6 +2,7 @@ using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -48,19 +49,22 @@ public class DetailModel : PageModel
     private readonly ReviewRequestService _reviewRequestService;
     private readonly UserDisplayNameResolver _displayNames;
     private readonly FavoriteGameService _favoriteGameService;
+    private readonly PublicKeyDropReader _publicKeyDropReader;
 
     public DetailModel(
         AppDbContext db,
         ICurrentUser currentUser,
         ReviewRequestService reviewRequestService,
         UserDisplayNameResolver displayNames,
-        FavoriteGameService favoriteGameService)
+        FavoriteGameService favoriteGameService,
+        PublicKeyDropReader publicKeyDropReader)
     {
         _db = db;
         _currentUser = currentUser;
         _reviewRequestService = reviewRequestService;
         _displayNames = displayNames;
         _favoriteGameService = favoriteGameService;
+        _publicKeyDropReader = publicKeyDropReader;
     }
 
     public Game Game { get; private set; } = null!;
@@ -70,7 +74,7 @@ public class DetailModel : PageModel
     public bool IsFavorite { get; private set; }
     public string? FavoriteMessage { get; private set; }
     public List<PlayLinkListItem> PlayLinks { get; private set; } = [];
-    public List<DropListItem> Drops { get; private set; } = [];
+    public IReadOnlyList<PublicKeyDropDetail> Drops { get; private set; } = [];
     public int PendingRequestCount { get; private set; }
     public List<RequestListItem> Requests { get; private set; } = [];
     public RequestNotice? RequestMessage { get; private set; }
@@ -148,11 +152,9 @@ public class DetailModel : PageModel
                     && reviewRequest.Status == ReviewRequestStatus.Queued);
         }
 
-        Drops = await _db.KeyDrops
-            .Where(drop => drop.GameId == game.Id)
-            .OrderBy(drop => drop.OpensAt)
-            .Select(drop => new DropListItem(drop.Id, drop.OpensAt))
-            .ToListAsync();
+        Drops = await _publicKeyDropReader.ListForGameAsync(
+            game.Id,
+            HttpContext.RequestAborted);
 
         return Page();
     }
@@ -277,11 +279,6 @@ public class DetailModel : PageModel
             ReviewRequestStatus.Completed => "완료",
             _ => Status.ToString(),
         };
-    }
-
-    public sealed record DropListItem(long Id, DateTimeOffset OpensAt)
-    {
-        public bool IsOpen => OpensAt <= DateTimeOffset.Now;
     }
 
     public sealed record PlayLinkListItem(
