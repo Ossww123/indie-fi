@@ -9,6 +9,7 @@ using IndieFi.Web.Modules.Credits;
 using IndieFi.Web.Modules.Feedback;
 using IndieFi.Web.Modules.Games;
 using IndieFi.Web.Modules.KeyDistributions;
+using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.Profiles;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -204,6 +205,8 @@ app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+app.MapHub<WaitingRoomHub>("/hubs/waiting-room")
+   .RequireAuthorization();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     AllowCachingResponses = false,
