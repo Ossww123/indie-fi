@@ -372,6 +372,38 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         return {1, existing}
         """;
 
+    private const string CompleteScript = """
+        local function split_entry(value)
+            local parts = {}
+            for part in string.gmatch(value .. '|', '(.-)|') do
+                table.insert(parts, part)
+            end
+            return parts
+        end
+
+        local existing = redis.call('HGET', KEYS[2], ARGV[1])
+        if not existing then
+            return {3, ''}
+        end
+
+        local parts = split_entry(existing)
+        if tonumber(parts[2]) == 4 then
+            return {2, existing}
+        end
+
+        redis.call('ZREM', KEYS[3], ARGV[1])
+        redis.call('ZREM', KEYS[4], ARGV[1])
+        redis.call('ZREM', KEYS[5], ARGV[1])
+        local completed = '1|4|' .. parts[3] .. '|' .. parts[4] .. '|'
+        redis.call('HSET', KEYS[2], ARGV[1], completed)
+        for index = 1, #KEYS do
+            if redis.call('EXISTS', KEYS[index]) == 1 then
+                redis.call('PEXPIRE', KEYS[index], tonumber(ARGV[2]))
+            end
+        end
+        return {1, completed}
+        """;
+
     private readonly WaitingRoomRedisConnection _connection;
     private readonly WaitingRoomRedisKeys _keys;
     private readonly WaitingRoomPolicyOptions _policy;
@@ -592,6 +624,32 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         };
         var value = (RedisValue)parts[1];
         return new WaitingRoomAdmissionValidationResult(
+            outcome,
+            value.IsNullOrEmpty ? null : WaitingRoomRedisValueCodec.Deserialize(value));
+    }
+
+    public async Task<WaitingRoomCompletionResult> CompleteAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(dropId, userId);
+        var result = await EvaluateAsync(
+            CompleteScript,
+            _keys.All(dropId),
+            [userId, ToMilliseconds(_policy.ActiveStateTtl)],
+            cancellationToken);
+        var parts = GetResultParts(result, expectedLength: 2);
+        var outcome = (int)parts[0] switch
+        {
+            1 => WaitingRoomCompletionOutcome.Completed,
+            2 => WaitingRoomCompletionOutcome.AlreadyCompleted,
+            3 => WaitingRoomCompletionOutcome.Missing,
+            var unknown => throw new InvalidOperationException(
+                $"Redis returned an unknown waiting-room completion outcome: {unknown}."),
+        };
+        var value = (RedisValue)parts[1];
+        return new WaitingRoomCompletionResult(
             outcome,
             value.IsNullOrEmpty ? null : WaitingRoomRedisValueCodec.Deserialize(value));
     }

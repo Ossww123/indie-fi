@@ -465,6 +465,54 @@ public sealed class RedisWaitingRoomStoreTests
     }
 
     [Fact]
+    public async Task CompleteAsync_RemovesAdmissionAndIsIdempotent()
+    {
+        var dropId = NextDropId();
+        var store = _fixture.NewStore();
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+
+        var first = await store.CompleteAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        var repeated = await store.CompleteAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        var snapshot = await store.GetSnapshotAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(WaitingRoomCompletionOutcome.Completed, first.Outcome);
+        Assert.Equal(WaitingRoomCompletionOutcome.AlreadyCompleted, repeated.Outcome);
+        Assert.Equal(WaitingRoomEntryState.Completed, snapshot!.Entry.State);
+        Assert.Null(snapshot.Entry.AdmissionExpiresUnixTimeMilliseconds);
+        Assert.Equal(0, snapshot.AdmittedCount);
+        Assert.Equal(0, snapshot.WaitingCount);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenEntryIsMissing_ReturnsMissing()
+    {
+        var result = await _fixture.NewStore().CompleteAsync(
+            NextDropId(),
+            1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(WaitingRoomCompletionOutcome.Missing, result.Outcome);
+        Assert.Null(result.Entry);
+    }
+
+    [Fact]
     public async Task JoinAsync_RefreshesActiveStateTtlAndHealthCheckUsesRealRedis()
     {
         var dropId = NextDropId();

@@ -6,6 +6,11 @@ public interface IKeyClaimAdmissionGate
         long dropId,
         long userId,
         CancellationToken cancellationToken = default);
+
+    Task CompleteAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default);
 }
 
 public enum KeyClaimAdmissionOutcome

@@ -256,5 +256,11 @@ public sealed class WaitingRoomParticipationServiceTests
             long userId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<WaitingRoomCompletionResult> CompleteAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

@@ -228,12 +228,18 @@ public class KeyClaimService
             await AccountMutationGuard.RollbackIfOwnedAsync(
                 transaction,
                 cancellationToken);
-            return Result(
-                exception.ConstraintName == OneKeyPerUserIndex
-                    ? ClaimOutcome.AlreadyClaimed
-                    : ClaimOutcome.Conflict,
-                dropId,
-                userId);
+            var outcome = exception.ConstraintName == OneKeyPerUserIndex
+                ? ClaimOutcome.AlreadyClaimed
+                : ClaimOutcome.Conflict;
+            if (outcome == ClaimOutcome.AlreadyClaimed)
+            {
+                await ReflectCompletionBestEffortAsync(
+                    dropId,
+                    userId,
+                    cancellationToken);
+            }
+
+            return Result(outcome, dropId, userId);
         }
     }
 
@@ -247,7 +253,37 @@ public class KeyClaimService
         await AccountMutationGuard.CommitIfOwnedAsync(
             transaction,
             cancellationToken);
+        if (outcome is ClaimOutcome.Granted or ClaimOutcome.AlreadyClaimed)
+        {
+            await ReflectCompletionBestEffortAsync(
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
         return Result(outcome, dropId, userId);
+    }
+
+    private async Task ReflectCompletionBestEffortAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _admissionGate.CompleteAsync(
+                dropId,
+                userId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                exception,
+                "Waiting-room completion sync failed after PostgreSQL claim drop={DropId} user={UserId}",
+                dropId,
+                userId);
+        }
     }
 
     private async Task<ClaimResult> RollbackConflictAsync(

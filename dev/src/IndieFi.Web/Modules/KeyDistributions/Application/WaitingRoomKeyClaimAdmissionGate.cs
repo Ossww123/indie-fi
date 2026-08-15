@@ -41,4 +41,13 @@ public sealed class WaitingRoomKeyClaimAdmissionGate : IKeyClaimAdmissionGate
             return KeyClaimAdmissionOutcome.Unavailable;
         }
     }
+
+    public async Task CompleteAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        await _store.CompleteAsync(dropId, userId, cancellationToken);
+        await _store.AdvanceAdmissionsAsync(dropId, cancellationToken);
+    }
 }

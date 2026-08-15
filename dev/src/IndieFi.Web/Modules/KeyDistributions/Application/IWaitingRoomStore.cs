@@ -34,6 +34,11 @@ public interface IWaitingRoomStore
         long dropId,
         long userId,
         CancellationToken cancellationToken = default);
+
+    Task<WaitingRoomCompletionResult> CompleteAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default);
 }
 
 public enum WaitingRoomJoinMode
@@ -120,4 +125,15 @@ public enum WaitingRoomAdmissionValidationOutcome
 
 public sealed record WaitingRoomAdmissionValidationResult(
     WaitingRoomAdmissionValidationOutcome Outcome,
+    WaitingRoomStoredEntry? Entry = null);
+
+public enum WaitingRoomCompletionOutcome
+{
+    Completed,
+    AlreadyCompleted,
+    Missing,
+}
+
+public sealed record WaitingRoomCompletionResult(
+    WaitingRoomCompletionOutcome Outcome,
     WaitingRoomStoredEntry? Entry = null);

@@ -15,4 +15,10 @@ internal sealed class AllowKeyClaimAdmissionGate : IKeyClaimAdmissionGate
         long userId,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(KeyClaimAdmissionOutcome.Allowed);
+
+    public Task CompleteAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 }

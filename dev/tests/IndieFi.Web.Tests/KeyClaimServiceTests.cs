@@ -1,6 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -151,6 +152,51 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(ClaimOutcome.AdmissionRequired, result.Outcome);
         Assert.Equal(1, gate.ValidationCalls);
         Assert.False(await verificationDb.KeyGrants.AnyAsync(
+            grant => grant.DropId == dropId && grant.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ClaimAsync_WhenCompletionSyncFails_KeepsGrantAndRetriesOnExistingClaim()
+    {
+        long userId;
+        long dropId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1)).Id;
+        }
+
+        var gate = new StubKeyClaimAdmissionGate(
+            KeyClaimAdmissionOutcome.Allowed,
+            completionFailures: 1);
+        ClaimResult first;
+        await using (var firstDb = _fixture.NewDbContext())
+        {
+            first = await NewService(firstDb, gate).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        ClaimResult repeated;
+        await using (var repeatedDb = _fixture.NewDbContext())
+        {
+            repeated = await NewService(repeatedDb, gate).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ClaimOutcome.Granted, first.Outcome);
+        Assert.Equal(ClaimOutcome.AlreadyClaimed, repeated.Outcome);
+        Assert.Equal(1, gate.ValidationCalls);
+        Assert.Equal(2, gate.CompletionCalls);
+        Assert.Equal(1, await verificationDb.KeyGrants.CountAsync(
             grant => grant.DropId == dropId && grant.UserId == userId,
             TestContext.Current.CancellationToken));
     }
@@ -522,12 +568,19 @@ public sealed class KeyClaimServiceTests
     {
         private readonly KeyClaimAdmissionOutcome _outcome;
 
-        public StubKeyClaimAdmissionGate(KeyClaimAdmissionOutcome outcome)
+        private int _completionFailures;
+
+        public StubKeyClaimAdmissionGate(
+            KeyClaimAdmissionOutcome outcome,
+            int completionFailures = 0)
         {
             _outcome = outcome;
+            _completionFailures = completionFailures;
         }
 
         public int ValidationCalls { get; private set; }
+
+        public int CompletionCalls { get; private set; }
 
         public Task<KeyClaimAdmissionOutcome> ValidateAsync(
             long dropId,
@@ -536,6 +589,21 @@ public sealed class KeyClaimServiceTests
         {
             ValidationCalls++;
             return Task.FromResult(_outcome);
+        }
+
+        public Task CompleteAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default)
+        {
+            CompletionCalls++;
+            if (_completionFailures > 0)
+            {
+                _completionFailures--;
+                throw new WaitingRoomUnavailableException("test unavailable");
+            }
+
+            return Task.CompletedTask;
         }
     }
 
