@@ -290,6 +290,53 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(count, grantedKeyIds.Distinct().Count());
     }
 
+    [Fact]
+    public async Task ClaimAsync_WhenManyUsersRaceForLastKey_GrantsExactlyOnce()
+    {
+        const int userCount = 20;
+        var userIds = new List<long>();
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            for (var index = 0; index < userCount; index++)
+            {
+                userIds.Add((await CreateUserAsync(arrangeDb)).Id);
+            }
+
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1)).Id;
+        }
+
+        var outcomes = await Task.WhenAll(userIds.Select(async userId =>
+        {
+            await using var serviceDb = _fixture.NewDbContext();
+            return (await NewService(serviceDb).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)).Outcome;
+        }));
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var grants = await verificationDb.KeyGrants
+            .Where(grant => grant.DropId == dropId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        var stateVersion = await verificationDb.KeyDrops
+            .Where(drop => drop.Id == dropId)
+            .Select(drop => drop.StateVersion)
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, outcomes.Count(outcome => outcome == ClaimOutcome.Granted));
+        Assert.Equal(
+            userCount - 1,
+            outcomes.Count(outcome => outcome == ClaimOutcome.SoldOut));
+        Assert.DoesNotContain(ClaimOutcome.Conflict, outcomes);
+        Assert.Single(grants);
+        Assert.Equal(1, stateVersion);
+    }
+
     // Concurrent duplicate submissions cannot be resolved by retrying with another key.
     // A duplicate-user unique violation must be reported immediately as AlreadyClaimed.
     [Fact]

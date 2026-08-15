@@ -5,6 +5,7 @@ using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Npgsql;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -181,6 +182,120 @@ public sealed class GameKeyMigrationServiceTests
     }
 
     [Fact]
+    public async Task RetireFingerprintKeyAsync_AfterVerificationKeepsDuplicateProtection()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var database = $"game_key_retirement_{Guid.NewGuid():N}";
+        var value = ParseKey($"RETIRE-FINGERPRINT-{Guid.NewGuid():N}");
+        var retiredFingerprintKeyId =
+            $"game-fingerprint-retired-{Guid.NewGuid():N}";
+        var rotationProvider = CreateRotationProvider(
+            previousFingerprintKeyId: retiredFingerprintKeyId);
+        var protection = new GameKeyProtectionService(rotationProvider);
+        var databaseCreated = false;
+
+        try
+        {
+            await ExecuteAdminCommandAsync(
+                $"CREATE DATABASE \"{database}\";",
+                cancellationToken);
+            databaseCreated = true;
+
+            var ownerOptions = new DbContextOptionsBuilder<AppDbContext>()
+                .UseNpgsql(_fixture.CreateOwnerConnectionString(database))
+                .Options;
+            await using (var migrationDb = new AppDbContext(ownerOptions))
+            {
+                await migrationDb.Database.MigrateAsync(cancellationToken);
+            }
+
+            long gameKeyId;
+            long targetDropId;
+            long targetOwnerId;
+            await using (var setupDb = new AppDbContext(ownerOptions))
+            {
+                var sourceDrop = await CreateDropAsync(setupDb);
+                var gameKey = AddProtectedGameKey(
+                    setupDb,
+                    sourceDrop,
+                    protection,
+                    value);
+                var targetDrop = await CreateDropAsync(setupDb);
+                AddProtectedGameKey(
+                    setupDb,
+                    targetDrop,
+                    protection,
+                    ParseKey($"RETIRE-TARGET-{Guid.NewGuid():N}"));
+                await setupDb.SaveChangesAsync(cancellationToken);
+                gameKeyId = gameKey.Id;
+                targetDropId = targetDrop.Id;
+                targetOwnerId = targetDrop.OwnerId;
+            }
+
+            var retirementProvider = CreateRotationProvider(
+                includePreviousFingerprint: false,
+                previousFingerprintKeyId: retiredFingerprintKeyId);
+            int deletedCount;
+            await using (var retirementDb = new AppDbContext(ownerOptions))
+            {
+                var service = new GameKeyMigrationService(
+                    retirementDb,
+                    retirementProvider);
+                deletedCount = await service.RetireFingerprintKeyAsync(
+                    retiredFingerprintKeyId,
+                    batchSize: 1,
+                    cancellationToken);
+            }
+
+            AddKeyInventoryResult duplicateResult;
+            await using (var inventoryDb =
+                         _fixture.NewApplicationDbContext(database))
+            {
+                duplicateResult = await new KeyDropInventoryService(
+                        inventoryDb,
+                        new GameKeyRegistrationWriter(
+                            inventoryDb,
+                            new GameKeyProtectionService(retirementProvider)),
+                        new KeyDropMutationLock(inventoryDb))
+                    .AddAsync(
+                        targetDropId,
+                        targetOwnerId,
+                        value.Value,
+                        cancellationToken);
+            }
+
+            await using var verificationDb = new AppDbContext(ownerOptions);
+            var remainingFingerprintKeyIds = await verificationDb
+                .GameKeyFingerprints
+                .Where(fingerprint => fingerprint.GameKeyId == gameKeyId)
+                .Select(fingerprint => fingerprint.KeyId)
+                .ToListAsync(cancellationToken);
+            var targetTotalKeys = await verificationDb.KeyDrops
+                .Where(drop => drop.Id == targetDropId)
+                .Select(drop => drop.TotalKeys)
+                .SingleAsync(cancellationToken);
+
+            Assert.Equal(2, deletedCount);
+            Assert.Equal(
+                ["game-fingerprint-test-v2"],
+                remainingFingerprintKeyIds);
+            Assert.Equal(
+                AddKeyInventoryOutcome.Invalid,
+                duplicateResult.Outcome);
+            Assert.Equal(2, targetTotalKeys);
+        }
+        finally
+        {
+            if (databaseCreated)
+            {
+                await ExecuteAdminCommandAsync(
+                    $"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE);",
+                    CancellationToken.None);
+            }
+        }
+    }
+
+    [Fact]
     public async Task MigrateBatchAsync_DuplicateAcrossBatchesStopsWithoutExposingValue()
     {
         var duplicateValue = $"DUPLICATE-SECRET-{Guid.NewGuid():N}";
@@ -289,7 +404,9 @@ public sealed class GameKeyMigrationServiceTests
             StringComparison.Ordinal);
     }
 
-    private static IKeyProvider CreateRotationProvider()
+    private static IKeyProvider CreateRotationProvider(
+        bool includePreviousFingerprint = true,
+        string previousFingerprintKeyId = "game-fingerprint-test-v1")
     {
         var values = TestAccountProtection.ConfigurationValues();
         values["AccountProtection:Purposes:game-key-encryption:CurrentKeyId"] =
@@ -307,16 +424,37 @@ public sealed class GameKeyMigrationServiceTests
         values["AccountProtection:Purposes:game-key-fingerprint:CurrentKeyId"] =
             "game-fingerprint-test-v2";
         values["AccountProtection:Purposes:game-key-fingerprint:ReadKeyIds:0"] =
-            "game-fingerprint-test-v1";
+            previousFingerprintKeyId;
         values["AccountProtection:Purposes:game-key-fingerprint:ReadKeyIds:1"] =
             "game-fingerprint-test-v2";
         values["AccountProtection:Purposes:game-key-fingerprint:WriteKeyIds:0"] =
-            "game-fingerprint-test-v1";
+            previousFingerprintKeyId;
         values["AccountProtection:Purposes:game-key-fingerprint:WriteKeyIds:1"] =
             "game-fingerprint-test-v2";
         values[
             "AccountProtection:Purposes:game-key-fingerprint:Keys:game-fingerprint-test-v2"] =
             Convert.ToBase64String(Enumerable.Repeat((byte)52, 32).ToArray());
+        if (!string.Equals(
+                previousFingerprintKeyId,
+                "game-fingerprint-test-v1",
+                StringComparison.Ordinal))
+        {
+            values[
+                $"AccountProtection:Purposes:game-key-fingerprint:Keys:{previousFingerprintKeyId}"] =
+                Convert.ToBase64String(Enumerable.Repeat((byte)53, 32).ToArray());
+        }
+
+        if (!includePreviousFingerprint)
+        {
+            values["AccountProtection:Purposes:game-key-fingerprint:ReadKeyIds:0"] =
+                "game-fingerprint-test-v2";
+            values.Remove(
+                "AccountProtection:Purposes:game-key-fingerprint:ReadKeyIds:1");
+            values["AccountProtection:Purposes:game-key-fingerprint:WriteKeyIds:0"] =
+                "game-fingerprint-test-v2";
+            values.Remove(
+                "AccountProtection:Purposes:game-key-fingerprint:WriteKeyIds:1");
+        }
 
         return new ConfigurationKeyProvider(
             new ConfigurationBuilder()
@@ -349,6 +487,46 @@ public sealed class GameKeyMigrationServiceTests
             AuthenticationTag = protectedKey.AuthenticationTag,
             EncryptionKeyId = protectedKey.EncryptionKeyId,
         };
+    }
+
+    private static GameKey AddProtectedGameKey(
+        AppDbContext db,
+        KeyDrop drop,
+        GameKeyProtectionService protection,
+        GameKeyValue value)
+    {
+        var protectedKey = protection.Protect(value);
+        var gameKey = new GameKey
+        {
+            DropId = drop.Id,
+            Ciphertext = protectedKey.Ciphertext,
+            Nonce = protectedKey.Nonce,
+            AuthenticationTag = protectedKey.AuthenticationTag,
+            EncryptionKeyId = protectedKey.EncryptionKeyId,
+        };
+        db.GameKeys.Add(gameKey);
+        foreach (var fingerprint in protection.CreateWritableFingerprints(value))
+        {
+            db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
+            {
+                GameKey = gameKey,
+                KeyId = fingerprint.KeyId,
+                Value = fingerprint.Value,
+            });
+        }
+
+        return gameKey;
+    }
+
+    private async Task ExecuteAdminCommandAsync(
+        string commandText,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(
+            _fixture.CreateOwnerConnectionString("postgres"));
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(commandText, connection);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private async Task<KeyDrop> CreateDropAsync(AppDbContext db)

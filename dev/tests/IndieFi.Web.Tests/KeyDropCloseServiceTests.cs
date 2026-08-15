@@ -191,6 +191,42 @@ public sealed class KeyDropCloseServiceTests
     }
 
     [Fact]
+    public async Task CloseAsync_WhenCloseCommitsFirst_LaterInventoryAddSeesClosedDrop()
+    {
+        var data = await CreateDropAsync(active: false, keyCount: 1);
+
+        CloseKeyDropResult close;
+        await using (var closeDb = _fixture.NewDbContext())
+        {
+            close = await NewCloseService(closeDb).CloseAsync(
+                data.DropId,
+                data.OwnerId,
+                TestContext.Current.CancellationToken);
+        }
+
+        AddKeyInventoryResult inventory;
+        await using (var inventoryDb = _fixture.NewDbContext())
+        {
+            inventory = await NewInventoryService(inventoryDb).AddAsync(
+                data.DropId,
+                data.OwnerId,
+                $"AFTER-CLOSE-{Guid.NewGuid():N}",
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var drop = await verificationDb.KeyDrops
+            .Where(item => item.Id == data.DropId)
+            .Select(item => new { item.TotalKeys, item.StateVersion })
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(CloseKeyDropOutcome.Closed, close.Outcome);
+        Assert.Equal(AddKeyInventoryOutcome.InvalidStatus, inventory.Outcome);
+        Assert.Equal(1, drop.TotalKeys);
+        Assert.Equal(1, drop.StateVersion);
+    }
+
+    [Fact]
     public async Task CloseAsync_WhenClaimCommitsAfterCloseSnapshot_ReturnsConflict()
     {
         var data = await CreateDropAsync(active: true, keyCount: 2);

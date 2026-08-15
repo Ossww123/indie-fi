@@ -104,6 +104,70 @@ public sealed class KeyDropPageTests
         Assert.Contains("키가 모두 소진되었습니다.", WebUtility.HtmlDecode(redirectedHtml));
     }
 
+    [Fact]
+    public async Task Post_Claim_WhenKeyExists_GrantsEncryptedKeyAndShowsItOnlyToRecipient()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var secret = $"HTTP-CLAIM-{Guid.NewGuid():N}";
+        var (dropId, _) = await CreateOpenDropAsync(1, secret);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var recipientClient = factory.CreateClient();
+        await PageTestSupport.LoginAsync(recipientClient, email, password);
+
+        using var formResponse = await recipientClient.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var formHtml = await formResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var claimForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(formHtml),
+        });
+
+        using var claimResponse = await recipientClient.PostAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=Claim",
+            claimForm,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Redirect, claimResponse.StatusCode);
+        var location = claimResponse.Headers.Location;
+        Assert.NotNull(location);
+
+        using var recipientResponse = await recipientClient.GetAsync(
+            location,
+            TestContext.Current.CancellationToken);
+        var recipientHtml = WebUtility.HtmlDecode(
+            await recipientResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, recipientResponse.StatusCode);
+        Assert.Contains(secret, recipientHtml);
+        Assert.True(recipientResponse.Headers.CacheControl?.NoStore);
+
+        using var anonymousClient = factory.CreateClient();
+        using var anonymousResponse = await anonymousClient.GetAsync(
+            location,
+            TestContext.Current.CancellationToken);
+        var anonymousHtml = await anonymousResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, anonymousResponse.StatusCode);
+        Assert.DoesNotContain(secret, anonymousHtml);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(
+            1,
+            await verificationDb.KeyGrants.CountAsync(
+                grant => grant.DropId == dropId,
+                TestContext.Current.CancellationToken));
+        Assert.Equal(
+            1,
+            await verificationDb.KeyDrops
+                .Where(drop => drop.Id == dropId)
+                .Select(drop => drop.StateVersion)
+                .SingleAsync(TestContext.Current.CancellationToken));
+    }
+
     // Anyone can edit the query string, so a code we do not recognise must produce no
     // notice at all. Echoing it back would put attacker-chosen text on our own page.
     [Fact]
@@ -574,7 +638,9 @@ public sealed class KeyDropPageTests
         return (drop.Id, ownerEmail, closedAt);
     }
 
-    private async Task<(long DropId, string GameTitle)> CreateOpenDropAsync(int keyCount)
+    private async Task<(long DropId, string GameTitle)> CreateOpenDropAsync(
+        int keyCount,
+        string? singleKey = null)
     {
         await using var db = _fixture.NewDbContext();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -609,7 +675,7 @@ public sealed class KeyDropPageTests
             TestAccountProtection.AddGameKey(
                 db,
                 drop,
-                $"TEST-{Guid.NewGuid():N}");
+                singleKey ?? $"TEST-{Guid.NewGuid():N}");
         }
 
         await db.SaveChangesAsync(cancellationToken);
