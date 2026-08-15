@@ -15,7 +15,14 @@ public static class KeyDistributionsModule
                 WaitingRoomRedisOptions.IsValid,
                 "Waiting-room Redis settings are invalid.")
             .ValidateOnStart();
+        services.AddOptions<WaitingRoomPolicyOptions>()
+            .Bind(configuration.GetSection(WaitingRoomPolicyOptions.SectionName))
+            .Validate(
+                WaitingRoomPolicyOptions.IsValid,
+                "Waiting-room policy settings are invalid.")
+            .ValidateOnStart();
         services.AddSingleton<WaitingRoomRedisConnection>();
+        services.AddSingleton<WaitingRoomRedisKeys>();
         services.AddHealthChecks()
             .AddCheck<WaitingRoomRedisHealthCheck>("waiting-room-redis");
         services.AddScoped<KeyClaimService>();
