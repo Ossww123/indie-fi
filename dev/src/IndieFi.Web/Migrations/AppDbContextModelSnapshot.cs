@@ -889,6 +889,61 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserProfile", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Biography")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("")
+                        .HasColumnName("biography");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Nickname")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("nickname");
+
+                    b.Property<DateTimeOffset?>("NicknameChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("nickname_changed_at");
+
+                    b.Property<string>("NormalizedNickname")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("normalized_nickname");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("NormalizedNickname")
+                        .IsUnique();
+
+                    b.ToTable("user_profiles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_user_profiles_biography_length", "char_length(biography) <= 500");
+
+                            t.HasCheckConstraint("CK_user_profiles_nickname_shape", "(nickname IS NULL AND normalized_nickname IS NULL) OR (nickname IS NOT NULL AND normalized_nickname IS NOT NULL AND char_length(nickname) BETWEEN 2 AND 20 AND char_length(normalized_nickname) BETWEEN 2 AND 20)");
+
+                            t.HasCheckConstraint("CK_user_profiles_timestamps", "updated_at >= created_at AND (nickname_changed_at IS NULL OR nickname_changed_at >= created_at)");
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -1114,6 +1169,15 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserProfile", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithOne()
+                        .HasForeignKey("IndieFi.Web.Modules.Profiles.Domain.UserProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
