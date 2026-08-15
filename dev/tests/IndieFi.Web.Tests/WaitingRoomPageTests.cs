@@ -4,6 +4,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
 using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -140,6 +141,157 @@ public sealed class WaitingRoomPageTests
     }
 
     [Fact]
+    public async Task Claim_WithoutAdmission_IsRejectedWithoutCreatingGrant()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var dropId = await CreateActiveDropAsync();
+        var store = new InMemoryWaitingRoomStore();
+
+        await using var factory = new WebAppFactory(
+            _fixture.ConnectionString,
+            waitingRoomStore: store);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        using var detailResponse = await client.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var detailHtml = await detailResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var claimForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(detailHtml),
+        });
+
+        using var claimResponse = await client.PostAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=Claim",
+            claimForm,
+            TestContext.Current.CancellationToken);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(HttpStatusCode.Redirect, claimResponse.StatusCode);
+        Assert.Contains("claim=admission", claimResponse.Headers.Location!.OriginalString);
+        Assert.False(await verificationDb.KeyGrants.AnyAsync(
+            grant => grant.DropId == dropId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Claim_WhenRedisIsUnavailable_IsRejectedWithoutCreatingGrant()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var dropId = await CreateActiveDropAsync();
+
+        await using var factory = new WebAppFactory(
+            _fixture.ConnectionString,
+            waitingRoomStore: new UnavailableWaitingRoomStore());
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        using var detailResponse = await client.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var detailHtml = await detailResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var claimForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(detailHtml),
+        });
+
+        using var claimResponse = await client.PostAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=Claim",
+            claimForm,
+            TestContext.Current.CancellationToken);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(HttpStatusCode.Redirect, claimResponse.StatusCode);
+        Assert.Contains(
+            "claim=waitingunavailable",
+            claimResponse.Headers.Location!.OriginalString);
+        Assert.False(await verificationDb.KeyGrants.AnyAsync(
+            grant => grant.DropId == dropId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Claim_WithAdmission_GrantsKeyAndCompletesWaitingEntry()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var dropId = await CreateActiveDropAsync();
+        var store = new InMemoryWaitingRoomStore
+        {
+            AdmitOnAdvance = true,
+        };
+
+        await using var factory = new WebAppFactory(
+            _fixture.ConnectionString,
+            waitingRoomStore: store);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        var admittedHtml = await JoinAndReadAsync(client, dropId);
+        using var claimForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(admittedHtml),
+        });
+
+        using var claimResponse = await client.PostAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=Claim",
+            claimForm,
+            TestContext.Current.CancellationToken);
+        using var completedResponse = await client.GetAsync(
+            claimResponse.Headers.Location,
+            TestContext.Current.CancellationToken);
+        var completedHtml = await completedResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(HttpStatusCode.Redirect, claimResponse.StatusCode);
+        Assert.Equal(1, await verificationDb.KeyGrants.CountAsync(
+            grant => grant.DropId == dropId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(WaitingRoomEntryState.Completed, store.Entries.Single().Value.State);
+        Assert.Contains("받은 키", completedHtml);
+    }
+
+    [Fact]
+    public async Task Claim_WhenCompletionSyncFails_KeepsGrantAndRepairsOnRepeat()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var dropId = await CreateActiveDropAsync();
+        var store = new InMemoryWaitingRoomStore
+        {
+            AdmitOnAdvance = true,
+            CompletionFailuresRemaining = 1,
+        };
+
+        await using var factory = new WebAppFactory(
+            _fixture.ConnectionString,
+            waitingRoomStore: store);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        var admittedHtml = await JoinAndReadAsync(client, dropId);
+        var token = PageTestSupport.ExtractAntiforgeryToken(admittedHtml);
+
+        using var firstResponse = await PostClaimAsync(client, dropId, token);
+        Assert.Equal(WaitingRoomEntryState.Admitted, store.Entries.Single().Value.State);
+        using var repeatedResponse = await PostClaimAsync(client, dropId, token);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, repeatedResponse.StatusCode);
+        Assert.Equal(2, store.CompletionCalls);
+        Assert.Equal(WaitingRoomEntryState.Completed, store.Entries.Single().Value.State);
+        Assert.Equal(1, await verificationDb.KeyGrants.CountAsync(
+            grant => grant.DropId == dropId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Get_WhenRedisIsUnavailable_ShowsFixedFailureWithoutLeakingDetails()
     {
         var (email, password) = await PageTestSupport
@@ -188,6 +340,41 @@ public sealed class WaitingRoomPageTests
         return drop.Id;
     }
 
+    private static async Task<string> JoinAndReadAsync(HttpClient client, long dropId)
+    {
+        using var detailResponse = await client.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var detailHtml = await detailResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var joinForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(detailHtml),
+        });
+        using var joinResponse = await client.PostAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=Join",
+            joinForm,
+            TestContext.Current.CancellationToken);
+        using var admittedResponse = await client.GetAsync(
+            joinResponse.Headers.Location,
+            TestContext.Current.CancellationToken);
+        return await admittedResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+    }
+
+    private static Task<HttpResponseMessage> PostClaimAsync(
+        HttpClient client,
+        long dropId,
+        string token) =>
+        client.PostAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=Claim",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = token,
+            }),
+            TestContext.Current.CancellationToken);
+
     private sealed class InMemoryWaitingRoomStore : IWaitingRoomStore
     {
         public ConcurrentDictionary<(long DropId, long UserId), WaitingRoomStoredEntry>
@@ -195,6 +382,10 @@ public sealed class WaitingRoomPageTests
         { get; } = new();
 
         public bool AdmitOnAdvance { get; init; }
+
+        public int CompletionFailuresRemaining { get; set; }
+
+        public int CompletionCalls { get; private set; }
 
         public Task<WaitingRoomJoinResult> JoinAsync(
             WaitingRoomJoinCommand command,
@@ -310,6 +501,13 @@ public sealed class WaitingRoomPageTests
             long userId,
             CancellationToken cancellationToken = default)
         {
+            CompletionCalls++;
+            if (CompletionFailuresRemaining > 0)
+            {
+                CompletionFailuresRemaining--;
+                throw new WaitingRoomUnavailableException("test completion unavailable");
+            }
+
             if (!Entries.TryGetValue((dropId, userId), out var entry))
             {
                 return Task.FromResult(new WaitingRoomCompletionResult(

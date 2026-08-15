@@ -174,7 +174,14 @@ else if (User.Identity?.IsAuthenticated != true)
 else
 {
     <form method="post" asp-page-handler="Claim">
-        <button type="submit" class="button-primary">키 받기</button>
+        @if (Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.Admitted)
+        {
+            <button type="submit" class="button-primary">키 받기</button>
+        }
+        else
+        {
+            <button type="submit" class="button-primary" disabled>대기실 입장 후 키 받기</button>
+        }
     </form>
 }
 
