@@ -135,6 +135,9 @@ public sealed class WaitingRoomPageTests
         Assert.Equal(HttpStatusCode.OK, restoredResponse.StatusCode);
         Assert.Contains("입장 가능", restoredHtml);
         Assert.Contains("data-admission-expires-at", restoredHtml);
+        Assert.Contains("data-waiting-room-client", restoredHtml);
+        Assert.Contains("key-distributions/detail.js", restoredHtml);
+        Assert.Contains("data-waiting-room-claim", restoredHtml);
         Assert.Contains("재접속해도 입장 가능 시간은 연장되지 않으며", restoredHtml);
         Assert.Contains("이 상태만으로 키가 예약되지는 않습니다", restoredHtml);
         Assert.Single(store.Entries);

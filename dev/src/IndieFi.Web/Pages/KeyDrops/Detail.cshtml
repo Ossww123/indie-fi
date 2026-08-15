@@ -35,7 +35,7 @@
     </div>
     <div class="grid gap-1 border-b border-slate-200 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
         <dt class="font-medium text-slate-700">키 수</dt>
-        <dd>총 @(Model.Drop.TotalKeys)개 중 @(Model.Drop.RemainingKeys)개 남음</dd>
+        <dd data-key-drop-inventory>총 @(Model.Drop.TotalKeys)개 중 @(Model.Drop.RemainingKeys)개 남음</dd>
     </div>
     <div class="grid gap-1 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
         <dt class="font-medium text-slate-700">상태</dt>
@@ -78,6 +78,20 @@
     <p class="mt-1 text-sm text-slate-500">
         대기실 진입은 게임 키 예약이나 지급을 보장하지 않습니다.
     </p>
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <div data-waiting-room-client
+             data-drop-id="@Model.Drop.Id"
+             data-total-keys="@Model.Drop.TotalKeys"
+             data-snapshot-url="@Url.Page("/KeyDrops/Detail", "WaitingRoomSnapshot", new { id = Model.Drop.Id })"
+             data-hub-url="@Url.Content("~/hubs/waiting-room")"
+             data-client-state="starting">
+            <p class="mt-3 text-sm font-medium text-slate-700" data-live-state aria-live="polite" hidden></p>
+            <p class="mt-1 text-sm text-slate-600" data-live-position hidden></p>
+            <p class="mt-1 text-sm text-slate-500" data-live-counts hidden></p>
+            <p class="mt-1 text-sm font-medium text-emerald-700" data-live-admission hidden></p>
+        </div>
+    }
     @if (User.Identity?.IsAuthenticated != true)
     {
         <p class="mt-3 text-sm text-slate-600">로그인하면 대기실에 참여할 수 있습니다.</p>
@@ -176,11 +190,11 @@ else
     <form method="post" asp-page-handler="Claim">
         @if (Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.Admitted)
         {
-            <button type="submit" class="button-primary">키 받기</button>
+            <button type="submit" class="button-primary" data-waiting-room-claim>키 받기</button>
         }
         else
         {
-            <button type="submit" class="button-primary" disabled>대기실 입장 후 키 받기</button>
+            <button type="submit" class="button-primary" data-waiting-room-claim disabled>대기실 입장 후 키 받기</button>
         }
     </form>
 }
@@ -188,3 +202,11 @@ else
 <a asp-page="/Games/Detail"
    asp-route-id="@Model.Drop.GameId"
    class="text-link mt-6 inline-block">← 게임으로</a>
+
+@section Scripts
+{
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <script type="module" src="~/js/dist/key-distributions/detail.js" asp-append-version="true"></script>
+    }
+}

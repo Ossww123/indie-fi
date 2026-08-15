@@ -16,5 +16,8 @@
     "esbuild": "0.28.1",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^10.0.0"
   }
 }
