@@ -404,6 +404,41 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         return {1, completed}
         """;
 
+    private const string TerminateScript = """
+        local function split_entry(value)
+            local parts = {}
+            for part in string.gmatch(value .. '|', '(.-)|') do
+                table.insert(parts, part)
+            end
+            return parts
+        end
+
+        if redis.call('HGET', KEYS[1], 'terminal') == '1' then
+            return {2, ''}
+        end
+
+        local affected = {}
+        local entries = redis.call('HGETALL', KEYS[2])
+        for index = 1, #entries, 2 do
+            local user_id = entries[index]
+            local value = entries[index + 1]
+            local parts = split_entry(value)
+            if tonumber(parts[2]) ~= 4 then
+                local terminal = '1|6|' .. parts[3] .. '|' .. parts[4] .. '|'
+                redis.call('HSET', KEYS[2], user_id, terminal)
+                table.insert(affected, user_id)
+            end
+        end
+
+        redis.call('DEL', KEYS[3], KEYS[4], KEYS[5])
+        redis.call('HSET', KEYS[1], 'terminal', '1')
+        redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[1]))
+        if redis.call('EXISTS', KEYS[2]) == 1 then
+            redis.call('PEXPIRE', KEYS[2], tonumber(ARGV[1]))
+        end
+        return {1, table.concat(affected, ',')}
+        """;
+
     private readonly WaitingRoomRedisConnection _connection;
     private readonly WaitingRoomRedisKeys _keys;
     private readonly WaitingRoomPolicyOptions _policy;
@@ -652,6 +687,29 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         return new WaitingRoomCompletionResult(
             outcome,
             value.IsNullOrEmpty ? null : WaitingRoomRedisValueCodec.Deserialize(value));
+    }
+
+    public async Task<WaitingRoomTerminationResult> TerminateAsync(
+        long dropId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
+        var result = await EvaluateAsync(
+            TerminateScript,
+            _keys.All(dropId),
+            [ToMilliseconds(_policy.TerminalStateTtl)],
+            cancellationToken);
+        var parts = GetResultParts(result, expectedLength: 2);
+        var outcome = (int)parts[0] switch
+        {
+            1 => WaitingRoomTerminationOutcome.Terminated,
+            2 => WaitingRoomTerminationOutcome.AlreadyTerminal,
+            var unknown => throw new InvalidOperationException(
+                $"Redis returned an unknown waiting-room termination outcome: {unknown}."),
+        };
+        return new WaitingRoomTerminationResult(
+            outcome,
+            ParseUserIds((string?)parts[1]));
     }
 
     private async Task<RedisResult> EvaluateAsync(

@@ -293,5 +293,10 @@ public sealed class WaitingRoomParticipationServiceTests
             long userId,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<WaitingRoomTerminationResult> TerminateAsync(
+            long dropId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

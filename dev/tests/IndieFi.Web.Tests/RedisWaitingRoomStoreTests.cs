@@ -513,6 +513,58 @@ public sealed class RedisWaitingRoomStoreTests
     }
 
     [Fact]
+    public async Task TerminateAsync_AtomicallyPreservesCompletedAndStopsAllOtherWork()
+    {
+        var dropId = NextDropId();
+        var store = _fixture.NewStore(new WaitingRoomPolicyOptions
+        {
+            ConcurrentAdmissionLimit = 2,
+        });
+        await Task.WhenAll(Enumerable.Range(1, 4).Select(userId =>
+            store.JoinAsync(
+                new WaitingRoomJoinCommand(dropId, userId, WaitingRoomJoinMode.Open),
+                TestContext.Current.CancellationToken)));
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var admission = await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var completedUserId = admission.PromotedUserIds[0];
+        await store.CompleteAsync(
+            dropId,
+            completedUserId,
+            TestContext.Current.CancellationToken);
+
+        var terminated = await store.TerminateAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var repeated = await store.TerminateAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var entries = await Task.WhenAll(Enumerable.Range(1, 4).Select(userId =>
+            store.GetEntryAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)));
+        var join = await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 5, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        var advance = await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(WaitingRoomTerminationOutcome.Terminated, terminated.Outcome);
+        Assert.Equal(3, terminated.AffectedUserIds.Count);
+        Assert.Equal(WaitingRoomTerminationOutcome.AlreadyTerminal, repeated.Outcome);
+        Assert.Empty(repeated.AffectedUserIds);
+        Assert.Single(entries, entry => entry!.State == WaitingRoomEntryState.Completed);
+        Assert.Equal(3, entries.Count(entry => entry!.State == WaitingRoomEntryState.Terminal));
+        Assert.Equal(WaitingRoomJoinOutcome.Terminal, join.Outcome);
+        Assert.Equal(WaitingRoomAdmissionAdvanceOutcome.Terminal, advance.Outcome);
+    }
+
+    [Fact]
     public async Task JoinAsync_RefreshesActiveStateTtlAndHealthCheckUsesRealRedis()
     {
         var dropId = NextDropId();

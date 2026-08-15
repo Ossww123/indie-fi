@@ -39,6 +39,10 @@ public interface IWaitingRoomStore
         long dropId,
         long userId,
         CancellationToken cancellationToken = default);
+
+    Task<WaitingRoomTerminationResult> TerminateAsync(
+        long dropId,
+        CancellationToken cancellationToken = default);
 }
 
 public enum WaitingRoomJoinMode
@@ -137,3 +141,13 @@ public enum WaitingRoomCompletionOutcome
 public sealed record WaitingRoomCompletionResult(
     WaitingRoomCompletionOutcome Outcome,
     WaitingRoomStoredEntry? Entry = null);
+
+public enum WaitingRoomTerminationOutcome
+{
+    Terminated,
+    AlreadyTerminal,
+}
+
+public sealed record WaitingRoomTerminationResult(
+    WaitingRoomTerminationOutcome Outcome,
+    IReadOnlyList<long> AffectedUserIds);
