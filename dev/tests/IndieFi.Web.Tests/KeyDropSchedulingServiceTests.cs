@@ -134,6 +134,36 @@ public sealed class KeyDropSchedulingServiceTests
     }
 
     [Fact]
+    public async Task ScheduleAsync_WithDuplicateKeys_RejectsWholeBatchWithoutExposingKey()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+        const string secretKey = "DO-NOT-EXPOSE-THIS-KEY";
+
+        ScheduleKeyDropResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await new KeyDropSchedulingService(serviceDb).ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddHours(1),
+                $"{secretKey}\n  {secretKey}  ");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ScheduleKeyDropOutcome.Invalid, result.Outcome);
+        var violation = Assert.Single(result.Violations);
+        Assert.Equal(KeyDropSchedulingService.KeysField, violation.Field);
+        Assert.Contains("2번째 줄", violation.Message);
+        Assert.DoesNotContain(secretKey, violation.Message);
+        Assert.False(await verificationDb.KeyDrops.AnyAsync(
+            drop => drop.GameId == gameId,
+            TestContext.Current.CancellationToken));
+        Assert.False(await verificationDb.SteamKeys.AnyAsync(
+            key => key.KeyValue == secretKey,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ScheduleAsync_WhenCallerDoesNotOwnGame_WritesNothing()
     {
         var (ownerId, gameId) = await CreateOwnerAndGameAsync();

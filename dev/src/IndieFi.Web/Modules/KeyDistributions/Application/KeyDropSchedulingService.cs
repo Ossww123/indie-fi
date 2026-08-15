@@ -2,6 +2,7 @@ using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.KeyDistributions.Application;
@@ -72,17 +73,18 @@ public sealed class KeyDropSchedulingService
                 NoViolations);
         }
 
-        var keys = ParseKeys(keysText);
+        var parsedKeys = GameKeyPolicy.ParseBatch(keysText);
+        var keys = parsedKeys.Keys;
 
         // Both rules are checked before returning so a form with two mistakes reports
         // both at once rather than one per submission.
         var violations = new List<ValidationViolation>();
 
-        if (keys.Count == 0)
+        foreach (var keyViolation in parsedKeys.Violations)
         {
             violations.Add(new ValidationViolation(
                 KeysField,
-                "키를 한 개 이상 입력해 주세요."));
+                GetKeyViolationMessage(keyViolation)));
         }
 
         if (opensAt is null)
@@ -115,7 +117,7 @@ public sealed class KeyDropSchedulingService
         var steamKeys = keys.Select(key => new SteamKey
         {
             Drop = keyDrop,
-            KeyValue = key,
+            KeyValue = key.Value,
         });
 
         _db.KeyDrops.Add(keyDrop);
@@ -130,12 +132,19 @@ public sealed class KeyDropSchedulingService
             keys.Count);
     }
 
-    private static List<string> ParseKeys(string? keysText)
+    private static string GetKeyViolationMessage(GameKeyInputViolation violation)
     {
-        return (keysText ?? string.Empty)
-            .Split('\n')
-            .Select(key => key.Trim())
-            .Where(key => key.Length > 0)
-            .ToList();
+        return violation.Error switch
+        {
+            GameKeyInputError.Empty => "키를 한 개 이상 입력해 주세요.",
+            GameKeyInputError.TooLong =>
+                $"{violation.LineNumber}번째 줄 키는 {GameKeyPolicy.MaxLength}자 이하여야 합니다.",
+            GameKeyInputError.ContainsControlCharacter =>
+                $"{violation.LineNumber}번째 줄 키에 사용할 수 없는 제어 문자가 있습니다.",
+            GameKeyInputError.Duplicate =>
+                $"{violation.LineNumber}번째 줄에 앞에서 입력한 것과 같은 키가 있습니다.",
+            _ => throw new InvalidOperationException(
+                $"Unsupported game key input error: {violation.Error}"),
+        };
     }
 }
