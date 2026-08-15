@@ -28,15 +28,57 @@ public sealed class SessionCookieAuthenticationEvents : CookieAuthenticationEven
             || !TryReadSinglePositiveInt64(
                 context.Principal,
                 AuthenticationClaimTypes.SessionVersion,
-                out var sessionVersion)
-            || !await _sessionValidation.IsValidAsync(
-                userId,
-                sessionVersion,
-                context.HttpContext.RequestAborted))
+                out var sessionVersion))
         {
-            context.RejectPrincipal();
-            await context.HttpContext.SignOutAsync(context.Scheme.Name);
+            await RejectAsync(context);
+            return;
         }
+
+        var validation = await _sessionValidation.ValidateAsync(
+            userId,
+            sessionVersion,
+            context.HttpContext.RequestAborted);
+        if (validation is null)
+        {
+            await RejectAsync(context);
+            return;
+        }
+
+        RefreshDisplayName(context, validation.DisplayName);
+    }
+
+    private static async Task RejectAsync(CookieValidatePrincipalContext context)
+    {
+        context.RejectPrincipal();
+        await context.HttpContext.SignOutAsync(context.Scheme.Name);
+    }
+
+    private static void RefreshDisplayName(
+        CookieValidatePrincipalContext context,
+        string displayName)
+    {
+        var currentNames = context.Principal!.FindAll(ClaimTypes.Name).ToArray();
+        if (currentNames.Length == 1
+            && string.Equals(
+                currentNames[0].Value,
+                displayName,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var principal = context.Principal.Clone();
+        var identity = principal.Identity as ClaimsIdentity
+            ?? throw new InvalidOperationException(
+                "The application cookie must contain a claims identity.");
+        foreach (var claim in identity.FindAll(ClaimTypes.Name).ToArray())
+        {
+            identity.RemoveClaim(claim);
+        }
+
+        identity.AddClaim(new Claim(ClaimTypes.Name, displayName));
+        context.ReplacePrincipal(principal);
+        context.ShouldRenew = true;
     }
 
     private static bool TryReadSinglePositiveInt64(

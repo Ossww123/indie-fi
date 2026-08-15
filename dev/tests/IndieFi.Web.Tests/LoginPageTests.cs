@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using IndieFi.Web.Infrastructure.Authentication;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -91,9 +92,10 @@ public sealed class LoginPageTests
     }
 
     [Fact]
-    public async Task Get_Layout_AfterLogin_ShowsUserIdentifierWithoutEmail()
+    public async Task Get_Layout_AfterLogin_ShowsNicknameWithoutEmailAndLinksProfile()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var nickname = $"Layout{Guid.NewGuid():N}"[..12];
         long userId;
         await using (var db = _fixture.NewDbContext())
         {
@@ -102,6 +104,7 @@ public sealed class LoginPageTests
                 email,
                 TestContext.Current.CancellationToken)).Id;
         }
+        await AddProfileAsync(userId, nickname);
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
@@ -114,17 +117,20 @@ public sealed class LoginPageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(UserDisplayIdentifier.Format(userId), html);
+        Assert.Contains($"{nickname} 님", WebUtility.HtmlDecode(html));
+        Assert.Contains($"href=\"/Profiles/{userId}\"", html);
+        Assert.DoesNotContain(UserDisplayIdentifier.Format(userId), html);
         Assert.DoesNotContain(email, html);
     }
 
     [Fact]
-    public async Task Post_Login_IssuesOnlyTheRequiredClaimsWithTheCurrentSessionVersion()
+    public async Task Post_Login_IssuesOnlyTheRequiredClaimsWithTheCurrentDisplayName()
     {
         const long sessionVersion = 37;
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(
             _fixture,
             sessionVersion: sessionVersion);
+        var nickname = $"Login{Guid.NewGuid():N}"[..12];
         long userId;
         await using (var db = _fixture.NewDbContext())
         {
@@ -133,6 +139,7 @@ public sealed class LoginPageTests
                 email,
                 TestContext.Current.CancellationToken)).Id;
         }
+        await AddProfileAsync(userId, nickname);
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
@@ -176,7 +183,7 @@ public sealed class LoginPageTests
         Assert.Contains(
             claims,
             claim => claim.Type == ClaimTypes.Name
-                && claim.Value == UserDisplayIdentifier.Format(userId));
+                && claim.Value == nickname);
         Assert.Contains(
             claims,
             claim => claim.Type == AuthenticationClaimTypes.SessionVersion
@@ -185,6 +192,22 @@ public sealed class LoginPageTests
             claims,
             claim => claim.Type == ClaimTypes.Email
                 || claim.Value.Contains(email, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task AddProfileAsync(long userId, string nickname)
+    {
+        await using var db = _fixture.NewDbContext();
+        var changedAt = DateTimeOffset.UtcNow.AddDays(-8);
+        db.UserProfiles.Add(new UserProfile
+        {
+            UserId = userId,
+            Nickname = nickname,
+            NormalizedNickname = nickname.ToUpperInvariant(),
+            NicknameChangedAt = changedAt,
+            CreatedAt = changedAt,
+            UpdatedAt = changedAt,
+        });
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]

@@ -185,6 +185,7 @@ public sealed class GameDetailPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("플레이하기", html);
         Assert.Contains("외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.", html);
+        Assert.Contains("로그인 후 관심 게임 추가", html);
         Assert.Contains("개발자 사이트", html);
         Assert.Contains("Web", html);
         Assert.Equal(2, CountOccurrences(rawHtml, "target=\"_blank\""));
@@ -221,6 +222,7 @@ public sealed class GameDetailPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("등록된 외부 플레이 링크 없음", html);
+        Assert.Contains("로그인 후 관심 게임 추가", html);
         Assert.DoesNotContain("외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.", html);
         Assert.DoesNotContain("target=\"_blank\"", html);
     }

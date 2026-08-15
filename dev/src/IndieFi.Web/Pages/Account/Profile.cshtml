@@ -1,0 +1,63 @@
+@page
+@model ProfileModel
+@{
+    ViewData["Title"] = "내 프로필";
+}
+
+<h1 class="page-title mb-2">내 프로필</h1>
+<p class="mb-6 text-sm text-slate-600">
+    다른 사용자에게 공개할 닉네임과 소개를 설정할 수 있습니다.
+</p>
+<p class="mb-6">
+    <a asp-page="/Profiles/Detail"
+       asp-route-id="@Model.PublicProfileUserId"
+       class="text-link">공개 프로필 보기</a>
+    <span class="mx-2 text-slate-300">|</span>
+    <a asp-page="/Account/Following" class="text-link">팔로잉 목록</a>
+    <span class="mx-2 text-slate-300">|</span>
+    <a asp-page="/Account/FavoriteGames" class="text-link">관심 게임</a>
+</p>
+
+@if (Model.StatusMessage is not null)
+{
+    <div class="alert-success mb-6" role="status">@Model.StatusMessage</div>
+}
+
+<form method="post" class="form-stack">
+    <div asp-validation-summary="ModelOnly"></div>
+
+    <div class="field-group">
+        <label asp-for="Nickname" class="field-label">닉네임</label>
+        <input asp-for="Nickname"
+               class="field-input"
+               maxlength="@Model.NicknameMaxLength"
+               autocomplete="nickname"
+               readonly="@(!Model.CanChangeNickname ? "readonly" : null)" />
+        <span asp-validation-for="Nickname" class="field-error"></span>
+        @if (Model.CanChangeNickname)
+        {
+            <p class="text-sm text-slate-500">
+                @Model.NicknameMinLength~@(Model.NicknameMaxLength)자의 한글, 영문, 숫자, 공백, 밑줄과 하이픈을 사용할 수 있습니다.
+                비워 두면 <strong>@Model.FallbackDisplayIdentifier</strong>로 표시되며, 설정·변경·해제 후 7일 동안 다시 바꿀 수 없습니다.
+            </p>
+        }
+        else if (Model.NicknameChangeAvailableAt is DateTimeOffset availableAt)
+        {
+            <p class="text-sm text-slate-500">
+                다음 변경 가능 시각:
+                <time datetime="@availableAt.ToString("O")">@availableAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</time>
+            </p>
+        }
+    </div>
+
+    <div class="field-group">
+        <label asp-for="Biography" class="field-label">소개</label>
+        <textarea asp-for="Biography"
+                  class="field-input min-h-40"
+                  rows="8"></textarea>
+        <span asp-validation-for="Biography" class="field-error"></span>
+        <p class="text-sm text-slate-500">최대 @(Model.BiographyMaxLength)자까지 입력할 수 있습니다.</p>
+    </div>
+
+    <button type="submit" class="button-primary">프로필 저장</button>
+</form>

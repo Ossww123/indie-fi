@@ -109,7 +109,8 @@ public sealed class GoogleLoginModel : PageModel
         await _accountSignIn.SignInAsync(
             HttpContext,
             result.UserId!.Value,
-            result.SessionVersion!.Value);
+            result.SessionVersion!.Value,
+            HttpContext.RequestAborted);
 
         return LocalRedirect(GetSafeReturnUrl(returnUrl));
     }

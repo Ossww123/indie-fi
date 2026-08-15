@@ -9,6 +9,7 @@ using IndieFi.Web.Modules.Credits;
 using IndieFi.Web.Modules.Feedback;
 using IndieFi.Web.Modules.Games;
 using IndieFi.Web.Modules.KeyDistributions;
+using IndieFi.Web.Modules.Profiles;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -101,6 +102,7 @@ builder.Services.AddIndieFiDataProtection(
     builder.Environment);
 
 builder.Services.AddAccountsModule();
+builder.Services.AddProfilesModule();
 builder.Services.AddGamesModule();
 builder.Services.AddCreditsModule();
 builder.Services.AddFeedbackModule();

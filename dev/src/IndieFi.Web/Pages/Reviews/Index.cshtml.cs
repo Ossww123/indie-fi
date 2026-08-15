@@ -1,8 +1,8 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
-using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -71,17 +71,20 @@ public class IndexModel : PageModel
     private readonly ICurrentUser _currentUser;
     private readonly ReviewClaimService _reviewClaimService;
     private readonly ReviewLeaseSweepService _reviewLeaseSweepService;
+    private readonly UserDisplayNameResolver _displayNames;
 
     public IndexModel(
         AppDbContext db,
         ICurrentUser currentUser,
         ReviewClaimService reviewClaimService,
-        ReviewLeaseSweepService reviewLeaseSweepService)
+        ReviewLeaseSweepService reviewLeaseSweepService,
+        UserDisplayNameResolver displayNames)
     {
         _db = db;
         _currentUser = currentUser;
         _reviewClaimService = reviewClaimService;
         _reviewLeaseSweepService = reviewLeaseSweepService;
+        _displayNames = displayNames;
     }
 
     public IReadOnlyList<ReviewListItem> Items { get; private set; } = [];
@@ -158,11 +161,15 @@ public class IndexModel : PageModel
                 reviewRequest.CreatedAt,
             })
             .ToListAsync();
+        var displayNames = await _displayNames.ResolveAsync(
+            queuedItems.Select(item => item.RequesterId),
+            HttpContext.RequestAborted);
 
         Items = queuedItems
             .Select(item => new ReviewListItem(
                 item.Title,
-                UserDisplayIdentifier.Format(item.RequesterId),
+                item.RequesterId,
+                displayNames[item.RequesterId],
                 item.CreatedAt))
             .ToList();
     }
@@ -205,7 +212,8 @@ public class IndexModel : PageModel
 
     public sealed record ReviewListItem(
         string GameTitle,
-        string RequesterDisplayIdentifier,
+        long RequesterId,
+        string RequesterDisplayName,
         DateTimeOffset RequestedAt);
 
     public sealed record ReviewAssignmentListItem(

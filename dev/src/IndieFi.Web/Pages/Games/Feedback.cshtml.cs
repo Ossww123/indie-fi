@@ -1,6 +1,6 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
-using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -13,11 +13,16 @@ public class FeedbackModel : PageModel
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly UserDisplayNameResolver _displayNames;
 
-    public FeedbackModel(AppDbContext db, ICurrentUser currentUser)
+    public FeedbackModel(
+        AppDbContext db,
+        ICurrentUser currentUser,
+        UserDisplayNameResolver displayNames)
     {
         _db = db;
         _currentUser = currentUser;
+        _displayNames = displayNames;
     }
 
     public long GameId { get; private set; }
@@ -51,10 +56,14 @@ public class FeedbackModel : PageModel
                 submission.Body,
             })
             .ToListAsync();
+        var displayNames = await _displayNames.ResolveAsync(
+            feedbackItems.Select(item => item.ReviewerId),
+            HttpContext.RequestAborted);
 
         Items = feedbackItems
             .Select(item => new FeedbackListItem(
-                UserDisplayIdentifier.Format(item.ReviewerId),
+                item.ReviewerId,
+                displayNames[item.ReviewerId],
                 item.CreatedAt,
                 item.Body))
             .ToList();
@@ -63,7 +72,8 @@ public class FeedbackModel : PageModel
     }
 
     public sealed record FeedbackListItem(
-        string ReviewerDisplayIdentifier,
+        long ReviewerId,
+        string ReviewerDisplayName,
         DateTimeOffset SubmittedAt,
         string Body);
 }

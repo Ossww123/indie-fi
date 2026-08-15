@@ -4,6 +4,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -61,10 +62,12 @@ public sealed class ReviewQueuePageTests
     }
 
     [Fact]
-    public async Task Get_ReviewsPage_ShowsAnotherDevelopersRequest()
+    public async Task Get_ReviewsPage_ShowsRequesterNicknameAndProfileLink()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
         var request = await CreateReviewRequestAsync(null, "다른 개발자의 게임");
+        var requesterNickname = $"Requester{Guid.NewGuid():N}"[..15];
+        await AddProfileAsync(request.RequesterId, requesterNickname);
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
@@ -79,7 +82,9 @@ public sealed class ReviewQueuePageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var decodedHtml = WebUtility.HtmlDecode(html);
         Assert.Contains(request.GameTitle, decodedHtml);
-        Assert.Contains(
+        Assert.Contains(requesterNickname, decodedHtml);
+        Assert.Contains($"href=\"/Profiles/{request.RequesterId}\"", decodedHtml);
+        Assert.DoesNotContain(
             UserDisplayIdentifier.Format(request.RequesterId),
             decodedHtml);
         Assert.DoesNotContain(request.RequesterEmail, decodedHtml);
@@ -318,6 +323,22 @@ public sealed class ReviewQueuePageTests
             db,
             email,
             TestContext.Current.CancellationToken)).Id;
+    }
+
+    private async Task AddProfileAsync(long userId, string nickname)
+    {
+        await using var db = _fixture.NewDbContext();
+        var changedAt = DateTimeOffset.UtcNow.AddDays(-8);
+        db.UserProfiles.Add(new UserProfile
+        {
+            UserId = userId,
+            Nickname = nickname,
+            NormalizedNickname = nickname.ToUpperInvariant(),
+            NicknameChangedAt = changedAt,
+            CreatedAt = changedAt,
+            UpdatedAt = changedAt,
+        });
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     private async Task<ReviewRequestPageData> CreateReviewRequestAsync(

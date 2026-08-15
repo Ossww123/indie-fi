@@ -91,7 +91,8 @@ public sealed class GoogleLinkModel : PageModel
         await _accountSignIn.SignInAsync(
             HttpContext,
             result.UserId!.Value,
-            result.SessionVersion!.Value);
+            result.SessionVersion!.Value,
+            HttpContext.RequestAborted);
         return LocalRedirect(ReturnUrl!);
     }
 

@@ -87,7 +87,8 @@ public class LoginModel : PageModel
         await _accountSignInService.SignInAsync(
             HttpContext,
             result.UserId!.Value,
-            result.SessionVersion!.Value);
+            result.SessionVersion!.Value,
+            HttpContext.RequestAborted);
 
         // ReturnUrl is attacker-controlled, so only local URLs may become post-login redirects.
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))

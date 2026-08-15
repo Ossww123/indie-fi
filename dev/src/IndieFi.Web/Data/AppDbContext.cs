@@ -2,6 +2,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Games.Domain;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 
@@ -29,6 +30,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
         Set<PasswordResetRequestAttempt>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
+
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<UserFollow> UserFollows => Set<UserFollow>();
+    public DbSet<FavoriteGame> FavoriteGames => Set<FavoriteGame>();
 
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GamePlayLink> GamePlayLinks => Set<GamePlayLink>();
@@ -316,6 +321,107 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             login.HasIndex(item => new { item.Provider, item.ProviderUserId }).IsUnique();
             login.HasIndex(item => new { item.UserId, item.Provider }).IsUnique();
             login.HasOne<User>().WithMany().HasForeignKey(item => item.UserId);
+        });
+
+        modelBuilder.Entity<UserProfile>(profile =>
+        {
+            profile.ToTable("user_profiles", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_user_profiles_nickname_shape",
+                    "(nickname IS NULL AND normalized_nickname IS NULL) OR " +
+                    "(nickname IS NOT NULL AND normalized_nickname IS NOT NULL AND " +
+                    $"char_length(nickname) BETWEEN {UserProfilePolicy.NicknameMinLength} " +
+                    $"AND {UserProfilePolicy.NicknameMaxLength} AND " +
+                    $"char_length(normalized_nickname) BETWEEN {UserProfilePolicy.NicknameMinLength} " +
+                    $"AND {UserProfilePolicy.NicknameMaxLength})");
+                table.HasCheckConstraint(
+                    "CK_user_profiles_biography_length",
+                    $"char_length(biography) <= {UserProfilePolicy.BiographyMaxLength}");
+                table.HasCheckConstraint(
+                    "CK_user_profiles_timestamps",
+                    "updated_at >= created_at AND " +
+                    "(nickname_changed_at IS NULL OR nickname_changed_at >= created_at)");
+            });
+
+            profile.HasKey(item => item.UserId);
+            profile.Property(item => item.UserId).HasColumnName("user_id");
+            profile.Property(item => item.Nickname)
+                .HasColumnName("nickname")
+                .HasMaxLength(UserProfilePolicy.NicknameMaxLength);
+            profile.Property(item => item.NormalizedNickname)
+                .HasColumnName("normalized_nickname")
+                .HasMaxLength(UserProfilePolicy.NicknameMaxLength);
+            profile.Property(item => item.Biography)
+                .HasColumnName("biography")
+                .HasMaxLength(UserProfilePolicy.BiographyMaxLength)
+                .HasDefaultValue(string.Empty);
+            profile.Property(item => item.NicknameChangedAt)
+                .HasColumnName("nickname_changed_at");
+            profile.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            profile.Property(item => item.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasDefaultValueSql("now()");
+            profile.HasIndex(item => item.NormalizedNickname).IsUnique();
+            profile.HasOne<User>()
+                .WithOne()
+                .HasForeignKey<UserProfile>(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserFollow>(follow =>
+        {
+            follow.ToTable("user_follows", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_user_follows_not_self",
+                    "follower_id <> followed_user_id");
+            });
+
+            follow.HasKey(item => new { item.FollowerId, item.FollowedUserId });
+            follow.Property(item => item.FollowerId)
+                .HasColumnName("follower_id");
+            follow.Property(item => item.FollowedUserId)
+                .HasColumnName("followed_user_id");
+            follow.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            follow.HasIndex(item => item.FollowedUserId);
+            follow.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.FollowerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            follow.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.FollowedUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FavoriteGame>(favorite =>
+        {
+            favorite.ToTable("favorite_games");
+            favorite.HasKey(item => new { item.UserId, item.GameId });
+            favorite.Property(item => item.UserId)
+                .HasColumnName("user_id");
+            favorite.Property(item => item.GameId)
+                .HasColumnName("game_id");
+            favorite.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            favorite.HasIndex(item => item.GameId);
+            favorite.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            favorite.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => item.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Game>(game =>

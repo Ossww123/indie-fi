@@ -2,6 +2,7 @@ using System.Net;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits.Domain;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -18,12 +19,14 @@ public sealed class ReceivedFeedbackPageTests
     }
 
     [Fact]
-    public async Task Get_FeedbackPage_AsOwner_ShowsBodyAndReviewerIdentifierWithoutEmail()
+    public async Task Get_FeedbackPage_AsOwner_ShowsReviewerNicknameAndProfileLinkWithoutEmail()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
         var ownerId = await FindUserIdAsync(email);
         var feedbackBody = $"소유자에게 보이는 충분히 긴 피드백 본문입니다. 식별자 {Guid.NewGuid():N}";
         var feedback = await CreateGameWithFeedbackAsync(ownerId, feedbackBody);
+        var reviewerNickname = $"Reviewer{Guid.NewGuid():N}"[..14];
+        await AddProfileAsync(feedback.ReviewerId, reviewerNickname);
 
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
@@ -39,7 +42,9 @@ public sealed class ReceivedFeedbackPageTests
         var decodedHtml = WebUtility.HtmlDecode(html);
         Assert.Contains(feedback.GameTitle, decodedHtml);
         Assert.Contains(feedbackBody, decodedHtml);
-        Assert.Contains(
+        Assert.Contains(reviewerNickname, decodedHtml);
+        Assert.Contains($"href=\"/Profiles/{feedback.ReviewerId}\"", decodedHtml);
+        Assert.DoesNotContain(
             UserDisplayIdentifier.Format(feedback.ReviewerId),
             decodedHtml);
         Assert.Contains("· 제출 ", decodedHtml);
@@ -165,6 +170,22 @@ public sealed class ReceivedFeedbackPageTests
             db,
             email,
             TestContext.Current.CancellationToken)).Id;
+    }
+
+    private async Task AddProfileAsync(long userId, string nickname)
+    {
+        await using var db = _fixture.NewDbContext();
+        var changedAt = DateTimeOffset.UtcNow.AddDays(-8);
+        db.UserProfiles.Add(new UserProfile
+        {
+            UserId = userId,
+            Nickname = nickname,
+            NormalizedNickname = nickname.ToUpperInvariant(),
+            NicknameChangedAt = changedAt,
+            CreatedAt = changedAt,
+            UpdatedAt = changedAt,
+        });
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
     private async Task<FeedbackTestData> CreateGameWithFeedbackAsync(
