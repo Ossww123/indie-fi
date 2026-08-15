@@ -550,7 +550,17 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<ReviewRequest>(reviewRequest =>
         {
-            reviewRequest.ToTable("review_requests");
+            reviewRequest.ToTable("review_requests", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_review_requests_status",
+                    "status IN ('Queued', 'Assigned', 'Completed', 'Cancelled')");
+                table.HasCheckConstraint(
+                    "CK_review_requests_terminal_timestamps",
+                    "(status IN ('Queued', 'Assigned') AND completed_at IS NULL AND cancelled_at IS NULL) OR "
+                    + "(status = 'Completed' AND completed_at IS NOT NULL AND cancelled_at IS NULL) OR "
+                    + "(status = 'Cancelled' AND cancelled_at IS NOT NULL AND completed_at IS NULL)");
+            });
 
             reviewRequest.HasKey(r => r.Id);
             reviewRequest.Property(r => r.Id).HasColumnName("id");
@@ -573,8 +583,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             reviewRequest.Property(r => r.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
+                .HasMaxLength(16)
                 .IsRequired()
                 .HasDefaultValue(ReviewRequestStatus.Queued);
+
+            reviewRequest.Property(r => r.CompletedAt)
+                .HasColumnName("completed_at");
+
+            reviewRequest.Property(r => r.CancelledAt)
+                .HasColumnName("cancelled_at");
 
             reviewRequest.Property(r => r.CreatedAt)
                 .HasColumnName("created_at")
@@ -625,7 +642,17 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<ReviewAssignment>(reviewAssignment =>
         {
-            reviewAssignment.ToTable("review_assignments");
+            reviewAssignment.ToTable("review_assignments", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_review_assignments_status",
+                    "status IN ('Active', 'Completed', 'Expired')");
+                table.HasCheckConstraint(
+                    "CK_review_assignments_terminal_timestamps",
+                    "(status = 'Active' AND completed_at IS NULL AND expired_at IS NULL) OR "
+                    + "(status = 'Completed' AND completed_at IS NOT NULL AND expired_at IS NULL) OR "
+                    + "(status = 'Expired' AND expired_at IS NOT NULL AND completed_at IS NULL)");
+            });
 
             reviewAssignment.HasKey(a => a.Id);
             reviewAssignment.Property(a => a.Id).HasColumnName("id");
@@ -645,11 +672,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             reviewAssignment.Property(a => a.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
+                .HasMaxLength(16)
                 .IsRequired();
 
             reviewAssignment.Property(a => a.LeasedUntil)
                 .HasColumnName("leased_until")
                 .IsRequired();
+
+            reviewAssignment.Property(a => a.CompletedAt)
+                .HasColumnName("completed_at");
+
+            reviewAssignment.Property(a => a.ExpiredAt)
+                .HasColumnName("expired_at");
 
             reviewAssignment.Property(a => a.CreatedAt)
                 .HasColumnName("created_at")

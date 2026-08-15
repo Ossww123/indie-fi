@@ -26,7 +26,7 @@ public class FeedbackSubmissionService
     private const string SubmitSql = """
         WITH completed AS (
             UPDATE review_assignments
-               SET status = 'Completed'
+               SET status = 'Completed', completed_at = now()
              WHERE id = @assignmentId
                AND reviewer_id = @reviewerId
                AND status = 'Active'
@@ -47,7 +47,7 @@ public class FeedbackSubmissionService
         ),
         finished AS (
             UPDATE review_requests
-               SET status = 'Completed'
+               SET status = 'Completed', completed_at = now()
               FROM completed
              WHERE review_requests.id = completed.request_id
             RETURNING review_requests.id

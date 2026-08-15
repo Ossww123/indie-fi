@@ -625,6 +625,7 @@ public sealed class ReviewClaimServiceTests
                 item => item.ReviewerId == reviewerId,
                 TestContext.Current.CancellationToken);
             assignment.Status = ReviewAssignmentStatus.Expired;
+            assignment.ExpiredAt = DateTimeOffset.UtcNow;
             await expirationDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 

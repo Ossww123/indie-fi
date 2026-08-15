@@ -65,7 +65,9 @@ public sealed class GameDetailPageTests
 
             assignedRequest.Status = ReviewRequestStatus.Assigned;
             completedRequest.Status = ReviewRequestStatus.Completed;
+            completedRequest.CompletedAt = DateTimeOffset.UtcNow;
             cancelledRequest.Status = ReviewRequestStatus.Cancelled;
+            cancelledRequest.CancelledAt = DateTimeOffset.UtcNow;
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 

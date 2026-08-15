@@ -14,5 +14,9 @@ public class ReviewAssignment
 
     public DateTimeOffset LeasedUntil { get; set; }
 
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public DateTimeOffset? ExpiredAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }

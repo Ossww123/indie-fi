@@ -49,7 +49,9 @@ public class ReviewRequestService
             RETURNING id
         )
         UPDATE review_requests
-           SET status = 'Cancelled', refund_entry_id = refunded.id
+           SET status = 'Cancelled',
+               refund_entry_id = refunded.id,
+               cancelled_at = now()
           FROM refunded
          WHERE review_requests.id = @requestId
         RETURNING review_requests.id AS "Value"

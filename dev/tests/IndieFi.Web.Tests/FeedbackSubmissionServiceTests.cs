@@ -38,21 +38,25 @@ public sealed class FeedbackSubmissionServiceTests
         }
 
         await using var verificationDb = _fixture.NewDbContext();
-        var assignmentStatus = await verificationDb.ReviewAssignments
+        var assignmentState = await verificationDb.ReviewAssignments
             .Where(item => item.Id == assignment.AssignmentId)
-            .Select(item => item.Status)
+            .Select(item => new { item.Status, item.CompletedAt, item.ExpiredAt })
             .SingleAsync(TestContext.Current.CancellationToken);
-        var requestStatus = await verificationDb.ReviewRequests
+        var requestState = await verificationDb.ReviewRequests
             .Where(item => item.Id == assignment.RequestId)
-            .Select(item => item.Status)
+            .Select(item => new { item.Status, item.CompletedAt, item.CancelledAt })
             .SingleAsync(TestContext.Current.CancellationToken);
         var submissions = await verificationDb.FeedbackSubmissions
             .Where(item => item.AssignmentId == assignment.AssignmentId)
             .ToListAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(FeedbackSubmissionOutcome.Submitted, result.Outcome);
-        Assert.Equal(ReviewAssignmentStatus.Completed, assignmentStatus);
-        Assert.Equal(ReviewRequestStatus.Completed, requestStatus);
+        Assert.Equal(ReviewAssignmentStatus.Completed, assignmentState.Status);
+        Assert.NotNull(assignmentState.CompletedAt);
+        Assert.Null(assignmentState.ExpiredAt);
+        Assert.Equal(ReviewRequestStatus.Completed, requestState.Status);
+        Assert.NotNull(requestState.CompletedAt);
+        Assert.Null(requestState.CancelledAt);
         var submission = Assert.Single(submissions);
         Assert.Equal(Body, submission.Body);
     }

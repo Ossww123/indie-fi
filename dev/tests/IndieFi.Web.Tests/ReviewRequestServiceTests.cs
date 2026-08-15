@@ -217,9 +217,14 @@ public sealed class ReviewRequestServiceTests
         }
 
         await using var verificationDb = _fixture.NewDbContext();
-        var requestStatus = await verificationDb.ReviewRequests
+        var requestState = await verificationDb.ReviewRequests
             .Where(request => request.Id == requestId)
-            .Select(request => request.Status)
+            .Select(request => new
+            {
+                request.Status,
+                request.CompletedAt,
+                request.CancelledAt,
+            })
             .SingleAsync(TestContext.Current.CancellationToken);
         var refundEntries = await verificationDb.CreditLedgerEntries
             .Where(entry => entry.UserId == userId && entry.Kind == CreditEntryKind.Refund)
@@ -230,7 +235,9 @@ public sealed class ReviewRequestServiceTests
             .SingleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(ReviewRequestOutcome.Cancelled, result.Outcome);
-        Assert.Equal(ReviewRequestStatus.Cancelled, requestStatus);
+        Assert.Equal(ReviewRequestStatus.Cancelled, requestState.Status);
+        Assert.Null(requestState.CompletedAt);
+        Assert.NotNull(requestState.CancelledAt);
         var refundEntry = Assert.Single(refundEntries);
         Assert.Equal(1, refundEntry.Delta);
         Assert.Equal(balanceBefore + 1, balanceAfter);

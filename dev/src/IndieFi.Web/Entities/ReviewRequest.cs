@@ -26,6 +26,10 @@ public class ReviewRequest
 
     public ReviewRequestStatus Status { get; set; } = ReviewRequestStatus.Queued;
 
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    public DateTimeOffset? CancelledAt { get; set; }
+
     /// <summary>
     /// Set by the database (<c>now()</c>), never by the application.
     /// </summary>

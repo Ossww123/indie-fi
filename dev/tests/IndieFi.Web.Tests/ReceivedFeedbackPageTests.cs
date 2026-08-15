@@ -193,7 +193,9 @@ public sealed class ReceivedFeedbackPageTests
             ownerId,
             game.Id);
 
+        var completedAt = DateTimeOffset.UtcNow;
         reviewRequest.Status = ReviewRequestStatus.Completed;
+        reviewRequest.CompletedAt = completedAt;
         var assignment = new ReviewAssignment
         {
             RequestId = reviewRequest.Id,
@@ -201,6 +203,7 @@ public sealed class ReceivedFeedbackPageTests
             ReviewerId = reviewer.Id,
             Status = ReviewAssignmentStatus.Completed,
             LeasedUntil = DateTimeOffset.UtcNow.AddHours(1),
+            CompletedAt = completedAt,
         };
         db.ReviewAssignments.Add(assignment);
         await db.SaveChangesAsync(cancellationToken);
