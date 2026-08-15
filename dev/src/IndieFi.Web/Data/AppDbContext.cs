@@ -33,6 +33,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
+    public DbSet<FavoriteGame> FavoriteGames => Set<FavoriteGame>();
 
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GamePlayLink> GamePlayLinks => Set<GamePlayLink>();
@@ -397,6 +398,29 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             follow.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(item => item.FollowedUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FavoriteGame>(favorite =>
+        {
+            favorite.ToTable("favorite_games");
+            favorite.HasKey(item => new { item.UserId, item.GameId });
+            favorite.Property(item => item.UserId)
+                .HasColumnName("user_id");
+            favorite.Property(item => item.GameId)
+                .HasColumnName("game_id");
+            favorite.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            favorite.HasIndex(item => item.GameId);
+            favorite.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            favorite.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => item.GameId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

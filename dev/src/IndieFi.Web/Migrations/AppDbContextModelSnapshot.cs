@@ -889,6 +889,29 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.FavoriteGame", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("GameId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("game_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("UserId", "GameId");
+
+                    b.HasIndex("GameId");
+
+                    b.ToTable("favorite_games", (string)null);
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserFollow", b =>
                 {
                     b.Property<long>("FollowerId")
@@ -1195,6 +1218,21 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.FavoriteGame", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.Game", null)
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserFollow", b =>

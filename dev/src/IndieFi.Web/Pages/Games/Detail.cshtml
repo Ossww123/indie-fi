@@ -16,6 +16,11 @@
     </div>
 }
 
+@if (Model.FavoriteMessage is not null)
+{
+    <div class="alert-success" role="status">@Model.FavoriteMessage</div>
+}
+
 <div class="flex flex-wrap items-center gap-2">
     <h1 class="page-title mr-2">@Model.Game.Title</h1>
     @* Hiding this link is only UX; the Edit endpoint enforces ownership. *@
@@ -34,6 +39,31 @@
             <input type="hidden" name="operationId" value="@Model.RequestOperationId" />
             <button type="submit" class="button-outline px-3 py-1.5">피드백 요청</button>
         </form>
+    }
+    @if (Model.CanManageFavorite)
+    {
+        @if (Model.IsFavorite)
+        {
+            <form method="post"
+                  asp-page-handler="Unfavorite"
+                  asp-route-id="@Model.Game.Id">
+                <button type="submit" class="button-outline px-3 py-1.5">관심 게임 제거</button>
+            </form>
+        }
+        else
+        {
+            <form method="post"
+                  asp-page-handler="Favorite"
+                  asp-route-id="@Model.Game.Id">
+                <button type="submit" class="button-primary px-3 py-1.5">관심 게임 추가</button>
+            </form>
+        }
+    }
+    else
+    {
+        <a asp-page="/Login"
+           asp-route-returnUrl="@($"/Games/Detail/{Model.Game.Id}")"
+           class="button-outline px-3 py-1.5">로그인 후 관심 게임 추가</a>
     }
 </div>
 <p class="mt-2 text-meta">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>

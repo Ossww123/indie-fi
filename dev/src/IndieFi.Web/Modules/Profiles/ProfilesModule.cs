@@ -10,6 +10,7 @@ public static class ProfilesModule
         services.AddScoped<PublicUserProfileQueryService>();
         services.AddScoped<UserDisplayNameResolver>();
         services.AddScoped<UserFollowService>();
+        services.AddScoped<FavoriteGameService>();
         return services;
     }
 }

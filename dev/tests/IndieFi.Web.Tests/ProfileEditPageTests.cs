@@ -53,6 +53,8 @@ public sealed class ProfileEditPageTests
         Assert.Contains("name=\"Nickname\"", html);
         Assert.Contains("name=\"Biography\"", html);
         Assert.Contains("href=\"/Account/Profile\"", html);
+        Assert.Contains("관심 게임", html);
+        Assert.Contains("href=\"/Account/FavoriteGames\"", html);
         Assert.Contains(UserDisplayIdentifier.Format(userId), html);
         Assert.DoesNotContain(email, html, StringComparison.OrdinalIgnoreCase);
     }
