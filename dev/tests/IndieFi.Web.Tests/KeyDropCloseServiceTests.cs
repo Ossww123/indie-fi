@@ -1,9 +1,7 @@
-using System.Data.Common;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -227,32 +225,27 @@ public sealed class KeyDropCloseServiceTests
     }
 
     [Fact]
-    public async Task CloseAsync_WhenClaimCommitsAfterCloseSnapshot_ReturnsConflict()
+    public async Task CloseAsync_WhenClaimCommittedFirst_StillCloses()
     {
         var data = await CreateDropAsync(active: true, keyCount: 2);
-        var gate = new CloseSnapshotGate();
 
-        await using var closeDb = _fixture.NewDbContext(gate);
-        var closeTask = NewCloseService(closeDb).CloseAsync(
-            data.DropId,
-            data.OwnerId,
-            TestContext.Current.CancellationToken);
-
-        await gate.SnapshotRead.WaitAsync(TestContext.Current.CancellationToken);
         ClaimResult claim;
-        try
+        await using (var claimDb = _fixture.NewDbContext())
         {
-            await using var claimDb = _fixture.NewDbContext();
             claim = await NewClaimService(claimDb).ClaimAsync(
                 data.DropId,
                 data.FirstRecipientId,
                 TestContext.Current.CancellationToken);
         }
-        finally
+
+        CloseKeyDropResult close;
+        await using (var closeDb = _fixture.NewDbContext())
         {
-            gate.Continue();
+            close = await NewCloseService(closeDb).CloseAsync(
+                data.DropId,
+                data.OwnerId,
+                TestContext.Current.CancellationToken);
         }
-        var close = await closeTask;
 
         await using var verificationDb = _fixture.NewDbContext();
         var drop = await verificationDb.KeyDrops
@@ -261,39 +254,34 @@ public sealed class KeyDropCloseServiceTests
             .SingleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(ClaimOutcome.Granted, claim.Outcome);
-        Assert.Equal(CloseKeyDropOutcome.Conflict, close.Outcome);
-        Assert.Null(drop.ClosedAt);
-        Assert.Equal(1, drop.StateVersion);
+        Assert.Equal(CloseKeyDropOutcome.Closed, close.Outcome);
+        Assert.NotNull(drop.ClosedAt);
+        Assert.Equal(2, drop.StateVersion);
     }
 
     [Fact]
-    public async Task CloseAsync_WhenInventoryCommitsAfterCloseSnapshot_ReturnsConflict()
+    public async Task CloseAsync_WhenInventoryCommittedFirst_StillCloses()
     {
         var data = await CreateDropAsync(active: false, keyCount: 1);
-        var gate = new CloseSnapshotGate();
 
-        await using var closeDb = _fixture.NewDbContext(gate);
-        var closeTask = NewCloseService(closeDb).CloseAsync(
-            data.DropId,
-            data.OwnerId,
-            TestContext.Current.CancellationToken);
-
-        await gate.SnapshotRead.WaitAsync(TestContext.Current.CancellationToken);
         AddKeyInventoryResult inventory;
-        try
+        await using (var inventoryDb = _fixture.NewDbContext())
         {
-            await using var inventoryDb = _fixture.NewDbContext();
             inventory = await NewInventoryService(inventoryDb).AddAsync(
                 data.DropId,
                 data.OwnerId,
                 $"CLOSE-RACE-{Guid.NewGuid():N}",
                 TestContext.Current.CancellationToken);
         }
-        finally
+
+        CloseKeyDropResult close;
+        await using (var closeDb = _fixture.NewDbContext())
         {
-            gate.Continue();
+            close = await NewCloseService(closeDb).CloseAsync(
+                data.DropId,
+                data.OwnerId,
+                TestContext.Current.CancellationToken);
         }
-        var close = await closeTask;
 
         await using var verificationDb = _fixture.NewDbContext();
         var drop = await verificationDb.KeyDrops
@@ -307,10 +295,49 @@ public sealed class KeyDropCloseServiceTests
             .SingleAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(AddKeyInventoryOutcome.Added, inventory.Outcome);
-        Assert.Equal(CloseKeyDropOutcome.Conflict, close.Outcome);
-        Assert.Null(drop.ClosedAt);
-        Assert.Equal(1, drop.StateVersion);
+        Assert.Equal(CloseKeyDropOutcome.Closed, close.Outcome);
+        Assert.NotNull(drop.ClosedAt);
+        Assert.Equal(2, drop.StateVersion);
         Assert.Equal(2, drop.TotalKeys);
+    }
+
+    [Fact]
+    public async Task CloseAsync_WhenTwoOwnersCloseConcurrently_OnlyOneClosesTheDrop()
+    {
+        var data = await CreateDropAsync(active: true, keyCount: 2);
+
+        await using var firstDb = _fixture.NewDbContext();
+        await using var secondDb = _fixture.NewDbContext();
+        var closes = await Task.WhenAll(
+            Task.Run(() => NewCloseService(firstDb).CloseAsync(
+                data.DropId,
+                data.OwnerId,
+                TestContext.Current.CancellationToken)),
+            Task.Run(() => NewCloseService(secondDb).CloseAsync(
+                data.DropId,
+                data.OwnerId,
+                TestContext.Current.CancellationToken)));
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var drop = await verificationDb.KeyDrops
+            .Where(item => item.Id == data.DropId)
+            .Select(item => new { item.ClosedAt, item.StateVersion })
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            1,
+            closes.Count(close => close.Outcome == CloseKeyDropOutcome.Closed));
+        Assert.All(
+            closes.Where(close => close.Outcome != CloseKeyDropOutcome.Closed),
+            close => Assert.Contains(
+                close.Outcome,
+                new[]
+                {
+                    CloseKeyDropOutcome.AlreadyClosed,
+                    CloseKeyDropOutcome.Conflict,
+                }));
+        Assert.NotNull(drop.ClosedAt);
+        Assert.Equal(1, drop.StateVersion);
     }
 
     private async Task<DropData> CreateDropAsync(bool active, int keyCount)
@@ -387,35 +414,4 @@ public sealed class KeyDropCloseServiceTests
         long SecondRecipientId,
         long DropId,
         IReadOnlyList<long> KeyIds);
-
-    private sealed class CloseSnapshotGate : DbCommandInterceptor
-    {
-        private readonly TaskCompletionSource _snapshotRead =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource _continue =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int _armed = 1;
-
-        public Task SnapshotRead => _snapshotRead.Task;
-
-        public void Continue() => _continue.TrySetResult();
-
-        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
-            DbCommand command,
-            CommandExecutedEventData eventData,
-            DbDataReader result,
-            CancellationToken cancellationToken = default)
-        {
-            if (command.CommandText.Contains(
-                    "state_version",
-                    StringComparison.OrdinalIgnoreCase)
-                && Interlocked.Exchange(ref _armed, 0) == 1)
-            {
-                _snapshotRead.TrySetResult();
-                await _continue.Task.WaitAsync(cancellationToken);
-            }
-
-            return result;
-        }
-    }
 }

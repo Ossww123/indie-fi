@@ -36,15 +36,6 @@ public sealed class KeyDropCloseService
         long ownerId,
         CancellationToken cancellationToken = default)
     {
-        // Capture the version before waiting for the mutation lock. If a claim or
-        // inventory add commits while this close request waits, closing must not
-        // silently apply to that newer state.
-        var expectedVersion = await _db.KeyDrops
-            .AsNoTracking()
-            .Where(drop => drop.Id == dropId)
-            .Select(drop => (long?)drop.StateVersion)
-            .SingleOrDefaultAsync(cancellationToken);
-
         await using var transaction =
             await AccountMutationGuard.BeginTransactionIfNeededAsync(
                 _db,
@@ -96,22 +87,18 @@ public sealed class KeyDropCloseService
             return new CloseKeyDropResult(CloseKeyDropOutcome.InvalidStatus);
         }
 
-        if (expectedVersion is null
-            || state.StateVersion != expectedVersion.Value)
-        {
-            await AccountMutationGuard.CommitIfOwnedAsync(
-                transaction,
-                cancellationToken);
-            return new CloseKeyDropResult(CloseKeyDropOutcome.Conflict);
-        }
-
+        // The locked state is authoritative, so the version guard uses it rather
+        // than an earlier snapshot. A claim or inventory add that committed before
+        // the lock was acquired does not invalidate the owner's intent to close:
+        // if it drained the last key, the CanCloseEarly check above already
+        // rejected the request. The guard still serializes concurrent closes.
         var updatedDropCount = await _db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             UPDATE key_drops
             SET closed_at = now(),
                 state_version = state_version + 1
             WHERE id = {dropId}
-              AND state_version = {expectedVersion.Value}
+              AND state_version = {state.StateVersion!.Value}
               AND closed_at IS NULL
             """,
             cancellationToken);
