@@ -102,7 +102,7 @@ public sealed class AccountAuthenticationServiceTests
     [Fact]
     public async Task AuthenticateAsync_WithUnknownEmail_ReturnsSameInvalidCredentialsResult()
     {
-        var passwordHasher = new PasswordHasher<User>();
+        var passwordHasher = new RecordingPasswordHasher();
 
         AccountAuthenticationResult result;
         await using (var authenticationDb = _fixture.NewDbContext())
@@ -121,6 +121,8 @@ public sealed class AccountAuthenticationServiceTests
         Assert.Equal(AccountAuthenticationOutcome.InvalidCredentials, result.Outcome);
         Assert.Null(result.UserId);
         Assert.Null(result.SessionVersion);
+        Assert.Equal(1, passwordHasher.VerifyCallCount);
+        Assert.NotNull(passwordHasher.VerifiedHash);
     }
 
     [Theory]
@@ -259,5 +261,24 @@ public sealed class AccountAuthenticationServiceTests
         }
 
         public override DateTimeOffset GetUtcNow() => _utcNow;
+    }
+
+    private sealed class RecordingPasswordHasher : IPasswordHasher<User>
+    {
+        public int VerifyCallCount { get; private set; }
+        public string? VerifiedHash { get; private set; }
+
+        public string HashPassword(User user, string password) =>
+            throw new NotSupportedException();
+
+        public PasswordVerificationResult VerifyHashedPassword(
+            User user,
+            string hashedPassword,
+            string providedPassword)
+        {
+            VerifyCallCount++;
+            VerifiedHash = hashedPassword;
+            return PasswordVerificationResult.Failed;
+        }
     }
 }
