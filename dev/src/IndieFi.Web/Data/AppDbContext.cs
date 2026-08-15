@@ -40,7 +40,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
 
-    public DbSet<SteamKey> SteamKeys => Set<SteamKey>();
+    public DbSet<GameKey> GameKeys => Set<GameKey>();
 
     public DbSet<KeyGrant> KeyGrants => Set<KeyGrant>();
 
@@ -545,29 +545,31 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(d => d.OwnerId);
         });
 
-        modelBuilder.Entity<SteamKey>(steamKey =>
+        modelBuilder.Entity<GameKey>(gameKey =>
         {
-            steamKey.ToTable("steam_keys");
+            gameKey.ToTable("game_keys");
 
-            steamKey.HasKey(k => k.Id);
-            steamKey.Property(k => k.Id).HasColumnName("id");
+            gameKey.HasKey(key => key.Id);
+            gameKey.Property(key => key.Id).HasColumnName("id");
 
-            steamKey.Property(k => k.DropId)
+            gameKey.Property(key => key.DropId)
                 .HasColumnName("drop_id")
                 .IsRequired();
 
-            steamKey.Property(k => k.KeyValue)
+            gameKey.Property(key => key.KeyValue)
                 .HasColumnName("key_value")
                 .IsRequired();
 
-            steamKey.Property(k => k.CreatedAt)
+            gameKey.Property(key => key.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
                 .ValueGeneratedOnAdd();
 
-            steamKey.HasOne(k => k.Drop)
+            gameKey.HasAlternateKey(key => new { key.Id, key.DropId });
+
+            gameKey.HasOne(key => key.Drop)
                 .WithMany()
-                .HasForeignKey(k => k.DropId)
+                .HasForeignKey(key => key.DropId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -605,15 +607,16 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(g => g.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            keyGrant.HasOne<SteamKey>()
+            keyGrant.HasOne<GameKey>()
                 .WithMany()
-                .HasForeignKey(g => g.KeyId)
+                .HasForeignKey(grant => new { grant.KeyId, grant.DropId })
+                .HasPrincipalKey(key => new { key.Id, key.DropId })
                 .OnDelete(DeleteBehavior.Cascade);
 
             // A user can receive only one key from a drop.
             keyGrant.HasIndex(g => new { g.DropId, g.UserId }).IsUnique();
 
-            // A Steam key can be granted to only one user.
+            // A game key can be granted to only one user.
             keyGrant.HasIndex(g => g.KeyId).IsUnique();
         });
 

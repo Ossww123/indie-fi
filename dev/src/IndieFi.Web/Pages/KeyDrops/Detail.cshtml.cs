@@ -68,7 +68,7 @@ public class DetailModel : PageModel
         // using database time when a key is claimed.
         IsOpen = drop.OpensAt <= DateTimeOffset.Now;
 
-        RemainingKeys = await _db.SteamKeys
+        RemainingKeys = await _db.GameKeys
             .CountAsync(key =>
                 key.DropId == id &&
                 !_db.KeyGrants.Any(grant => grant.KeyId == key.Id));
@@ -80,7 +80,7 @@ public class DetailModel : PageModel
             ClaimedKey = await _db.KeyGrants
                 .Where(grant => grant.DropId == id && grant.UserId == userId)
                 .Join(
-                    _db.SteamKeys,
+                    _db.GameKeys,
                     grant => grant.KeyId,
                     key => key.Id,
                     (_, key) => key.KeyValue)

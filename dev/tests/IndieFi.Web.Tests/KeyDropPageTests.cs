@@ -231,7 +231,7 @@ public sealed class KeyDropPageTests
 
         for (var index = 0; index < keyCount; index++)
         {
-            db.SteamKeys.Add(new SteamKey
+            db.GameKeys.Add(new GameKey
             {
                 DropId = drop.Id,
                 KeyValue = $"TEST-{Guid.NewGuid():N}"

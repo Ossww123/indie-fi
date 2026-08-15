@@ -1,7 +1,7 @@
 namespace IndieFi.Web.Entities;
 
 /// <summary>
-/// A scheduled release of Steam keys for a game. One row per drop.
+/// A scheduled release of game keys. One row per drop.
 /// </summary>
 public class KeyDrop
 {

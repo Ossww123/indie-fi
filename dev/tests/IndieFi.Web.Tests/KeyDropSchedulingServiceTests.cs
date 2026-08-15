@@ -34,7 +34,7 @@ public sealed class KeyDropSchedulingServiceTests
         var drop = await verificationDb.KeyDrops.SingleAsync(
             item => item.Id == result.KeyDropId,
             TestContext.Current.CancellationToken);
-        var keys = await verificationDb.SteamKeys
+        var keys = await verificationDb.GameKeys
             .Where(key => key.DropId == drop.Id)
             .OrderBy(key => key.Id)
             .Select(key => key.KeyValue)
@@ -158,7 +158,7 @@ public sealed class KeyDropSchedulingServiceTests
         Assert.False(await verificationDb.KeyDrops.AnyAsync(
             drop => drop.GameId == gameId,
             TestContext.Current.CancellationToken));
-        Assert.False(await verificationDb.SteamKeys.AnyAsync(
+        Assert.False(await verificationDb.GameKeys.AnyAsync(
             key => key.KeyValue == secretKey,
             TestContext.Current.CancellationToken));
     }

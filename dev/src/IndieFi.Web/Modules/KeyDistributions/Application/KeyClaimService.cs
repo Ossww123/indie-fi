@@ -71,7 +71,7 @@ public class KeyClaimService
 
         // One PostgreSQL statement is one transaction, so the FOR UPDATE lock survives
         // through the INSERT and no explicit transaction is needed. A residual race remains:
-        // the lock covers steam_keys, while "taken" lives in key_grants; under READ COMMITTED,
+        // the lock covers game_keys, while "taken" lives in key_grants; under READ COMMITTED,
         // another claimer can commit between our snapshot and lock acquisition. The unique
         // index rejects that collision, so retries are still required.
         const int maxAttempts = 5;
@@ -92,7 +92,7 @@ public class KeyClaimService
                         ),
                         picked AS (
                             SELECT s.id
-                            FROM steam_keys AS s
+                            FROM game_keys AS s
                             CROSS JOIN active_user
                             WHERE s.drop_id = {dropId}
                               AND NOT EXISTS (

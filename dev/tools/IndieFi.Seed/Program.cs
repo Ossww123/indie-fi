@@ -135,7 +135,7 @@ internal sealed class Program
 
         for (var index = 1; index <= options.KeyCount; index++)
         {
-            db.SteamKeys.Add(new SteamKey
+            db.GameKeys.Add(new GameKey
             {
                 Drop = drop,
                 KeyValue = $"LOADTEST-{Guid.NewGuid():N}"

@@ -219,7 +219,7 @@ public sealed class AccountMutationBlockingTests
                 TotalKeys = 1,
             };
             arrangeDb.KeyDrops.Add(drop);
-            arrangeDb.SteamKeys.Add(new SteamKey
+            arrangeDb.GameKeys.Add(new GameKey
             {
                 Drop = drop,
                 KeyValue = $"BLOCKED-{Guid.NewGuid():N}",

@@ -135,7 +135,7 @@ public sealed class KeyClaimServiceTests
             .Where(grant => grant.DropId == dropId && grant.UserId == userId)
             .Select(grant => grant.KeyId)
             .SingleAsync(TestContext.Current.CancellationToken);
-        var remainingKeyCount = await verificationDb.SteamKeys
+        var remainingKeyCount = await verificationDb.GameKeys
             .CountAsync(key =>
                 key.DropId == dropId &&
                 !verificationDb.KeyGrants.Any(grant => grant.KeyId == key.Id),
@@ -369,7 +369,7 @@ public sealed class KeyClaimServiceTests
 
         for (var index = 0; index < keyCount; index++)
         {
-            db.SteamKeys.Add(new SteamKey
+            db.GameKeys.Add(new GameKey
             {
                 DropId = drop.Id,
                 KeyValue = $"TEST-{Guid.NewGuid():N}"

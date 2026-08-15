@@ -1,7 +1,7 @@
 namespace IndieFi.Web.Entities;
 
 /// <summary>
-/// A Steam key granted to a user from a drop. One row per grant.
+/// A game key granted to a user from a drop. One row per grant.
 /// </summary>
 public class KeyGrant
 {

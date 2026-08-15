@@ -114,14 +114,14 @@ public sealed class KeyDropSchedulingService
             TotalKeys = keys.Count,
         };
 
-        var steamKeys = keys.Select(key => new SteamKey
+        var gameKeys = keys.Select(key => new GameKey
         {
             Drop = keyDrop,
             KeyValue = key.Value,
         });
 
         _db.KeyDrops.Add(keyDrop);
-        _db.SteamKeys.AddRange(steamKeys);
+        _db.GameKeys.AddRange(gameKeys);
         await _db.SaveChangesAsync();
         await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 

@@ -109,6 +109,37 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("games", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.GameKey", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("DropId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("drop_id");
+
+                    b.Property<string>("KeyValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key_value");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DropId");
+
+                    b.ToTable("game_keys", (string)null);
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.GamePlayLink", b =>
                 {
                     b.Property<long>("Id")
@@ -244,6 +275,8 @@ namespace IndieFi.Web.Migrations
 
                     b.HasIndex("DropId", "UserId")
                         .IsUnique();
+
+                    b.HasIndex("KeyId", "DropId");
 
                     b.ToTable("key_grants", (string)null);
                 });
@@ -402,37 +435,6 @@ namespace IndieFi.Web.Migrations
 
                             t.HasCheckConstraint("CK_review_requests_terminal_timestamps", "(status IN ('Queued', 'Assigned') AND completed_at IS NULL AND cancelled_at IS NULL) OR (status = 'Completed' AND completed_at IS NOT NULL AND cancelled_at IS NULL) OR (status = 'Cancelled' AND cancelled_at IS NOT NULL AND completed_at IS NULL)");
                         });
-                });
-
-            modelBuilder.Entity("IndieFi.Web.Entities.SteamKey", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<long>("DropId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("drop_id");
-
-                    b.Property<string>("KeyValue")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("key_value");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DropId");
-
-                    b.ToTable("steam_keys", (string)null);
                 });
 
             modelBuilder.Entity("IndieFi.Web.Entities.User", b =>
@@ -1043,6 +1045,17 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Entities.GameKey", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.KeyDrop", "Drop")
+                        .WithMany()
+                        .HasForeignKey("DropId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Drop");
+                });
+
             modelBuilder.Entity("IndieFi.Web.Entities.GamePlayLink", b =>
                 {
                     b.HasOne("IndieFi.Web.Entities.Game", null)
@@ -1075,15 +1088,16 @@ namespace IndieFi.Web.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("IndieFi.Web.Entities.SteamKey", null)
-                        .WithMany()
-                        .HasForeignKey("KeyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("IndieFi.Web.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.GameKey", null)
+                        .WithMany()
+                        .HasForeignKey("KeyId", "DropId")
+                        .HasPrincipalKey("Id", "DropId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -1133,17 +1147,6 @@ namespace IndieFi.Web.Migrations
                     b.Navigation("RefundEntry");
 
                     b.Navigation("SpendEntry");
-                });
-
-            modelBuilder.Entity("IndieFi.Web.Entities.SteamKey", b =>
-                {
-                    b.HasOne("IndieFi.Web.Entities.KeyDrop", "Drop")
-                        .WithMany()
-                        .HasForeignKey("DropId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Drop");
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Accounts.Domain.AuthenticationEmailOutboxMessage", b =>
