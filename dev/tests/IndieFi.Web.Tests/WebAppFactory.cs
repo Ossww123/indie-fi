@@ -53,14 +53,19 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
                 _accountProtectionKeyFilePath;
             configuration.AddInMemoryCollection(values);
         });
-        if (_waitingRoomStore is not null)
+        builder.ConfigureServices(services =>
         {
-            builder.ConfigureServices(services =>
+            if (_waitingRoomStore is null)
             {
-                services.RemoveAll<IWaitingRoomStore>();
-                services.AddSingleton(_waitingRoomStore);
-            });
-        }
+                services.RemoveAll<IKeyClaimAdmissionGate>();
+                services.AddSingleton<IKeyClaimAdmissionGate>(
+                    AllowKeyClaimAdmissionGate.Instance);
+                return;
+            }
+
+            services.RemoveAll<IWaitingRoomStore>();
+            services.AddSingleton(_waitingRoomStore);
+        });
     }
 
     public new HttpClient CreateClient()

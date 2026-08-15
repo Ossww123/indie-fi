@@ -16,6 +16,9 @@ public class DetailModel : PageModel
         new(ClaimOutcome.SoldOut, "soldout", "키가 모두 소진되었습니다."),
         new(ClaimOutcome.ClosedEarly, "closed", "조기 마감된 배포입니다."),
         new(ClaimOutcome.NotEligible, "ineligible", "이 배포의 참여 자격을 충족하지 못했습니다."),
+        new(ClaimOutcome.AdmissionRequired, "admission", "유효한 대기실 입장 허용이 필요합니다."),
+        new(ClaimOutcome.WaitingRoomTerminal, "waitingclosed", "대기실이 종료되어 키를 받을 수 없습니다."),
+        new(ClaimOutcome.WaitingRoomUnavailable, "waitingunavailable", "대기실에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."),
         new(ClaimOutcome.Conflict, "conflict", "동시 요청으로 키를 발급하지 못했습니다. 잠시 후 다시 시도해 주세요."),
     ];
 

@@ -321,6 +321,57 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         return {1, admitted_count, table.concat(promoted, ','), table.concat(expired, ',')}
         """;
 
+    private const string ValidateAdmissionScript = """
+        local function now_milliseconds()
+            local current = redis.call('TIME')
+            return (tonumber(current[1]) * 1000) + math.floor(tonumber(current[2]) / 1000)
+        end
+
+        local function split_entry(value)
+            local parts = {}
+            for part in string.gmatch(value .. '|', '(.-)|') do
+                table.insert(parts, part)
+            end
+            return parts
+        end
+
+        local function refresh_ttl(ttl)
+            for index = 1, #KEYS do
+                if redis.call('EXISTS', KEYS[index]) == 1 then
+                    redis.call('PEXPIRE', KEYS[index], ttl)
+                end
+            end
+        end
+
+        if redis.call('HGET', KEYS[1], 'terminal') == '1' then
+            return {5, ''}
+        end
+
+        local user_id = ARGV[1]
+        local existing = redis.call('HGET', KEYS[2], user_id)
+        if not existing then
+            return {2, ''}
+        end
+
+        local parts = split_entry(existing)
+        if tonumber(parts[2]) ~= 3 then
+            return {3, existing}
+        end
+
+        local now = now_milliseconds()
+        local expires = tonumber(parts[5])
+        if not expires or expires <= now then
+            redis.call('ZREM', KEYS[5], user_id)
+            local expired = '1|5|' .. parts[3] .. '|' .. parts[4] .. '|'
+            redis.call('HSET', KEYS[2], user_id, expired)
+            refresh_ttl(tonumber(ARGV[2]))
+            return {4, expired}
+        end
+
+        refresh_ttl(tonumber(ARGV[2]))
+        return {1, existing}
+        """;
+
     private readonly WaitingRoomRedisConnection _connection;
     private readonly WaitingRoomRedisKeys _keys;
     private readonly WaitingRoomPolicyOptions _policy;
@@ -515,6 +566,34 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             ParseUserIds((string?)parts[2]),
             ParseUserIds((string?)parts[3]),
             checked((int)(long)parts[1]));
+    }
+
+    public async Task<WaitingRoomAdmissionValidationResult> ValidateAdmissionAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(dropId, userId);
+        var result = await EvaluateAsync(
+            ValidateAdmissionScript,
+            _keys.All(dropId),
+            [userId, ToMilliseconds(_policy.ActiveStateTtl)],
+            cancellationToken);
+        var parts = GetResultParts(result, expectedLength: 2);
+        var outcome = (int)parts[0] switch
+        {
+            1 => WaitingRoomAdmissionValidationOutcome.Valid,
+            2 => WaitingRoomAdmissionValidationOutcome.Missing,
+            3 => WaitingRoomAdmissionValidationOutcome.NotAdmitted,
+            4 => WaitingRoomAdmissionValidationOutcome.Expired,
+            5 => WaitingRoomAdmissionValidationOutcome.Terminal,
+            var unknown => throw new InvalidOperationException(
+                $"Redis returned an unknown waiting-room admission validation outcome: {unknown}."),
+        };
+        var value = (RedisValue)parts[1];
+        return new WaitingRoomAdmissionValidationResult(
+            outcome,
+            value.IsNullOrEmpty ? null : WaitingRoomRedisValueCodec.Deserialize(value));
     }
 
     private async Task<RedisResult> EvaluateAsync(

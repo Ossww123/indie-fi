@@ -289,6 +289,21 @@ public sealed class WaitingRoomPageTests
                     item.Key.DropId == dropId
                     && item.Value.State == WaitingRoomEntryState.Admitted)));
         }
+
+        public Task<WaitingRoomAdmissionValidationResult> ValidateAdmissionAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default)
+        {
+            Entries.TryGetValue((dropId, userId), out var entry);
+            return Task.FromResult(new WaitingRoomAdmissionValidationResult(
+                entry?.State == WaitingRoomEntryState.Admitted
+                    ? WaitingRoomAdmissionValidationOutcome.Valid
+                    : entry is null
+                        ? WaitingRoomAdmissionValidationOutcome.Missing
+                        : WaitingRoomAdmissionValidationOutcome.NotAdmitted,
+                entry));
+        }
     }
 
     private sealed class UnavailableWaitingRoomStore : IWaitingRoomStore
@@ -322,6 +337,12 @@ public sealed class WaitingRoomPageTests
 
         public Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
             long dropId,
+            CancellationToken cancellationToken = default) =>
+            throw new WaitingRoomUnavailableException("test unavailable");
+
+        public Task<WaitingRoomAdmissionValidationResult> ValidateAdmissionAsync(
+            long dropId,
+            long userId,
             CancellationToken cancellationToken = default) =>
             throw new WaitingRoomUnavailableException("test unavailable");
     }

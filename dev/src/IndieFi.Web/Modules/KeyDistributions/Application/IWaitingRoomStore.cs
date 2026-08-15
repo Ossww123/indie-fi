@@ -29,6 +29,11 @@ public interface IWaitingRoomStore
     Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
         long dropId,
         CancellationToken cancellationToken = default);
+
+    Task<WaitingRoomAdmissionValidationResult> ValidateAdmissionAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default);
 }
 
 public enum WaitingRoomJoinMode
@@ -103,3 +108,16 @@ public sealed record WaitingRoomAdmissionAdvanceResult(
     IReadOnlyList<long> PromotedUserIds,
     IReadOnlyList<long> ExpiredUserIds,
     int AdmittedCount);
+
+public enum WaitingRoomAdmissionValidationOutcome
+{
+    Valid,
+    Missing,
+    NotAdmitted,
+    Expired,
+    Terminal,
+}
+
+public sealed record WaitingRoomAdmissionValidationResult(
+    WaitingRoomAdmissionValidationOutcome Outcome,
+    WaitingRoomStoredEntry? Entry = null);

@@ -262,7 +262,8 @@ public sealed class AccountMutationBlockingTests
             var claim = await new KeyClaimService(
                     claimDb,
                     new KeyDropMutationLock(claimDb),
-                    NullLogger<KeyClaimService>.Instance)
+                    NullLogger<KeyClaimService>.Instance,
+                    AllowKeyClaimAdmissionGate.Instance)
                 .ClaimAsync(
                     dropId,
                     userId,

@@ -390,6 +390,81 @@ public sealed class RedisWaitingRoomStoreTests
     }
 
     [Fact]
+    public async Task ValidateAdmissionAsync_RequiresMatchingUserDropAndAdmittedState()
+    {
+        var dropId = NextDropId();
+        var otherDropId = NextDropId();
+        var store = _fixture.NewStore();
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        var waiting = await store.ValidateAdmissionAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+
+        var valid = await store.ValidateAdmissionAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        var otherUser = await store.ValidateAdmissionAsync(
+            dropId,
+            2,
+            TestContext.Current.CancellationToken);
+        var otherDrop = await store.ValidateAdmissionAsync(
+            otherDropId,
+            1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(WaitingRoomAdmissionValidationOutcome.NotAdmitted, waiting.Outcome);
+        Assert.Equal(WaitingRoomAdmissionValidationOutcome.Valid, valid.Outcome);
+        Assert.Equal(WaitingRoomEntryState.Admitted, valid.Entry!.State);
+        Assert.Equal(WaitingRoomAdmissionValidationOutcome.Missing, otherUser.Outcome);
+        Assert.Equal(WaitingRoomAdmissionValidationOutcome.Missing, otherDrop.Outcome);
+    }
+
+    [Fact]
+    public async Task ValidateAdmissionAsync_AfterAbsoluteExpiry_AtomicallyMarksEntryExpired()
+    {
+        var dropId = NextDropId();
+        var store = _fixture.NewStore(new WaitingRoomPolicyOptions
+        {
+            ConcurrentAdmissionLimit = 1,
+            AdmissionLifetime = TimeSpan.FromMilliseconds(100),
+        });
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        await Task.Delay(150, TestContext.Current.CancellationToken);
+
+        var result = await store.ValidateAdmissionAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        var snapshot = await store.GetSnapshotAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(WaitingRoomAdmissionValidationOutcome.Expired, result.Outcome);
+        Assert.Equal(WaitingRoomEntryState.Expired, result.Entry!.State);
+        Assert.Equal(WaitingRoomEntryState.Expired, snapshot!.Entry.State);
+        Assert.Equal(0, snapshot.AdmittedCount);
+    }
+
+    [Fact]
     public async Task JoinAsync_RefreshesActiveStateTtlAndHealthCheckUsesRealRedis()
     {
         var dropId = NextDropId();

@@ -24,6 +24,7 @@ public static class KeyDistributionsModule
         services.AddSingleton<WaitingRoomRedisConnection>();
         services.AddSingleton<WaitingRoomRedisKeys>();
         services.AddSingleton<IWaitingRoomStore, RedisWaitingRoomStore>();
+        services.AddScoped<IKeyClaimAdmissionGate, WaitingRoomKeyClaimAdmissionGate>();
         services.AddHealthChecks()
             .AddCheck<WaitingRoomRedisHealthCheck>("waiting-room-redis");
         services.AddScoped<KeyClaimService>();

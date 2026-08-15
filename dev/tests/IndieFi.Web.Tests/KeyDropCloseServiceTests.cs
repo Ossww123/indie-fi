@@ -398,7 +398,8 @@ public sealed class KeyDropCloseServiceTests
         new(
             db,
             new KeyDropMutationLock(db),
-            NullLogger<KeyClaimService>.Instance);
+            NullLogger<KeyClaimService>.Instance,
+            AllowKeyClaimAdmissionGate.Instance);
 
     private static KeyDropInventoryService NewInventoryService(AppDbContext db) =>
         new(

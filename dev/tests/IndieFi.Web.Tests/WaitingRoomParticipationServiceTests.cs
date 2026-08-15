@@ -250,5 +250,11 @@ public sealed class WaitingRoomParticipationServiceTests
                 [],
                 ExistingEntry?.State == WaitingRoomEntryState.Admitted ? 1 : 0));
         }
+
+        public Task<WaitingRoomAdmissionValidationResult> ValidateAdmissionAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

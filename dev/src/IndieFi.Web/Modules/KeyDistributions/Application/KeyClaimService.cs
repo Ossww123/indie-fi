@@ -19,6 +19,9 @@ public enum ClaimOutcome
     DropNotFound,
     AccountUnavailable,
     NotEligible,
+    AdmissionRequired,
+    WaitingRoomTerminal,
+    WaitingRoomUnavailable,
 }
 
 public record ClaimResult(ClaimOutcome Outcome);
@@ -31,18 +34,21 @@ public class KeyClaimService
     private readonly AppDbContext _db;
     private readonly KeyDropMutationLock _keyDropMutationLock;
     private readonly KeyDropEligibilityService _keyDropEligibilityService;
+    private readonly IKeyClaimAdmissionGate _admissionGate;
     private readonly ILogger<KeyClaimService> _logger;
 
     public KeyClaimService(
         AppDbContext db,
         KeyDropMutationLock keyDropMutationLock,
         ILogger<KeyClaimService> logger,
+        IKeyClaimAdmissionGate admissionGate,
         KeyDropEligibilityService? keyDropEligibilityService = null)
     {
         _db = db;
         _keyDropMutationLock = keyDropMutationLock;
         _keyDropEligibilityService = keyDropEligibilityService
             ?? new KeyDropEligibilityService(db);
+        _admissionGate = admissionGate;
         _logger = logger;
     }
 
@@ -116,6 +122,28 @@ public class KeyClaimService
             return await CompleteAsync(
                 transaction,
                 ClaimOutcome.NotEligible,
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
+        var admission = await _admissionGate.ValidateAsync(
+            dropId,
+            userId,
+            cancellationToken);
+        if (admission != KeyClaimAdmissionOutcome.Allowed)
+        {
+            var outcome = admission switch
+            {
+                KeyClaimAdmissionOutcome.Required => ClaimOutcome.AdmissionRequired,
+                KeyClaimAdmissionOutcome.Terminal => ClaimOutcome.WaitingRoomTerminal,
+                KeyClaimAdmissionOutcome.Unavailable => ClaimOutcome.WaitingRoomUnavailable,
+                _ => throw new InvalidOperationException(
+                    $"Unsupported key-claim admission outcome: {admission}"),
+            };
+            return await CompleteAsync(
+                transaction,
+                outcome,
                 dropId,
                 userId,
                 cancellationToken);

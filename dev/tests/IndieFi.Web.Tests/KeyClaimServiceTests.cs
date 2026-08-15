@@ -123,6 +123,38 @@ public sealed class KeyClaimServiceTests
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task ClaimAsync_WithoutValidAdmission_DoesNotCreateGrant()
+    {
+        long userId;
+        long dropId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1)).Id;
+        }
+
+        var gate = new StubKeyClaimAdmissionGate(KeyClaimAdmissionOutcome.Required);
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb, gate).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ClaimOutcome.AdmissionRequired, result.Outcome);
+        Assert.Equal(1, gate.ValidationCalls);
+        Assert.False(await verificationDb.KeyGrants.AnyAsync(
+            grant => grant.DropId == dropId && grant.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
     // A user can receive only one key from the same drop.
     [Fact]
     public async Task ClaimAsync_WhenSameUserClaimsTwice_GrantsOnceThenReturnsAlreadyClaimed()
@@ -477,11 +509,35 @@ public sealed class KeyClaimServiceTests
 
     // The service takes a logger it uses for one line per claim; tests do not assert on
     // logs, so a no-op logger keeps the call sites readable.
-    private static KeyClaimService NewService(AppDbContext db) =>
+    private static KeyClaimService NewService(
+        AppDbContext db,
+        IKeyClaimAdmissionGate? admissionGate = null) =>
         new(
             db,
             new KeyDropMutationLock(db),
-            NullLogger<KeyClaimService>.Instance);
+            NullLogger<KeyClaimService>.Instance,
+            admissionGate ?? AllowKeyClaimAdmissionGate.Instance);
+
+    private sealed class StubKeyClaimAdmissionGate : IKeyClaimAdmissionGate
+    {
+        private readonly KeyClaimAdmissionOutcome _outcome;
+
+        public StubKeyClaimAdmissionGate(KeyClaimAdmissionOutcome outcome)
+        {
+            _outcome = outcome;
+        }
+
+        public int ValidationCalls { get; private set; }
+
+        public Task<KeyClaimAdmissionOutcome> ValidateAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default)
+        {
+            ValidationCalls++;
+            return Task.FromResult(_outcome);
+        }
+    }
 
     private static async Task<User> CreateUserAsync(AppDbContext db)
     {
