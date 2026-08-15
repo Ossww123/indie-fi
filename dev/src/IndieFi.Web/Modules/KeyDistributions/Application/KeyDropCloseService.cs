@@ -22,13 +22,16 @@ public sealed class KeyDropCloseService
 {
     private readonly AppDbContext _db;
     private readonly KeyDropMutationLock _keyDropMutationLock;
+    private readonly IWaitingRoomLifecycle _waitingRoomLifecycle;
 
     public KeyDropCloseService(
         AppDbContext db,
-        KeyDropMutationLock keyDropMutationLock)
+        KeyDropMutationLock keyDropMutationLock,
+        IWaitingRoomLifecycle waitingRoomLifecycle)
     {
         _db = db;
         _keyDropMutationLock = keyDropMutationLock;
+        _waitingRoomLifecycle = waitingRoomLifecycle;
     }
 
     public async Task<CloseKeyDropResult> CloseAsync(
@@ -112,6 +115,9 @@ public sealed class KeyDropCloseService
 
         await AccountMutationGuard.CommitIfOwnedAsync(
             transaction,
+            cancellationToken);
+        await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+            dropId,
             cancellationToken);
         return new CloseKeyDropResult(CloseKeyDropOutcome.Closed);
     }

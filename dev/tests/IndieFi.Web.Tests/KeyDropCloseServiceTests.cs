@@ -24,11 +24,12 @@ public sealed class KeyDropCloseServiceTests
         bool active)
     {
         var data = await CreateDropAsync(active, keyCount: 2);
+        var lifecycle = new RecordingWaitingRoomLifecycle();
 
         CloseKeyDropResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await NewCloseService(serviceDb).CloseAsync(
+            result = await NewCloseService(serviceDb, lifecycle).CloseAsync(
                 data.DropId,
                 data.OwnerId,
                 TestContext.Current.CancellationToken);
@@ -43,6 +44,7 @@ public sealed class KeyDropCloseServiceTests
         Assert.Equal(CloseKeyDropOutcome.Closed, result.Outcome);
         Assert.NotNull(stored.ClosedAt);
         Assert.Equal(1, stored.StateVersion);
+        Assert.Equal([data.DropId], lifecycle.TerminalDropIds);
     }
 
     [Fact]
@@ -391,15 +393,21 @@ public sealed class KeyDropCloseServiceTests
             keys.Select(key => key.Id).ToArray());
     }
 
-    private static KeyDropCloseService NewCloseService(AppDbContext db) =>
-        new(db, new KeyDropMutationLock(db));
+    private static KeyDropCloseService NewCloseService(
+        AppDbContext db,
+        IWaitingRoomLifecycle? waitingRoomLifecycle = null) =>
+        new(
+            db,
+            new KeyDropMutationLock(db),
+            waitingRoomLifecycle ?? NullWaitingRoomLifecycle.Instance);
 
     private static KeyClaimService NewClaimService(AppDbContext db) =>
         new(
             db,
             new KeyDropMutationLock(db),
             NullLogger<KeyClaimService>.Instance,
-            AllowKeyClaimAdmissionGate.Instance);
+            AllowKeyClaimAdmissionGate.Instance,
+            NullWaitingRoomLifecycle.Instance);
 
     private static KeyDropInventoryService NewInventoryService(AppDbContext db) =>
         new(
@@ -407,7 +415,8 @@ public sealed class KeyDropCloseServiceTests
             new GameKeyRegistrationWriter(
                 db,
                 TestAccountProtection.CreateGameKeyProtectionService()),
-            new KeyDropMutationLock(db));
+            new KeyDropMutationLock(db),
+            NullWaitingRoomLifecycle.Instance);
 
     private sealed record DropData(
         long OwnerId,

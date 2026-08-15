@@ -201,6 +201,36 @@ public sealed class KeyClaimServiceTests
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task ClaimAsync_WhenLastKeyIsGranted_SynchronizesTerminalWaitingRoom()
+    {
+        long userId;
+        long dropId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1)).Id;
+        }
+
+        var lifecycle = new RecordingWaitingRoomLifecycle();
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(
+                serviceDb,
+                waitingRoomLifecycle: lifecycle).ClaimAsync(
+                    dropId,
+                    userId,
+                    TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(ClaimOutcome.Granted, result.Outcome);
+        Assert.Equal([dropId], lifecycle.TerminalDropIds);
+    }
+
     // A user can receive only one key from the same drop.
     [Fact]
     public async Task ClaimAsync_WhenSameUserClaimsTwice_GrantsOnceThenReturnsAlreadyClaimed()
@@ -557,12 +587,14 @@ public sealed class KeyClaimServiceTests
     // logs, so a no-op logger keeps the call sites readable.
     private static KeyClaimService NewService(
         AppDbContext db,
-        IKeyClaimAdmissionGate? admissionGate = null) =>
+        IKeyClaimAdmissionGate? admissionGate = null,
+        IWaitingRoomLifecycle? waitingRoomLifecycle = null) =>
         new(
             db,
             new KeyDropMutationLock(db),
             NullLogger<KeyClaimService>.Instance,
-            admissionGate ?? AllowKeyClaimAdmissionGate.Instance);
+            admissionGate ?? AllowKeyClaimAdmissionGate.Instance,
+            waitingRoomLifecycle ?? NullWaitingRoomLifecycle.Instance);
 
     private sealed class StubKeyClaimAdmissionGate : IKeyClaimAdmissionGate
     {

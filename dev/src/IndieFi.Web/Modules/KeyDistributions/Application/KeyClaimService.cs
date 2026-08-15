@@ -35,6 +35,7 @@ public class KeyClaimService
     private readonly KeyDropMutationLock _keyDropMutationLock;
     private readonly KeyDropEligibilityService _keyDropEligibilityService;
     private readonly IKeyClaimAdmissionGate _admissionGate;
+    private readonly IWaitingRoomLifecycle _waitingRoomLifecycle;
     private readonly ILogger<KeyClaimService> _logger;
 
     public KeyClaimService(
@@ -42,6 +43,7 @@ public class KeyClaimService
         KeyDropMutationLock keyDropMutationLock,
         ILogger<KeyClaimService> logger,
         IKeyClaimAdmissionGate admissionGate,
+        IWaitingRoomLifecycle waitingRoomLifecycle,
         KeyDropEligibilityService? keyDropEligibilityService = null)
     {
         _db = db;
@@ -49,6 +51,7 @@ public class KeyClaimService
         _keyDropEligibilityService = keyDropEligibilityService
             ?? new KeyDropEligibilityService(db);
         _admissionGate = admissionGate;
+        _waitingRoomLifecycle = waitingRoomLifecycle;
         _logger = logger;
     }
 
@@ -215,7 +218,8 @@ public class KeyClaimService
                 ClaimOutcome.Granted,
                 dropId,
                 userId,
-                cancellationToken);
+                cancellationToken,
+                synchronizeTerminal: state.RemainingKeys == 1);
         }
         catch (PostgresException exception)
             when (exception.SqlState == UniqueViolation)
@@ -248,11 +252,19 @@ public class KeyClaimService
         ClaimOutcome outcome,
         long dropId,
         long userId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool synchronizeTerminal = false)
     {
         await AccountMutationGuard.CommitIfOwnedAsync(
             transaction,
             cancellationToken);
+        if (synchronizeTerminal)
+        {
+            await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                dropId,
+                cancellationToken);
+        }
+
         if (outcome is ClaimOutcome.Granted or ClaimOutcome.AlreadyClaimed)
         {
             await ReflectCompletionBestEffortAsync(

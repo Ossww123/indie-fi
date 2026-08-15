@@ -23,11 +23,12 @@ public sealed class KeyDropInventoryServiceTests
         var data = await CreateDropAsync(
             DateTimeOffset.UtcNow.AddHours(1),
             "INITIAL-KEY");
+        var lifecycle = new RecordingWaitingRoomLifecycle();
 
         AddKeyInventoryResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await NewService(serviceDb).AddAsync(
+            result = await NewService(serviceDb, lifecycle).AddAsync(
                 data.DropId,
                 data.OwnerId,
                 " NEW-KEY-ONE \r\n\nNEW-KEY-TWO ",
@@ -65,6 +66,8 @@ public sealed class KeyDropInventoryServiceTests
         Assert.Equal(
             ["INITIAL-KEY", "NEW-KEY-ONE", "NEW-KEY-TWO"],
             plaintexts);
+        Assert.Empty(lifecycle.TerminalDropIds);
+        Assert.Equal([data.DropId], lifecycle.InventoryChangedDropIds);
     }
 
     [Fact]
@@ -311,12 +314,15 @@ public sealed class KeyDropInventoryServiceTests
         return new DropData(owner.Id, drop.Id, gameKey.Id);
     }
 
-    private static KeyDropInventoryService NewService(AppDbContext db) => new(
+    private static KeyDropInventoryService NewService(
+        AppDbContext db,
+        IWaitingRoomLifecycle? waitingRoomLifecycle = null) => new(
         db,
         new GameKeyRegistrationWriter(
             db,
             TestAccountProtection.CreateGameKeyProtectionService()),
-        new KeyDropMutationLock(db));
+        new KeyDropMutationLock(db),
+        waitingRoomLifecycle ?? NullWaitingRoomLifecycle.Instance);
 
     private sealed record DropData(long OwnerId, long DropId, long InitialKeyId);
 }

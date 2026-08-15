@@ -263,7 +263,8 @@ public sealed class AccountMutationBlockingTests
                     claimDb,
                     new KeyDropMutationLock(claimDb),
                     NullLogger<KeyClaimService>.Instance,
-                    AllowKeyClaimAdmissionGate.Instance)
+                    AllowKeyClaimAdmissionGate.Instance,
+                    NullWaitingRoomLifecycle.Instance)
                 .ClaimAsync(
                     dropId,
                     userId,
@@ -278,7 +279,8 @@ public sealed class AccountMutationBlockingTests
                     new GameKeyRegistrationWriter(
                         inventoryDb,
                         TestAccountProtection.CreateGameKeyProtectionService()),
-                    new KeyDropMutationLock(inventoryDb))
+                    new KeyDropMutationLock(inventoryDb),
+                    NullWaitingRoomLifecycle.Instance)
                 .AddAsync(
                     dropId,
                     userId,
@@ -293,7 +295,8 @@ public sealed class AccountMutationBlockingTests
         {
             var close = await new KeyDropCloseService(
                     closeDb,
-                    new KeyDropMutationLock(closeDb))
+                    new KeyDropMutationLock(closeDb),
+                    NullWaitingRoomLifecycle.Instance)
                 .CloseAsync(
                     dropId,
                     userId,
