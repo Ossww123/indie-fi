@@ -1,5 +1,7 @@
 namespace IndieFi.Web.Modules.KeyDistributions.Application;
 
+using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
+
 public sealed class WaitingRoomLifecycle : IWaitingRoomLifecycle
 {
     private readonly IWaitingRoomStore _store;
@@ -34,6 +36,7 @@ public sealed class WaitingRoomLifecycle : IWaitingRoomLifecycle
         }
         catch (Exception exception)
         {
+            WaitingRoomTelemetry.RecordFailure("redis", "terminate_after_commit");
             _logger.LogWarning(
                 exception,
                 "Waiting-room terminal synchronization failed after PostgreSQL commit drop={DropId}",

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.SignalR;
+using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
 
 namespace IndieFi.Web.Modules.KeyDistributions.Application;
 
@@ -62,6 +63,7 @@ public sealed class SignalRWaitingRoomNotifier : IWaitingRoomNotifier
         }
         catch (Exception exception)
         {
+            WaitingRoomTelemetry.RecordFailure("signalr", method);
             _logger.LogWarning(
                 exception,
                 "Waiting-room notification failed method={Method} drop={DropId}",

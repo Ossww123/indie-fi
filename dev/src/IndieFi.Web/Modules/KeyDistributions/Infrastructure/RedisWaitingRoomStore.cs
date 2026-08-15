@@ -1,6 +1,8 @@
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using StackExchange.Redis;
 
@@ -442,15 +444,18 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     private readonly WaitingRoomRedisConnection _connection;
     private readonly WaitingRoomRedisKeys _keys;
     private readonly WaitingRoomPolicyOptions _policy;
+    private readonly ILogger<RedisWaitingRoomStore> _logger;
 
     public RedisWaitingRoomStore(
         WaitingRoomRedisConnection connection,
         WaitingRoomRedisKeys keys,
-        IOptions<WaitingRoomPolicyOptions> policy)
+        IOptions<WaitingRoomPolicyOptions> policy,
+        ILogger<RedisWaitingRoomStore>? logger = null)
     {
         _connection = connection;
         _keys = keys;
         _policy = policy.Value;
+        _logger = logger ?? NullLogger<RedisWaitingRoomStore>.Instance;
     }
 
     public async Task<WaitingRoomJoinResult> JoinAsync(
@@ -464,6 +469,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         }
 
         var result = await EvaluateAsync(
+            "join",
             JoinScript,
             _keys.All(command.DropId),
             [
@@ -486,6 +492,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         var entry = outcome == WaitingRoomJoinOutcome.Terminal
             ? null
             : WaitingRoomRedisValueCodec.Deserialize((RedisValue)parts[1]);
+        WaitingRoomTelemetry.RecordOperation("join", outcome.ToString());
         return new WaitingRoomJoinResult(outcome, entry);
     }
 
@@ -495,9 +502,10 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         CancellationToken cancellationToken = default)
     {
         ValidateIdentity(dropId, userId);
-        var database = await GetDatabaseAsync(cancellationToken);
+        var started = Stopwatch.GetTimestamp();
         try
         {
+            var database = await GetDatabaseAsync(cancellationToken);
             var value = await database.HashGetAsync(
                 _keys.Entries(dropId),
                 userId,
@@ -508,7 +516,19 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         }
         catch (RedisException exception)
         {
+            RecordRedisFailure("get_entry", exception);
             throw Unavailable(exception);
+        }
+        catch (WaitingRoomUnavailableException exception)
+        {
+            RecordRedisFailure("get_entry", exception);
+            throw;
+        }
+        finally
+        {
+            WaitingRoomTelemetry.RecordRedisDuration(
+                "get_entry",
+                Stopwatch.GetElapsedTime(started));
         }
     }
 
@@ -519,6 +539,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     {
         ValidateIdentity(dropId, userId);
         var result = await EvaluateAsync(
+            "snapshot",
             SnapshotScript,
             _keys.All(dropId),
             [userId],
@@ -526,11 +547,13 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         var parts = GetResultParts(result, expectedLength: 8);
         if ((int)parts[0] == 0)
         {
+            WaitingRoomTelemetry.RecordOperation("snapshot", "Missing");
             return null;
         }
 
         var position = (int)parts[2];
         var aheadCount = (int)parts[3];
+        WaitingRoomTelemetry.RecordOperation("snapshot", "Found");
         return new WaitingRoomSnapshot(
             WaitingRoomRedisValueCodec.Deserialize((RedisValue)parts[1]),
             position < 0 ? null : position,
@@ -554,6 +577,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         }
 
         var result = await EvaluateAsync(
+            "transition",
             TransitionScript,
             _keys.All(command.DropId),
             [
@@ -578,6 +602,12 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             or WaitingRoomTransitionOutcome.Terminal
             ? null
             : WaitingRoomRedisValueCodec.Deserialize((RedisValue)parts[1]);
+        WaitingRoomTelemetry.RecordOperation("transition", outcome.ToString());
+        if (outcome == WaitingRoomTransitionOutcome.Changed)
+        {
+            WaitingRoomTelemetry.RecordTransition(command.TargetState.ToString());
+        }
+
         return new WaitingRoomTransitionResult(outcome, entry);
     }
 
@@ -588,6 +618,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
         var seed = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var result = await EvaluateAsync(
+            "finalize_order",
             FinalizeOrderScript,
             _keys.All(dropId),
             [seed, ToMilliseconds(_policy.ActiveStateTtl)],
@@ -601,6 +632,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             var value => throw new InvalidOperationException(
                 $"Redis returned an unknown waiting-room finalization outcome: {value}."),
         };
+        WaitingRoomTelemetry.RecordOperation("finalize_order", outcome.ToString());
         return new WaitingRoomOrderFinalizationResult(
             outcome,
             checked((int)(long)parts[1]));
@@ -612,6 +644,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
         var result = await EvaluateAsync(
+            "advance_admissions",
             AdvanceAdmissionsScript,
             _keys.All(dropId),
             [
@@ -628,10 +661,15 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             var value => throw new InvalidOperationException(
                 $"Redis returned an unknown waiting-room admission outcome: {value}."),
         };
+        var promoted = ParseUserIds((string?)parts[2]);
+        var expired = ParseUserIds((string?)parts[3]);
+        WaitingRoomTelemetry.RecordOperation("advance_admissions", outcome.ToString());
+        WaitingRoomTelemetry.RecordTransition("promoted", promoted.Count);
+        WaitingRoomTelemetry.RecordTransition("expired", expired.Count);
         return new WaitingRoomAdmissionAdvanceResult(
             outcome,
-            ParseUserIds((string?)parts[2]),
-            ParseUserIds((string?)parts[3]),
+            promoted,
+            expired,
             checked((int)(long)parts[1]));
     }
 
@@ -642,6 +680,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     {
         ValidateIdentity(dropId, userId);
         var result = await EvaluateAsync(
+            "validate_admission",
             ValidateAdmissionScript,
             _keys.All(dropId),
             [userId, ToMilliseconds(_policy.ActiveStateTtl)],
@@ -658,6 +697,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
                 $"Redis returned an unknown waiting-room admission validation outcome: {unknown}."),
         };
         var value = (RedisValue)parts[1];
+        WaitingRoomTelemetry.RecordOperation("validate_admission", outcome.ToString());
         return new WaitingRoomAdmissionValidationResult(
             outcome,
             value.IsNullOrEmpty ? null : WaitingRoomRedisValueCodec.Deserialize(value));
@@ -670,6 +710,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     {
         ValidateIdentity(dropId, userId);
         var result = await EvaluateAsync(
+            "complete",
             CompleteScript,
             _keys.All(dropId),
             [userId, ToMilliseconds(_policy.ActiveStateTtl)],
@@ -684,6 +725,12 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
                 $"Redis returned an unknown waiting-room completion outcome: {unknown}."),
         };
         var value = (RedisValue)parts[1];
+        WaitingRoomTelemetry.RecordOperation("complete", outcome.ToString());
+        if (outcome == WaitingRoomCompletionOutcome.Completed)
+        {
+            WaitingRoomTelemetry.RecordTransition("completed");
+        }
+
         return new WaitingRoomCompletionResult(
             outcome,
             value.IsNullOrEmpty ? null : WaitingRoomRedisValueCodec.Deserialize(value));
@@ -695,6 +742,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
         var result = await EvaluateAsync(
+            "terminate",
             TerminateScript,
             _keys.All(dropId),
             [ToMilliseconds(_policy.TerminalStateTtl)],
@@ -707,20 +755,25 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             var unknown => throw new InvalidOperationException(
                 $"Redis returned an unknown waiting-room termination outcome: {unknown}."),
         };
+        var affectedUserIds = ParseUserIds((string?)parts[1]);
+        WaitingRoomTelemetry.RecordOperation("terminate", outcome.ToString());
+        WaitingRoomTelemetry.RecordTransition("terminal", affectedUserIds.Count);
         return new WaitingRoomTerminationResult(
             outcome,
-            ParseUserIds((string?)parts[1]));
+            affectedUserIds);
     }
 
     private async Task<RedisResult> EvaluateAsync(
+        string operation,
         string script,
         RedisKey[] keys,
         RedisValue[] values,
         CancellationToken cancellationToken)
     {
-        var database = await GetDatabaseAsync(cancellationToken);
+        var started = Stopwatch.GetTimestamp();
         try
         {
+            var database = await GetDatabaseAsync(cancellationToken);
             return await database.ScriptEvaluateAsync(
                 script,
                 keys,
@@ -729,7 +782,19 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         }
         catch (RedisException exception)
         {
+            RecordRedisFailure(operation, exception);
             throw Unavailable(exception);
+        }
+        catch (WaitingRoomUnavailableException exception)
+        {
+            RecordRedisFailure(operation, exception);
+            throw;
+        }
+        finally
+        {
+            WaitingRoomTelemetry.RecordRedisDuration(
+                operation,
+                Stopwatch.GetElapsedTime(started));
         }
     }
 
@@ -772,6 +837,15 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(userId);
+    }
+
+    private void RecordRedisFailure(string operation, Exception exception)
+    {
+        WaitingRoomTelemetry.RecordFailure("redis", operation);
+        _logger.LogWarning(
+            exception,
+            "Waiting-room Redis operation failed operation={Operation}",
+            operation);
     }
 
     private static WaitingRoomUnavailableException Unavailable(

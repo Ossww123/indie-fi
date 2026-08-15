@@ -58,6 +58,7 @@ public sealed class WaitingRoomRedisConnection : IAsyncDisposable
             }
             catch (RedisConnectionException exception)
             {
+                WaitingRoomTelemetry.RecordFailure("redis", "connect");
                 throw new WaitingRoomUnavailableException(
                     "The virtual waiting-room Redis connection is unavailable.",
                     exception);
