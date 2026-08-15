@@ -67,8 +67,13 @@ public sealed class UserProfilePolicyTests
     [Fact]
     public void NormalizeBiography_TrimsAndNormalizesLineEndings()
     {
-        var value = UserProfilePolicy.NormalizeBiography("  첫 줄\r\n둘째 줄\r  ");
+        var success = UserProfilePolicy.TryNormalizeBiography(
+            "  첫 줄\r\n둘째 줄\r  ",
+            out var value,
+            out var error);
 
+        Assert.True(success);
         Assert.Equal("첫 줄\n둘째 줄", value);
+        Assert.Equal(BiographyValidationError.None, error);
     }
 }

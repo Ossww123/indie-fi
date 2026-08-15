@@ -11,6 +11,12 @@ public enum NicknameValidationError
     InvalidCharacter,
 }
 
+public enum BiographyValidationError
+{
+    None,
+    TooLong,
+}
+
 public sealed record NicknameValue(string Value, string UniquenessKey);
 
 public static class UserProfilePolicy
@@ -67,17 +73,37 @@ public static class UserProfilePolicy
         DateTimeOffset now) =>
         lastChangedAt is null || now >= lastChangedAt.Value + NicknameChangeInterval;
 
-    public static string NormalizeBiography(string? input)
+    public static bool TryNormalizeBiography(
+        string? input,
+        out string biography,
+        out BiographyValidationError error)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
-            return string.Empty;
+            biography = string.Empty;
+            error = BiographyValidationError.None;
+            return true;
         }
 
-        return input
+        biography = input
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace('\r', '\n')
             .Trim();
+
+        var length = 0;
+        foreach (var _ in biography.EnumerateRunes())
+        {
+            length++;
+        }
+
+        if (length > BiographyMaxLength)
+        {
+            error = BiographyValidationError.TooLong;
+            return false;
+        }
+
+        error = BiographyValidationError.None;
+        return true;
     }
 
     private static string CollapseWhitespace(string input)
