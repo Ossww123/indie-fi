@@ -244,6 +244,83 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         return {1, entry, position, ahead, waiting_count, pre_count, admitted_count, finalized}
         """;
 
+    private const string AdvanceAdmissionsScript = """
+        local function now_milliseconds()
+            local current = redis.call('TIME')
+            return (tonumber(current[1]) * 1000) + math.floor(tonumber(current[2]) / 1000)
+        end
+
+        local function split_entry(value)
+            local parts = {}
+            for part in string.gmatch(value .. '|', '(.-)|') do
+                table.insert(parts, part)
+            end
+            return parts
+        end
+
+        local function refresh_ttl(ttl)
+            for index = 1, #KEYS do
+                if redis.call('EXISTS', KEYS[index]) == 1 then
+                    redis.call('PEXPIRE', KEYS[index], ttl)
+                end
+            end
+        end
+
+        if redis.call('HGET', KEYS[1], 'terminal') == '1' then
+            return {2, 0, '', ''}
+        end
+
+        local now = now_milliseconds()
+        local expired = {}
+        local expired_users = redis.call('ZRANGEBYSCORE', KEYS[5], '-inf', now)
+        for _, user_id in ipairs(expired_users) do
+            redis.call('ZREM', KEYS[5], user_id)
+            local existing = redis.call('HGET', KEYS[2], user_id)
+            if existing then
+                local parts = split_entry(existing)
+                if tonumber(parts[2]) == 3 and parts[5] ~= '' and tonumber(parts[5]) <= now then
+                    local updated = '1|5|' .. parts[3] .. '|' .. parts[4] .. '|'
+                    redis.call('HSET', KEYS[2], user_id, updated)
+                    table.insert(expired, user_id)
+                end
+            end
+        end
+
+        local limit = tonumber(ARGV[1])
+        local admitted_count = redis.call('ZCARD', KEYS[5])
+        local slots = limit - admitted_count
+        local promoted = {}
+        if slots > 0 then
+            local admission_expires = now + tonumber(ARGV[2])
+            while #promoted < slots do
+                local candidates = redis.call('ZRANGE', KEYS[4], 0, 0)
+                if #candidates == 0 then
+                    break
+                end
+                local user_id = candidates[1]
+                local existing = redis.call('HGET', KEYS[2], user_id)
+                if existing then
+                    local parts = split_entry(existing)
+                    if tonumber(parts[2]) == 2 then
+                        redis.call('ZREM', KEYS[4], user_id)
+                        redis.call('ZADD', KEYS[5], admission_expires, user_id)
+                        local updated = '1|3|' .. parts[3] .. '|' .. parts[4] .. '|' .. admission_expires
+                        redis.call('HSET', KEYS[2], user_id, updated)
+                        table.insert(promoted, user_id)
+                    else
+                        redis.call('ZREM', KEYS[4], user_id)
+                    end
+                else
+                    redis.call('ZREM', KEYS[4], user_id)
+                end
+            end
+        end
+
+        admitted_count = redis.call('ZCARD', KEYS[5])
+        refresh_ttl(tonumber(ARGV[3]))
+        return {1, admitted_count, table.concat(promoted, ','), table.concat(expired, ',')}
+        """;
+
     private readonly WaitingRoomRedisConnection _connection;
     private readonly WaitingRoomRedisKeys _keys;
     private readonly WaitingRoomPolicyOptions _policy;
@@ -411,6 +488,35 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             checked((int)(long)parts[1]));
     }
 
+    public async Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
+        long dropId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
+        var result = await EvaluateAsync(
+            AdvanceAdmissionsScript,
+            _keys.All(dropId),
+            [
+                _policy.ConcurrentAdmissionLimit,
+                ToMilliseconds(_policy.AdmissionLifetime),
+                ToMilliseconds(_policy.ActiveStateTtl),
+            ],
+            cancellationToken);
+        var parts = GetResultParts(result, expectedLength: 4);
+        var outcome = (int)parts[0] switch
+        {
+            1 => WaitingRoomAdmissionAdvanceOutcome.Advanced,
+            2 => WaitingRoomAdmissionAdvanceOutcome.Terminal,
+            var value => throw new InvalidOperationException(
+                $"Redis returned an unknown waiting-room admission outcome: {value}."),
+        };
+        return new WaitingRoomAdmissionAdvanceResult(
+            outcome,
+            ParseUserIds((string?)parts[2]),
+            ParseUserIds((string?)parts[3]),
+            checked((int)(long)parts[1]));
+    }
+
     private async Task<RedisResult> EvaluateAsync(
         string script,
         RedisKey[] keys,
@@ -453,6 +559,18 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         }
 
         return parts;
+    }
+
+    private static IReadOnlyList<long> ParseUserIds(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return [];
+        }
+
+        return value.Split(',').Select(item => long.Parse(
+            item,
+            System.Globalization.CultureInfo.InvariantCulture)).ToArray();
     }
 
     private static void ValidateIdentity(long dropId, long userId)

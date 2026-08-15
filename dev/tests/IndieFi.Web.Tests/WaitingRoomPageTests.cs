@@ -202,6 +202,15 @@ public sealed class WaitingRoomPageTests
             Task.FromResult(new WaitingRoomOrderFinalizationResult(
                 WaitingRoomOrderFinalizationOutcome.AlreadyFinalized,
                 Entries.Count));
+
+        public Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
+            long dropId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WaitingRoomAdmissionAdvanceResult(
+                WaitingRoomAdmissionAdvanceOutcome.Advanced,
+                [],
+                [],
+                0));
     }
 
     private sealed class UnavailableWaitingRoomStore : IWaitingRoomStore
@@ -229,6 +238,11 @@ public sealed class WaitingRoomPageTests
             throw new WaitingRoomUnavailableException("test unavailable");
 
         public Task<WaitingRoomOrderFinalizationResult> FinalizeOrderAsync(
+            long dropId,
+            CancellationToken cancellationToken = default) =>
+            throw new WaitingRoomUnavailableException("test unavailable");
+
+        public Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
             long dropId,
             CancellationToken cancellationToken = default) =>
             throw new WaitingRoomUnavailableException("test unavailable");

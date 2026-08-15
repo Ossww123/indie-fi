@@ -254,6 +254,142 @@ public sealed class RedisWaitingRoomStoreTests
     }
 
     [Fact]
+    public async Task AdvanceAdmissionsAsync_WhenCalledConcurrently_AdmitsOnlyConfiguredLimitInOrder()
+    {
+        const int UserCount = 25;
+        var dropId = NextDropId();
+        var store = _fixture.NewStore();
+        await Task.WhenAll(Enumerable.Range(1, UserCount).Select(userId =>
+            store.JoinAsync(
+                new WaitingRoomJoinCommand(
+                    dropId,
+                    userId,
+                    WaitingRoomJoinMode.PreOpen),
+                TestContext.Current.CancellationToken)));
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+
+        var advances = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ =>
+            store.AdvanceAdmissionsAsync(
+                dropId,
+                TestContext.Current.CancellationToken)));
+        var entries = await Task.WhenAll(Enumerable.Range(1, UserCount).Select(userId =>
+            store.GetEntryAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)));
+        var admitted = entries.Where(entry => entry!.State == WaitingRoomEntryState.Admitted)
+            .ToArray();
+        var waiting = entries.Where(entry => entry!.State == WaitingRoomEntryState.Waiting)
+            .ToArray();
+
+        Assert.Equal(10, advances.Sum(result => result.PromotedUserIds.Count));
+        Assert.All(advances, result => Assert.InRange(result.AdmittedCount, 10, 10));
+        Assert.Equal(10, admitted.Length);
+        Assert.Equal(15, waiting.Length);
+        Assert.All(admitted, entry => Assert.InRange(entry!.Order, 1, 10));
+        Assert.All(waiting, entry => Assert.InRange(entry!.Order, 11, UserCount));
+    }
+
+    [Fact]
+    public async Task AdvanceAdmissionsAsync_ExpiresPermitsAndPromotesNextWithoutAutoRequeue()
+    {
+        var dropId = NextDropId();
+        var policy = new WaitingRoomPolicyOptions
+        {
+            ConcurrentAdmissionLimit = 2,
+            AdmissionLifetime = TimeSpan.FromMilliseconds(100),
+        };
+        var store = _fixture.NewStore(policy);
+        await Task.WhenAll(Enumerable.Range(1, 4).Select(userId =>
+            store.JoinAsync(
+                new WaitingRoomJoinCommand(
+                    dropId,
+                    userId,
+                    WaitingRoomJoinMode.PreOpen),
+                TestContext.Current.CancellationToken)));
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var firstAdvance = await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        await Task.Delay(150, TestContext.Current.CancellationToken);
+
+        var secondAdvance = await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var expiredEntries = await Task.WhenAll(firstAdvance.PromotedUserIds.Select(userId =>
+            store.GetEntryAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)));
+        var promotedEntries = await Task.WhenAll(secondAdvance.PromotedUserIds.Select(userId =>
+            store.GetEntryAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken)));
+        var rejoined = await store.JoinAsync(
+            new WaitingRoomJoinCommand(
+                dropId,
+                firstAdvance.PromotedUserIds[0],
+                WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, firstAdvance.PromotedUserIds.Count);
+        Assert.Equal(2, secondAdvance.ExpiredUserIds.Count);
+        Assert.Equal(2, secondAdvance.PromotedUserIds.Count);
+        Assert.All(expiredEntries, entry => Assert.Equal(
+            WaitingRoomEntryState.Expired,
+            entry!.State));
+        Assert.All(promotedEntries, entry => Assert.Equal(
+            WaitingRoomEntryState.Admitted,
+            entry!.State));
+        Assert.Equal(WaitingRoomJoinOutcome.Rejoined, rejoined.Outcome);
+        Assert.Equal(5, rejoined.Entry!.Order);
+        Assert.Equal(WaitingRoomEntryState.Waiting, rejoined.Entry.State);
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhileAdmissionIsValid_DoesNotExtendAbsoluteExpiry()
+    {
+        var dropId = NextDropId();
+        var policy = new WaitingRoomPolicyOptions
+        {
+            ConcurrentAdmissionLimit = 1,
+            AdmissionLifetime = TimeSpan.FromSeconds(1),
+        };
+        var store = _fixture.NewStore(policy);
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        await store.AdvanceAdmissionsAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var before = await store.GetEntryAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        var repeated = await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(before);
+        Assert.Equal(WaitingRoomJoinOutcome.Existing, repeated.Outcome);
+        Assert.Equal(WaitingRoomEntryState.Admitted, repeated.Entry!.State);
+        Assert.Equal(
+            before.AdmissionExpiresUnixTimeMilliseconds,
+            repeated.Entry.AdmissionExpiresUnixTimeMilliseconds);
+        Assert.True(repeated.Entry.LastSeenUnixTimeMilliseconds > before.LastSeenUnixTimeMilliseconds);
+    }
+
+    [Fact]
     public async Task JoinAsync_RefreshesActiveStateTtlAndHealthCheckUsesRealRedis()
     {
         var dropId = NextDropId();

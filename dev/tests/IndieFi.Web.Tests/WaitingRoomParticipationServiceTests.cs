@@ -199,5 +199,14 @@ public sealed class WaitingRoomParticipationServiceTests
             Task.FromResult(new WaitingRoomOrderFinalizationResult(
                 WaitingRoomOrderFinalizationOutcome.AlreadyFinalized,
                 0));
+
+        public Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
+            long dropId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WaitingRoomAdmissionAdvanceResult(
+                WaitingRoomAdmissionAdvanceOutcome.Advanced,
+                [],
+                [],
+                0));
     }
 }
