@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using IndieFi.Web.Modules.KeyDistributions.Application;
 
 namespace IndieFi.Web.Tests;
 
@@ -9,11 +12,16 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
     private readonly string _connectionString;
     private readonly bool _configureGoogle;
     private readonly string _accountProtectionKeyFilePath;
+    private readonly IWaitingRoomStore? _waitingRoomStore;
 
-    public WebAppFactory(string connectionString, bool configureGoogle = true)
+    public WebAppFactory(
+        string connectionString,
+        bool configureGoogle = true,
+        IWaitingRoomStore? waitingRoomStore = null)
     {
         _connectionString = connectionString;
         _configureGoogle = configureGoogle;
+        _waitingRoomStore = waitingRoomStore;
         _accountProtectionKeyFilePath = TestAccountProtection.CreateKeyFile();
     }
 
@@ -27,6 +35,7 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
             "DataProtectionKeyManagement:PrivateKeyPath",
             TestDataProtection.PrivateKeyPath);
         builder.UseSetting("DataProtectionKeyManagement:KeyLifetimeDays", "90");
+        builder.UseSetting("WaitingRoom:Redis:Enabled", "false");
         if (_configureGoogle)
         {
             builder.UseSetting(
@@ -44,6 +53,14 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
                 _accountProtectionKeyFilePath;
             configuration.AddInMemoryCollection(values);
         });
+        if (_waitingRoomStore is not null)
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IWaitingRoomStore>();
+                services.AddSingleton(_waitingRoomStore);
+            });
+        }
     }
 
     public new HttpClient CreateClient()

@@ -11,6 +11,8 @@ public sealed record PublicKeyDropDetail(
     DateTimeOffset OpensAt,
     int TotalKeys,
     int RemainingKeys,
+    int? MinimumAccountAgeDays,
+    int? MinimumCompletedReviewCount,
     KeyDropStatus Status)
 {
     public string StatusText => Status switch
@@ -52,6 +54,8 @@ public sealed class PublicKeyDropReader
                        game.title AS "GameTitle",
                        key_drop.opens_at AS "OpensAt",
                        key_drop.total_keys AS "TotalKeys",
+                       key_drop.minimum_account_age_days AS "MinimumAccountAgeDays",
+                       key_drop.minimum_completed_review_count AS "MinimumCompletedReviewCount",
                        (
                            SELECT COUNT(*)::integer
                            FROM game_keys AS game_key
@@ -86,6 +90,8 @@ public sealed class PublicKeyDropReader
                        game.title AS "GameTitle",
                        key_drop.opens_at AS "OpensAt",
                        key_drop.total_keys AS "TotalKeys",
+                       key_drop.minimum_account_age_days AS "MinimumAccountAgeDays",
+                       key_drop.minimum_completed_review_count AS "MinimumCompletedReviewCount",
                        (
                            SELECT COUNT(*)::integer
                            FROM game_keys AS game_key
@@ -122,6 +128,10 @@ public sealed class PublicKeyDropReader
 
         public int RemainingKeys { get; init; }
 
+        public int? MinimumAccountAgeDays { get; init; }
+
+        public int? MinimumCompletedReviewCount { get; init; }
+
         public DateTimeOffset? ClosedAt { get; init; }
 
         public DateTimeOffset DatabaseNow { get; init; }
@@ -141,6 +151,8 @@ public sealed class PublicKeyDropReader
                 OpensAt,
                 TotalKeys,
                 RemainingKeys,
+                MinimumAccountAgeDays,
+                MinimumCompletedReviewCount,
                 status);
         }
     }
