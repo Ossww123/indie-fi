@@ -40,7 +40,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
 
-    public DbSet<SteamKey> SteamKeys => Set<SteamKey>();
+    public DbSet<GameKey> GameKeys => Set<GameKey>();
+
+    public DbSet<StoredGameKeyFingerprint> GameKeyFingerprints =>
+        Set<StoredGameKeyFingerprint>();
 
     public DbSet<KeyGrant> KeyGrants => Set<KeyGrant>();
 
@@ -510,7 +513,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<KeyDrop>(keyDrop =>
         {
-            keyDrop.ToTable("key_drops");
+            keyDrop.ToTable("key_drops", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_key_drops_total_keys_nonnegative",
+                    "total_keys >= 0");
+                table.HasCheckConstraint(
+                    "CK_key_drops_state_version_nonnegative",
+                    "state_version >= 0");
+            });
 
             keyDrop.HasKey(d => d.Id);
             keyDrop.Property(d => d.Id).HasColumnName("id");
@@ -531,6 +542,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("total_keys")
                 .IsRequired();
 
+            keyDrop.Property(d => d.ClosedAt)
+                .HasColumnName("closed_at");
+
+            keyDrop.Property(d => d.StateVersion)
+                .HasColumnName("state_version")
+                .HasDefaultValue(0L)
+                .IsConcurrencyToken()
+                .IsRequired();
+
             keyDrop.Property(d => d.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
@@ -545,29 +565,82 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(d => d.OwnerId);
         });
 
-        modelBuilder.Entity<SteamKey>(steamKey =>
+        modelBuilder.Entity<GameKey>(gameKey =>
         {
-            steamKey.ToTable("steam_keys");
+            gameKey.ToTable("game_keys", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_keys_encryption_shape",
+                    "octet_length(ciphertext) BETWEEN 1 AND 800 AND "
+                    + "octet_length(nonce) = 12 AND "
+                    + "octet_length(authentication_tag) = 16 AND "
+                    + "char_length(encryption_key_id) BETWEEN 1 AND 100 AND "
+                    + "encryption_key_id = btrim(encryption_key_id)");
+            });
 
-            steamKey.HasKey(k => k.Id);
-            steamKey.Property(k => k.Id).HasColumnName("id");
+            gameKey.HasKey(key => key.Id);
+            gameKey.Property(key => key.Id).HasColumnName("id");
 
-            steamKey.Property(k => k.DropId)
+            gameKey.Property(key => key.DropId)
                 .HasColumnName("drop_id")
                 .IsRequired();
 
-            steamKey.Property(k => k.KeyValue)
-                .HasColumnName("key_value")
+            gameKey.Property(key => key.Ciphertext)
+                .HasColumnName("ciphertext")
                 .IsRequired();
 
-            steamKey.Property(k => k.CreatedAt)
+            gameKey.Property(key => key.Nonce)
+                .HasColumnName("nonce")
+                .IsRequired();
+
+            gameKey.Property(key => key.AuthenticationTag)
+                .HasColumnName("authentication_tag")
+                .IsRequired();
+
+            gameKey.Property(key => key.EncryptionKeyId)
+                .HasColumnName("encryption_key_id")
+                .HasMaxLength(100)
+                .IsRequired();
+
+            gameKey.Property(key => key.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
                 .ValueGeneratedOnAdd();
 
-            steamKey.HasOne(k => k.Drop)
+            gameKey.HasAlternateKey(key => new { key.Id, key.DropId });
+
+            gameKey.HasOne(key => key.Drop)
                 .WithMany()
-                .HasForeignKey(k => k.DropId)
+                .HasForeignKey(key => key.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StoredGameKeyFingerprint>(fingerprint =>
+        {
+            fingerprint.ToTable("game_key_fingerprints", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_key_fingerprints_key_id_shape",
+                    "char_length(key_id) BETWEEN 1 AND 100 AND key_id = btrim(key_id)");
+                table.HasCheckConstraint(
+                    "CK_game_key_fingerprints_value_length",
+                    "octet_length(value) = 32");
+            });
+
+            fingerprint.HasKey(item => new { item.GameKeyId, item.KeyId });
+            fingerprint.Property(item => item.GameKeyId)
+                .HasColumnName("game_key_id");
+            fingerprint.Property(item => item.KeyId)
+                .HasColumnName("key_id")
+                .HasMaxLength(100);
+            fingerprint.Property(item => item.Value)
+                .HasColumnName("value");
+
+            fingerprint.HasIndex(item => new { item.KeyId, item.Value })
+                .IsUnique();
+            fingerprint.HasOne(item => item.GameKey)
+                .WithMany()
+                .HasForeignKey(item => item.GameKeyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -605,15 +678,16 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasForeignKey(g => g.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            keyGrant.HasOne<SteamKey>()
+            keyGrant.HasOne<GameKey>()
                 .WithMany()
-                .HasForeignKey(g => g.KeyId)
+                .HasForeignKey(grant => new { grant.KeyId, grant.DropId })
+                .HasPrincipalKey(key => new { key.Id, key.DropId })
                 .OnDelete(DeleteBehavior.Cascade);
 
             // A user can receive only one key from a drop.
             keyGrant.HasIndex(g => new { g.DropId, g.UserId }).IsUnique();
 
-            // A Steam key can be granted to only one user.
+            // A game key can be granted to only one user.
             keyGrant.HasIndex(g => g.KeyId).IsUnique();
         });
 

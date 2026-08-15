@@ -1,15 +1,21 @@
 namespace IndieFi.Web.Entities;
 
 /// <summary>
-/// A Steam key assigned to a scheduled drop. One row per key.
+/// An opaque game key assigned to a scheduled distribution. One row per key.
 /// </summary>
-public class SteamKey
+public class GameKey
 {
     public long Id { get; set; }
 
     public long DropId { get; set; }
 
-    public string KeyValue { get; set; } = string.Empty;
+    public byte[] Ciphertext { get; set; } = [];
+
+    public byte[] Nonce { get; set; } = [];
+
+    public byte[] AuthenticationTag { get; set; } = [];
+
+    public string EncryptionKeyId { get; set; } = string.Empty;
 
     public KeyDrop Drop { get; set; } = null!;
 

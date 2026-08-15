@@ -33,6 +33,13 @@ public sealed class ConfigurationKeyProviderTests
         Assert.Equal(
             "request-ip-v1",
             provider.GetCurrent(KeyPurpose.AccountRequestIpLookup).Id);
+        Assert.Equal(
+            "game-encryption-v1",
+            provider.GetCurrent(KeyPurpose.GameKeyEncryption).Id);
+        Assert.Equal(
+            ["game-fingerprint-v1"],
+            provider.GetWritable(KeyPurpose.GameKeyFingerprint)
+                .Select(key => key.Id));
     }
 
     [Fact]
@@ -64,6 +71,43 @@ public sealed class ConfigurationKeyProviderTests
                     LookupKey: Bytes(2),
                     MessageKey: shared,
                     RequestIpKey: Bytes(4))));
+
+        Assert.Contains("must not share", exception.Message);
+        Assert.DoesNotContain(Convert.ToBase64String(shared), exception.Message);
+    }
+
+    [Fact]
+    public void Constructor_WhenGameAndAccountPurposesShareSecret_RejectsConfiguration()
+    {
+        var shared = Bytes(1);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new ConfigurationKeyProvider(
+                BuildConfiguration(
+                    EmailKey: shared,
+                    LookupKey: Bytes(2),
+                    MessageKey: Bytes(3),
+                    RequestIpKey: Bytes(4),
+                    GameEncryptionKey: shared)));
+
+        Assert.Contains("must not share", exception.Message);
+        Assert.DoesNotContain(Convert.ToBase64String(shared), exception.Message);
+    }
+
+    [Fact]
+    public void Constructor_WhenGamePurposesShareSecret_RejectsConfiguration()
+    {
+        var shared = Bytes(5);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new ConfigurationKeyProvider(
+                BuildConfiguration(
+                    EmailKey: Bytes(1),
+                    LookupKey: Bytes(2),
+                    MessageKey: Bytes(3),
+                    RequestIpKey: Bytes(4),
+                    GameEncryptionKey: shared,
+                    GameFingerprintKey: shared)));
 
         Assert.Contains("must not share", exception.Message);
         Assert.DoesNotContain(Convert.ToBase64String(shared), exception.Message);
@@ -109,6 +153,8 @@ public sealed class ConfigurationKeyProviderTests
         byte[] LookupKey,
         byte[] MessageKey,
         byte[] RequestIpKey,
+        byte[]? GameEncryptionKey = null,
+        byte[]? GameFingerprintKey = null,
         string EmailKeyId = "email-v1")
     {
         return new ConfigurationBuilder()
@@ -130,6 +176,14 @@ public sealed class ConfigurationKeyProviderTests
                 ["AccountProtection:Purposes:account-request-ip-lookup:ReadKeyIds:0"] = "request-ip-v1",
                 ["AccountProtection:Purposes:account-request-ip-lookup:WriteKeyIds:0"] = "request-ip-v1",
                 ["AccountProtection:Purposes:account-request-ip-lookup:Keys:request-ip-v1"] = Convert.ToBase64String(RequestIpKey),
+                ["AccountProtection:Purposes:game-key-encryption:CurrentKeyId"] = "game-encryption-v1",
+                ["AccountProtection:Purposes:game-key-encryption:ReadKeyIds:0"] = "game-encryption-v1",
+                ["AccountProtection:Purposes:game-key-encryption:WriteKeyIds:0"] = "game-encryption-v1",
+                ["AccountProtection:Purposes:game-key-encryption:Keys:game-encryption-v1"] = Convert.ToBase64String(GameEncryptionKey ?? Bytes(5)),
+                ["AccountProtection:Purposes:game-key-fingerprint:CurrentKeyId"] = "game-fingerprint-v1",
+                ["AccountProtection:Purposes:game-key-fingerprint:ReadKeyIds:0"] = "game-fingerprint-v1",
+                ["AccountProtection:Purposes:game-key-fingerprint:WriteKeyIds:0"] = "game-fingerprint-v1",
+                ["AccountProtection:Purposes:game-key-fingerprint:Keys:game-fingerprint-v1"] = Convert.ToBase64String(GameFingerprintKey ?? Bytes(6)),
             })
             .Build();
     }

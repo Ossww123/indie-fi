@@ -37,6 +37,12 @@ public sealed class FileKeyProviderTests
             Assert.Equal(
                 "request-ip-test-v1",
                 provider.GetCurrent(KeyPurpose.AccountRequestIpLookup).Id);
+            Assert.Equal(
+                "game-encryption-test-v1",
+                provider.GetCurrent(KeyPurpose.GameKeyEncryption).Id);
+            Assert.Equal(
+                "game-fingerprint-test-v1",
+                provider.GetCurrent(KeyPurpose.GameKeyFingerprint).Id);
         }
         finally
         {

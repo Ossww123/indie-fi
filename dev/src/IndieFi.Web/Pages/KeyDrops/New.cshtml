@@ -26,6 +26,9 @@
                   rows="8"
                   placeholder="한 줄에 키 하나"></textarea>
         <span asp-validation-for="KeysText" class="field-error"></span>
+        <p class="text-sm text-slate-500">
+            키 하나는 앞뒤 공백을 제외하고 1~200자여야 하며 같은 키를 중복 입력할 수 없습니다.
+        </p>
     </div>
 
     <div class="flex flex-wrap gap-2">

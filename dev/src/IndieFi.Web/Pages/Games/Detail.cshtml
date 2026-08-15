@@ -170,21 +170,43 @@ else
     <div class="surface-list">
         @foreach (var drop in Model.Drops)
         {
-            <a asp-page="/KeyDrops/Detail"
-               asp-route-id="@drop.Id"
-               class="surface-item surface-link">
+            <div class="surface-item">
                 <div class="flex items-center justify-between gap-4">
-                    <span>@drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
-                    @if (drop.IsOpen)
+                    <a asp-page="/KeyDrops/Detail"
+                       asp-route-id="@drop.Id"
+                       class="text-link">
+                        @drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    </a>
+                    <span class="text-sm text-slate-500">
+                        @drop.RemainingKeys/@drop.TotalKeys 남음
+                    </span>
+                    @if (drop.CanClaim)
                     {
-                        <span class="badge-success">진행 중</span>
+                        <span class="badge-success">@drop.StatusText</span>
                     }
                     else
                     {
-                        <span class="badge-neutral">오픈 예정</span>
+                        <span class="badge-neutral">@drop.StatusText</span>
+                    }
+                    @if (Model.IsOwner && (drop.CanAddInventory || drop.CanCloseEarly))
+                    {
+                        <span class="flex flex-wrap items-center gap-2">
+                            @if (drop.CanAddInventory)
+                            {
+                                <a asp-page="/KeyDrops/AddKeys"
+                                   asp-route-id="@drop.Id"
+                                   class="button-link">키 추가</a>
+                            }
+                            @if (drop.CanCloseEarly)
+                            {
+                                <a asp-page="/KeyDrops/Close"
+                                   asp-route-id="@drop.Id"
+                                   class="button-danger px-3 py-1.5">조기 마감</a>
+                            }
+                        </span>
                     }
                 </div>
-            </a>
+            </div>
         }
     </div>
 }

@@ -3,6 +3,8 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Infrastructure.Cryptography;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -15,6 +17,10 @@ internal static class TestAccountProtection
     public static readonly byte[] MessageKey = Enumerable.Repeat((byte)23, 32).ToArray();
     public static readonly byte[] MessageKeyV2 = Enumerable.Repeat((byte)24, 32).ToArray();
     public static readonly byte[] RequestIpKey = Enumerable.Repeat((byte)25, 32).ToArray();
+    public static readonly byte[] GameKeyEncryptionKey =
+        Enumerable.Repeat((byte)26, 32).ToArray();
+    public static readonly byte[] GameKeyFingerprintKey =
+        Enumerable.Repeat((byte)27, 32).ToArray();
 
     public static EmailProtectionService CreateService()
     {
@@ -29,6 +35,51 @@ internal static class TestAccountProtection
     public static RequestIpProtectionService CreateRequestIpProtectionService()
     {
         return new RequestIpProtectionService(new Provider());
+    }
+
+    public static GameKeyProtectionService CreateGameKeyProtectionService()
+    {
+        return new GameKeyProtectionService(new Provider());
+    }
+
+    public static GameKey AddGameKey(
+        AppDbContext db,
+        KeyDrop drop,
+        string value)
+    {
+        var parsed = GameKeyPolicy.ParseBatch(value);
+        if (!parsed.IsValid || parsed.Keys.Count != 1)
+        {
+            throw new ArgumentException(
+                "A valid test game key is required.",
+                nameof(value));
+        }
+
+        var gameKeyValue = parsed.Keys[0];
+        var protection = CreateGameKeyProtectionService();
+        var protectedKey = protection.Protect(gameKeyValue);
+        var gameKey = new GameKey
+        {
+            Drop = drop,
+            Ciphertext = protectedKey.Ciphertext,
+            Nonce = protectedKey.Nonce,
+            AuthenticationTag = protectedKey.AuthenticationTag,
+            EncryptionKeyId = protectedKey.EncryptionKeyId,
+        };
+        db.GameKeys.Add(gameKey);
+
+        foreach (var fingerprint in
+                 protection.CreateWritableFingerprints(gameKeyValue))
+        {
+            db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
+            {
+                GameKey = gameKey,
+                KeyId = fingerprint.KeyId,
+                Value = fingerprint.Value,
+            });
+        }
+
+        return gameKey;
     }
 
     public static User AddUser(
@@ -115,6 +166,14 @@ internal static class TestAccountProtection
             ["AccountProtection:Purposes:account-request-ip-lookup:ReadKeyIds:0"] = "request-ip-test-v1",
             ["AccountProtection:Purposes:account-request-ip-lookup:WriteKeyIds:0"] = "request-ip-test-v1",
             ["AccountProtection:Purposes:account-request-ip-lookup:Keys:request-ip-test-v1"] = Convert.ToBase64String(RequestIpKey),
+            ["AccountProtection:Purposes:game-key-encryption:CurrentKeyId"] = "game-encryption-test-v1",
+            ["AccountProtection:Purposes:game-key-encryption:ReadKeyIds:0"] = "game-encryption-test-v1",
+            ["AccountProtection:Purposes:game-key-encryption:WriteKeyIds:0"] = "game-encryption-test-v1",
+            ["AccountProtection:Purposes:game-key-encryption:Keys:game-encryption-test-v1"] = Convert.ToBase64String(GameKeyEncryptionKey),
+            ["AccountProtection:Purposes:game-key-fingerprint:CurrentKeyId"] = "game-fingerprint-test-v1",
+            ["AccountProtection:Purposes:game-key-fingerprint:ReadKeyIds:0"] = "game-fingerprint-test-v1",
+            ["AccountProtection:Purposes:game-key-fingerprint:WriteKeyIds:0"] = "game-fingerprint-test-v1",
+            ["AccountProtection:Purposes:game-key-fingerprint:Keys:game-fingerprint-test-v1"] = Convert.ToBase64String(GameKeyFingerprintKey),
             ["AuthenticationEmail:Enabled"] = "false",
         };
     }
@@ -146,6 +205,12 @@ internal static class TestAccountProtection
                 [KeyPurpose.AccountRequestIpLookup.Value] = Purpose(
                     "request-ip-test-v1",
                     RequestIpKey),
+                [KeyPurpose.GameKeyEncryption.Value] = Purpose(
+                    "game-encryption-test-v1",
+                    GameKeyEncryptionKey),
+                [KeyPurpose.GameKeyFingerprint.Value] = Purpose(
+                    "game-fingerprint-test-v1",
+                    GameKeyFingerprintKey),
             },
         });
     }
@@ -171,6 +236,10 @@ internal static class TestAccountProtection
         private static readonly KeyMaterial Message = new("message-test-v1", MessageKey);
         private static readonly KeyMaterial MessageV2 = new("message-test-v2", MessageKeyV2);
         private static readonly KeyMaterial RequestIp = new("request-ip-test-v1", RequestIpKey);
+        private static readonly KeyMaterial GameEncryption =
+            new("game-encryption-test-v1", GameKeyEncryptionKey);
+        private static readonly KeyMaterial GameFingerprint =
+            new("game-fingerprint-test-v1", GameKeyFingerprintKey);
 
         public KeyMaterial GetCurrent(KeyPurpose purpose) => Get(purpose);
         public KeyMaterial GetById(KeyPurpose purpose, string keyId)
@@ -199,6 +268,8 @@ internal static class TestAccountProtection
             var value when value == KeyPurpose.AccountEmailLookup => Lookup,
             var value when value == KeyPurpose.AccountEmailMessageEncryption => Message,
             var value when value == KeyPurpose.AccountRequestIpLookup => RequestIp,
+            var value when value == KeyPurpose.GameKeyEncryption => GameEncryption,
+            var value when value == KeyPurpose.GameKeyFingerprint => GameFingerprint,
             _ => throw new InvalidOperationException($"Unknown test purpose: {purpose}"),
         };
     }

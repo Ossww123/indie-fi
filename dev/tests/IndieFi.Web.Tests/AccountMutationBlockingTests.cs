@@ -219,11 +219,10 @@ public sealed class AccountMutationBlockingTests
                 TotalKeys = 1,
             };
             arrangeDb.KeyDrops.Add(drop);
-            arrangeDb.SteamKeys.Add(new SteamKey
-            {
-                Drop = drop,
-                KeyValue = $"BLOCKED-{Guid.NewGuid():N}",
-            });
+            TestAccountProtection.AddGameKey(
+                arrangeDb,
+                drop,
+                $"BLOCKED-{Guid.NewGuid():N}");
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             gameId = game.Id;
             dropId = drop.Id;
@@ -246,7 +245,11 @@ public sealed class AccountMutationBlockingTests
 
         await using (var scheduleDb = _fixture.NewDbContext())
         {
-            var schedule = await new KeyDropSchedulingService(scheduleDb).ScheduleAsync(
+            var schedule = await new KeyDropSchedulingService(
+                scheduleDb,
+                new GameKeyRegistrationWriter(
+                    scheduleDb,
+                    TestAccountProtection.CreateGameKeyProtectionService())).ScheduleAsync(
                 gameId,
                 userId,
                 DateTimeOffset.UtcNow.AddHours(1),
@@ -258,9 +261,45 @@ public sealed class AccountMutationBlockingTests
         {
             var claim = await new KeyClaimService(
                     claimDb,
+                    new KeyDropMutationLock(claimDb),
                     NullLogger<KeyClaimService>.Instance)
-                .ClaimAsync(dropId, userId);
+                .ClaimAsync(
+                    dropId,
+                    userId,
+                    TestContext.Current.CancellationToken);
             Assert.Equal(ClaimOutcome.AccountUnavailable, claim.Outcome);
+        }
+
+        await using (var inventoryDb = _fixture.NewDbContext())
+        {
+            var inventory = await new KeyDropInventoryService(
+                    inventoryDb,
+                    new GameKeyRegistrationWriter(
+                        inventoryDb,
+                        TestAccountProtection.CreateGameKeyProtectionService()),
+                    new KeyDropMutationLock(inventoryDb))
+                .AddAsync(
+                    dropId,
+                    userId,
+                    "BLOCKED-INVENTORY-KEY",
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(
+                AddKeyInventoryOutcome.AccountUnavailable,
+                inventory.Outcome);
+        }
+
+        await using (var closeDb = _fixture.NewDbContext())
+        {
+            var close = await new KeyDropCloseService(
+                    closeDb,
+                    new KeyDropMutationLock(closeDb))
+                .CloseAsync(
+                    dropId,
+                    userId,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(
+                CloseKeyDropOutcome.AccountUnavailable,
+                close.Outcome);
         }
 
         await using var verificationDb = _fixture.NewDbContext();

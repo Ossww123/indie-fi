@@ -2,6 +2,7 @@ using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.KeyDistributions.Application;
@@ -29,10 +30,14 @@ public sealed class KeyDropSchedulingService
     private static readonly IReadOnlyList<ValidationViolation> NoViolations = [];
 
     private readonly AppDbContext _db;
+    private readonly GameKeyRegistrationWriter _gameKeyRegistrationWriter;
 
-    public KeyDropSchedulingService(AppDbContext db)
+    public KeyDropSchedulingService(
+        AppDbContext db,
+        GameKeyRegistrationWriter gameKeyRegistrationWriter)
     {
         _db = db;
+        _gameKeyRegistrationWriter = gameKeyRegistrationWriter;
     }
 
     public async Task<ScheduleKeyDropResult> ScheduleAsync(
@@ -72,17 +77,18 @@ public sealed class KeyDropSchedulingService
                 NoViolations);
         }
 
-        var keys = ParseKeys(keysText);
+        var parsedKeys = GameKeyPolicy.ParseBatch(keysText);
+        var keys = parsedKeys.Keys;
 
         // Both rules are checked before returning so a form with two mistakes reports
         // both at once rather than one per submission.
         var violations = new List<ValidationViolation>();
 
-        if (keys.Count == 0)
+        foreach (var keyViolation in parsedKeys.Violations)
         {
             violations.Add(new ValidationViolation(
                 KeysField,
-                "키를 한 개 이상 입력해 주세요."));
+                GetKeyViolationMessage(keyViolation)));
         }
 
         if (opensAt is null)
@@ -104,6 +110,12 @@ public sealed class KeyDropSchedulingService
             return new ScheduleKeyDropResult(ScheduleKeyDropOutcome.Invalid, violations);
         }
 
+        if (await _gameKeyRegistrationWriter.ContainsRegisteredKeyAsync(keys))
+        {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
+            return DuplicateKeyResult();
+        }
+
         var keyDrop = new KeyDrop
         {
             GameId = gameId,
@@ -112,15 +124,21 @@ public sealed class KeyDropSchedulingService
             TotalKeys = keys.Count,
         };
 
-        var steamKeys = keys.Select(key => new SteamKey
-        {
-            Drop = keyDrop,
-            KeyValue = key,
-        });
-
         _db.KeyDrops.Add(keyDrop);
-        _db.SteamKeys.AddRange(steamKeys);
-        await _db.SaveChangesAsync();
+        _gameKeyRegistrationWriter.StageForNewDrop(keyDrop, keys);
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception)
+            when (GameKeyRegistrationWriter
+                .IsDuplicateFingerprintViolation(exception))
+        {
+            await AccountMutationGuard.RollbackIfOwnedAsync(transaction);
+            _db.ChangeTracker.Clear();
+            return DuplicateKeyResult();
+        }
+
         await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         return new ScheduleKeyDropResult(
@@ -130,12 +148,23 @@ public sealed class KeyDropSchedulingService
             keys.Count);
     }
 
-    private static List<string> ParseKeys(string? keysText)
+    private static ScheduleKeyDropResult DuplicateKeyResult() => new(
+        ScheduleKeyDropOutcome.Invalid,
+        [new ValidationViolation(KeysField, "이미 등록된 게임 키가 포함되어 있습니다.")]);
+
+    private static string GetKeyViolationMessage(GameKeyInputViolation violation)
     {
-        return (keysText ?? string.Empty)
-            .Split('\n')
-            .Select(key => key.Trim())
-            .Where(key => key.Length > 0)
-            .ToList();
+        return violation.Error switch
+        {
+            GameKeyInputError.Empty => "키를 한 개 이상 입력해 주세요.",
+            GameKeyInputError.TooLong =>
+                $"{violation.LineNumber}번째 줄 키는 {GameKeyPolicy.MaxLength}자 이하여야 합니다.",
+            GameKeyInputError.ContainsControlCharacter =>
+                $"{violation.LineNumber}번째 줄 키에 사용할 수 없는 제어 문자가 있습니다.",
+            GameKeyInputError.Duplicate =>
+                $"{violation.LineNumber}번째 줄에 앞에서 입력한 것과 같은 키가 있습니다.",
+            _ => throw new InvalidOperationException(
+                $"Unsupported game key input error: {violation.Error}"),
+        };
     }
 }

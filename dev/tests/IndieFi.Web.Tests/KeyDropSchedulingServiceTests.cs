@@ -1,4 +1,7 @@
+using IndieFi.Web.Data;
+using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -23,7 +26,7 @@ public sealed class KeyDropSchedulingServiceTests
         ScheduleKeyDropResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new KeyDropSchedulingService(serviceDb).ScheduleAsync(
+            result = await NewService(serviceDb).ScheduleAsync(
                 gameId,
                 ownerId,
                 opensAt,
@@ -34,11 +37,20 @@ public sealed class KeyDropSchedulingServiceTests
         var drop = await verificationDb.KeyDrops.SingleAsync(
             item => item.Id == result.KeyDropId,
             TestContext.Current.CancellationToken);
-        var keys = await verificationDb.SteamKeys
+        var keys = await verificationDb.GameKeys
             .Where(key => key.DropId == drop.Id)
             .OrderBy(key => key.Id)
-            .Select(key => key.KeyValue)
             .ToListAsync(TestContext.Current.CancellationToken);
+        var protection = TestAccountProtection.CreateGameKeyProtectionService();
+        var decryptedKeys = keys.Select(key => protection.Unprotect(
+            new ProtectedGameKey(
+                key.Ciphertext!,
+                key.Nonce!,
+                key.AuthenticationTag!,
+                key.EncryptionKeyId!)).Value);
+        var fingerprintCount = await verificationDb.GameKeyFingerprints.CountAsync(
+            item => keys.Select(key => key.Id).Contains(item.GameKeyId),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(ScheduleKeyDropOutcome.Scheduled, result.Outcome);
         Assert.Equal(2, result.KeyCount);
@@ -49,7 +61,17 @@ public sealed class KeyDropSchedulingServiceTests
             (drop.OpensAt - opensAt).Duration(),
             TimeSpan.Zero,
             TimeSpan.FromMilliseconds(1));
-        Assert.Equal(["KEY-ONE", "KEY-TWO"], keys);
+        Assert.All(keys, key =>
+        {
+            Assert.NotNull(key.Ciphertext);
+            Assert.Equal(GameKeyProtectionService.NonceSize, key.Nonce.Length);
+            Assert.Equal(
+                GameKeyProtectionService.AuthenticationTagSize,
+                key.AuthenticationTag.Length);
+            Assert.Equal("game-encryption-test-v1", key.EncryptionKeyId);
+        });
+        Assert.Equal(["KEY-ONE", "KEY-TWO"], decryptedKeys);
+        Assert.Equal(2, fingerprintCount);
     }
 
     [Fact]
@@ -60,7 +82,7 @@ public sealed class KeyDropSchedulingServiceTests
         ScheduleKeyDropResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new KeyDropSchedulingService(serviceDb).ScheduleAsync(
+            result = await NewService(serviceDb).ScheduleAsync(
                 gameId,
                 ownerId,
                 DateTimeOffset.UtcNow.AddHours(1),
@@ -87,7 +109,7 @@ public sealed class KeyDropSchedulingServiceTests
         ScheduleKeyDropResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new KeyDropSchedulingService(serviceDb).ScheduleAsync(
+            result = await NewService(serviceDb).ScheduleAsync(
                 gameId,
                 ownerId,
                 DateTimeOffset.UtcNow.AddMinutes(-1),
@@ -114,7 +136,7 @@ public sealed class KeyDropSchedulingServiceTests
         ScheduleKeyDropResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new KeyDropSchedulingService(serviceDb).ScheduleAsync(
+            result = await NewService(serviceDb).ScheduleAsync(
                 gameId,
                 ownerId,
                 DateTimeOffset.UtcNow.AddMinutes(-1),
@@ -134,6 +156,33 @@ public sealed class KeyDropSchedulingServiceTests
     }
 
     [Fact]
+    public async Task ScheduleAsync_WithDuplicateKeys_RejectsWholeBatchWithoutExposingKey()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+        const string secretKey = "DO-NOT-EXPOSE-THIS-KEY";
+
+        ScheduleKeyDropResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb).ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddHours(1),
+                $"{secretKey}\n  {secretKey}  ");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ScheduleKeyDropOutcome.Invalid, result.Outcome);
+        var violation = Assert.Single(result.Violations);
+        Assert.Equal(KeyDropSchedulingService.KeysField, violation.Field);
+        Assert.Contains("2번째 줄", violation.Message);
+        Assert.DoesNotContain(secretKey, violation.Message);
+        Assert.False(await verificationDb.KeyDrops.AnyAsync(
+            drop => drop.GameId == gameId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ScheduleAsync_WhenCallerDoesNotOwnGame_WritesNothing()
     {
         var (ownerId, gameId) = await CreateOwnerAndGameAsync();
@@ -148,7 +197,7 @@ public sealed class KeyDropSchedulingServiceTests
         ScheduleKeyDropResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new KeyDropSchedulingService(serviceDb).ScheduleAsync(
+            result = await NewService(serviceDb).ScheduleAsync(
                 gameId,
                 otherUserId,
                 DateTimeOffset.UtcNow.AddHours(1),
@@ -165,6 +214,44 @@ public sealed class KeyDropSchedulingServiceTests
         Assert.Equal(0, dropCount);
     }
 
+    [Fact]
+    public async Task ScheduleAsync_WhenKeyWasAlreadyRegistered_RejectsWholeNewDrop()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+        const string secretKey = "GLOBALLY-DUPLICATE-GAME-KEY";
+
+        await using (var firstDb = _fixture.NewDbContext())
+        {
+            var first = await NewService(firstDb).ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddHours(1),
+                secretKey);
+            Assert.Equal(ScheduleKeyDropOutcome.Scheduled, first.Outcome);
+        }
+
+        ScheduleKeyDropResult duplicate;
+        await using (var secondDb = _fixture.NewDbContext())
+        {
+            duplicate = await NewService(secondDb).ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddHours(2),
+                secretKey);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var drops = await verificationDb.KeyDrops
+            .Where(drop => drop.GameId == gameId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(ScheduleKeyDropOutcome.Invalid, duplicate.Outcome);
+        var violation = Assert.Single(duplicate.Violations);
+        Assert.Equal(KeyDropSchedulingService.KeysField, violation.Field);
+        Assert.DoesNotContain(secretKey, violation.Message);
+        Assert.Single(drops);
+    }
+
     private async Task<(long OwnerId, long GameId)> CreateOwnerAndGameAsync()
     {
         await using var db = _fixture.NewDbContext();
@@ -172,4 +259,10 @@ public sealed class KeyDropSchedulingServiceTests
         var game = await ReviewTestData.CreateGameAsync(db, owner.Id);
         return (owner.Id, game.Id);
     }
+
+    private static KeyDropSchedulingService NewService(AppDbContext db) => new(
+        db,
+        new GameKeyRegistrationWriter(
+            db,
+            TestAccountProtection.CreateGameKeyProtectionService()));
 }

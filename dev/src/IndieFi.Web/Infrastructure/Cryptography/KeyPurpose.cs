@@ -14,5 +14,11 @@ public readonly record struct KeyPurpose(string Value)
     public static readonly KeyPurpose AccountRequestIpLookup =
         new("account-request-ip-lookup");
 
+    public static readonly KeyPurpose GameKeyEncryption =
+        new("game-key-encryption");
+
+    public static readonly KeyPurpose GameKeyFingerprint =
+        new("game-key-fingerprint");
+
     public override string ToString() => Value;
 }
