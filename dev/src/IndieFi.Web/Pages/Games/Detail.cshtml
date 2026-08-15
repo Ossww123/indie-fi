@@ -170,11 +170,13 @@ else
     <div class="surface-list">
         @foreach (var drop in Model.Drops)
         {
-            <a asp-page="/KeyDrops/Detail"
-               asp-route-id="@drop.Id"
-               class="surface-item surface-link">
+            <div class="surface-item">
                 <div class="flex items-center justify-between gap-4">
-                    <span>@drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    <a asp-page="/KeyDrops/Detail"
+                       asp-route-id="@drop.Id"
+                       class="text-link">
+                        @drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    </a>
                     <span class="text-sm text-slate-500">
                         @drop.RemainingKeys/@drop.TotalKeys 남음
                     </span>
@@ -186,8 +188,14 @@ else
                     {
                         <span class="badge-neutral">@drop.StatusText</span>
                     }
+                    @if (Model.IsOwner && drop.CanAddInventory)
+                    {
+                        <a asp-page="/KeyDrops/AddKeys"
+                           asp-route-id="@drop.Id"
+                           class="button-link">키 추가</a>
+                    }
                 </div>
-            </a>
+            </div>
         }
     </div>
 }

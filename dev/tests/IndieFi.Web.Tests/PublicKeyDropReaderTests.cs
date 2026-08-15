@@ -115,12 +115,16 @@ public sealed class PublicKeyDropReaderTests
 
         Assert.Equal(KeyDropStatus.Scheduled, byId[scheduledDropId].Status);
         Assert.Equal((1, 1, "오픈 예정", false), Summary(byId[scheduledDropId]));
+        Assert.True(byId[scheduledDropId].CanAddInventory);
         Assert.Equal(KeyDropStatus.Active, byId[activeDropId].Status);
         Assert.Equal((2, 1, "진행 중", true), Summary(byId[activeDropId]));
+        Assert.True(byId[activeDropId].CanAddInventory);
         Assert.Equal(KeyDropStatus.SoldOut, byId[soldOutDropId].Status);
         Assert.Equal((1, 0, "소진", false), Summary(byId[soldOutDropId]));
+        Assert.False(byId[soldOutDropId].CanAddInventory);
         Assert.Equal(KeyDropStatus.ClosedEarly, byId[closedDropId].Status);
         Assert.Equal((1, 1, "조기 마감", false), Summary(byId[closedDropId]));
+        Assert.False(byId[closedDropId].CanAddInventory);
 
         var activeDetail = await reader.GetAsync(
             activeDropId,

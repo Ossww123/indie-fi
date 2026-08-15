@@ -116,7 +116,7 @@ public sealed class KeyDropPageTests
 
         const string injected = "totally-made-up-code";
         using var response = await client.GetAsync(
-            $"/KeyDrops/Detail/{dropId}?claim={injected}",
+            $"/KeyDrops/Detail/{dropId}?claim={injected}&inventory={injected}",
             TestContext.Current.CancellationToken);
         var html = await response.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
@@ -124,6 +124,7 @@ public sealed class KeyDropPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.DoesNotContain(injected, html);
         Assert.DoesNotContain("alert-warning", html);
+        Assert.DoesNotContain("alert-success", html);
     }
 
     [Fact]
@@ -184,6 +185,129 @@ public sealed class KeyDropPageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, moduleResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_AddKeys_AsOwner_AddsInventoryAndShowsFixedSuccessNotice()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var (gameId, dropId) = await CreateDropOwnedByAsync(email);
+        var secret = $"HTTP-ADDED-{Guid.NewGuid():N}";
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var gameResponse = await client.GetAsync(
+            $"/Games/Detail/{gameId}",
+            TestContext.Current.CancellationToken);
+        var gameHtml = await gameResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, gameResponse.StatusCode);
+        Assert.Contains($"/KeyDrops/AddKeys/{dropId}", gameHtml);
+
+        using var formResponse = await client.GetAsync(
+            $"/KeyDrops/AddKeys/{dropId}",
+            TestContext.Current.CancellationToken);
+        var formHtml = await formResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, formResponse.StatusCode);
+        Assert.Contains("추가할 게임 키", formHtml);
+
+        using var addForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["KeysText"] = secret,
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(formHtml),
+        });
+        using var addResponse = await client.PostAsync(
+            $"/KeyDrops/AddKeys/{dropId}",
+            addForm,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, addResponse.StatusCode);
+        var location = addResponse.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Contains("inventory=added", location.OriginalString);
+
+        using var detailResponse = await client.GetAsync(
+            location,
+            TestContext.Current.CancellationToken);
+        var detailHtml = WebUtility.HtmlDecode(
+            await detailResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        Assert.Contains("게임 키 재고를 추가했습니다.", detailHtml);
+        Assert.Contains("총 2개 중 2개 남음", detailHtml);
+        Assert.DoesNotContain(secret, detailHtml);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(
+            2,
+            await verificationDb.KeyDrops
+                .Where(drop => drop.Id == dropId)
+                .Select(drop => drop.TotalKeys)
+                .SingleAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            2,
+            await verificationDb.GameKeys.CountAsync(
+                key => key.DropId == dropId,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Get_AddKeys_AsNonOwner_ReturnsNotFound()
+    {
+        var (ownerEmail, _) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var (_, dropId) = await CreateDropOwnedByAsync(ownerEmail);
+        var (otherEmail, otherPassword) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, otherEmail, otherPassword);
+        using var response = await client.GetAsync(
+            $"/KeyDrops/AddKeys/{dropId}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_AddKeys_WithRegisteredKey_DoesNotEchoSecret()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var secret = $"HTTP-DUPLICATE-{Guid.NewGuid():N}";
+        var (_, dropId) = await CreateDropOwnedByAsync(email, secret);
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        using var formResponse = await client.GetAsync(
+            $"/KeyDrops/AddKeys/{dropId}",
+            TestContext.Current.CancellationToken);
+        var formHtml = await formResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var addForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["KeysText"] = secret,
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(formHtml),
+        });
+
+        using var response = await client.PostAsync(
+            $"/KeyDrops/AddKeys/{dropId}",
+            addForm,
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("이미 등록된 게임 키가 포함되어 있습니다.", html);
+        Assert.DoesNotContain(secret, html);
     }
 
     // Service-level tests cannot see this: an annotation on the page can fail model
@@ -316,6 +440,40 @@ public sealed class KeyDropPageTests
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
         await PageTestSupport.LoginAsync(client, email, password);
+    }
+
+    private async Task<(long GameId, long DropId)> CreateDropOwnedByAsync(
+        string ownerEmail,
+        string? initialKey = null)
+    {
+        await using var db = _fixture.NewDbContext();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var owner = await TestAccountProtection.FindUserAsync(
+            db,
+            ownerEmail,
+            cancellationToken);
+        var game = new Game
+        {
+            OwnerId = owner.Id,
+            Title = $"Inventory page game {Guid.NewGuid():N}",
+        };
+        db.Games.Add(game);
+        await db.SaveChangesAsync(cancellationToken);
+        var drop = new KeyDrop
+        {
+            GameId = game.Id,
+            OwnerId = owner.Id,
+            OpensAt = DateTimeOffset.UtcNow.AddHours(1),
+            TotalKeys = 1,
+        };
+        db.KeyDrops.Add(drop);
+        await db.SaveChangesAsync(cancellationToken);
+        TestAccountProtection.AddGameKey(
+            db,
+            drop,
+            initialKey ?? $"INITIAL-{Guid.NewGuid():N}");
+        await db.SaveChangesAsync(cancellationToken);
+        return (game.Id, drop.Id);
     }
 
     private async Task<(long DropId, string OwnerEmail, DateTimeOffset ClosedAt)>

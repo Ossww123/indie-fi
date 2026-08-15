@@ -262,5 +262,7 @@ public sealed class KeyDropSchedulingServiceTests
 
     private static KeyDropSchedulingService NewService(AppDbContext db) => new(
         db,
-        TestAccountProtection.CreateGameKeyProtectionService());
+        new GameKeyRegistrationWriter(
+            db,
+            TestAccountProtection.CreateGameKeyProtectionService()));
 }

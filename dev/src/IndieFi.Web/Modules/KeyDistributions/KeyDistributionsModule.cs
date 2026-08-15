@@ -8,7 +8,9 @@ public static class KeyDistributionsModule
         this IServiceCollection services)
     {
         services.AddScoped<KeyClaimService>();
+        services.AddScoped<KeyDropInventoryService>();
         services.AddScoped<KeyDropSchedulingService>();
+        services.AddScoped<GameKeyRegistrationWriter>();
         services.AddScoped<GrantedGameKeyReader>();
         services.AddScoped<PublicKeyDropReader>();
         services.AddSingleton<GameKeyProtectionService>();

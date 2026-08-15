@@ -37,13 +37,20 @@ public class DetailModel : PageModel
     public PublicKeyDropDetail Drop { get; private set; } = null!;
     public string? ClaimedKey { get; private set; }
     public string? ClaimMessage { get; private set; }
+    public string? InventoryMessage { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(long id, string? claim)
+    public async Task<IActionResult> OnGetAsync(
+        long id,
+        string? claim,
+        string? inventory)
     {
         // Query strings are user-controlled, so only known codes may select displayed text.
         ClaimMessage = ClaimNotices
             .FirstOrDefault(notice => notice.Code == claim)
             ?.Message;
+        InventoryMessage = inventory == "added"
+            ? "게임 키 재고를 추가했습니다."
+            : null;
 
         var drop = await _publicKeyDropReader.GetAsync(
             id,

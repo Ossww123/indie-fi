@@ -247,7 +247,9 @@ public sealed class AccountMutationBlockingTests
         {
             var schedule = await new KeyDropSchedulingService(
                 scheduleDb,
-                TestAccountProtection.CreateGameKeyProtectionService()).ScheduleAsync(
+                new GameKeyRegistrationWriter(
+                    scheduleDb,
+                    TestAccountProtection.CreateGameKeyProtectionService())).ScheduleAsync(
                 gameId,
                 userId,
                 DateTimeOffset.UtcNow.AddHours(1),
@@ -262,6 +264,23 @@ public sealed class AccountMutationBlockingTests
                     NullLogger<KeyClaimService>.Instance)
                 .ClaimAsync(dropId, userId);
             Assert.Equal(ClaimOutcome.AccountUnavailable, claim.Outcome);
+        }
+
+        await using (var inventoryDb = _fixture.NewDbContext())
+        {
+            var inventory = await new KeyDropInventoryService(
+                    inventoryDb,
+                    new GameKeyRegistrationWriter(
+                        inventoryDb,
+                        TestAccountProtection.CreateGameKeyProtectionService()))
+                .AddAsync(
+                    dropId,
+                    userId,
+                    "BLOCKED-INVENTORY-KEY",
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(
+                AddKeyInventoryOutcome.AccountUnavailable,
+                inventory.Outcome);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
