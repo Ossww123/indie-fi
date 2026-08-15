@@ -889,6 +889,32 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserFollow", b =>
+                {
+                    b.Property<long>("FollowerId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("follower_id");
+
+                    b.Property<long>("FollowedUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("followed_user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("FollowerId", "FollowedUserId");
+
+                    b.HasIndex("FollowedUserId");
+
+                    b.ToTable("user_follows", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_user_follows_not_self", "follower_id <> followed_user_id");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserProfile", b =>
                 {
                     b.Property<long>("UserId")
@@ -1169,6 +1195,21 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserFollow", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("FollowedUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("FollowerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.UserProfile", b =>

@@ -4,6 +4,11 @@
     ViewData["Title"] = Model.Profile.DisplayName;
 }
 
+@if (Model.FollowMessage is not null)
+{
+    <div class="alert-success mb-6" role="status">@Model.FollowMessage</div>
+}
+
 <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
     <div class="flex size-24 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700"
          data-default-profile-image>
@@ -23,6 +28,32 @@
             @if (Model.IsOwner)
             {
                 <a asp-page="/Account/Profile" class="button-outline px-3 py-1.5">프로필 수정</a>
+                <a asp-page="/Account/Following" class="button-outline px-3 py-1.5">팔로잉 목록</a>
+            }
+            else if (Model.CanManageFollow)
+            {
+                @if (Model.IsFollowing)
+                {
+                    <form method="post"
+                          asp-page-handler="Unfollow"
+                          asp-route-id="@Model.Profile.UserId">
+                        <button type="submit" class="button-outline px-3 py-1.5">팔로우 해제</button>
+                    </form>
+                }
+                else
+                {
+                    <form method="post"
+                          asp-page-handler="Follow"
+                          asp-route-id="@Model.Profile.UserId">
+                        <button type="submit" class="button-primary px-3 py-1.5">팔로우</button>
+                    </form>
+                }
+            }
+            else
+            {
+                <a asp-page="/Login"
+                   asp-route-returnUrl="@($"/Profiles/{Model.Profile.UserId}")"
+                   class="button-outline px-3 py-1.5">로그인 후 팔로우</a>
             }
         </div>
         @if (string.IsNullOrEmpty(Model.Profile.Biography))

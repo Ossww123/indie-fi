@@ -32,6 +32,7 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<UserFollow> UserFollows => Set<UserFollow>();
 
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GamePlayLink> GamePlayLinks => Set<GamePlayLink>();
@@ -367,6 +368,35 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             profile.HasOne<User>()
                 .WithOne()
                 .HasForeignKey<UserProfile>(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserFollow>(follow =>
+        {
+            follow.ToTable("user_follows", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_user_follows_not_self",
+                    "follower_id <> followed_user_id");
+            });
+
+            follow.HasKey(item => new { item.FollowerId, item.FollowedUserId });
+            follow.Property(item => item.FollowerId)
+                .HasColumnName("follower_id");
+            follow.Property(item => item.FollowedUserId)
+                .HasColumnName("followed_user_id");
+            follow.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            follow.HasIndex(item => item.FollowedUserId);
+            follow.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.FollowerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            follow.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.FollowedUserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

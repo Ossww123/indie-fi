@@ -66,6 +66,7 @@ public sealed class PublicProfilePageTests
         Assert.Contains($"href=\"/Games/Detail/{gameId}\"", html);
         Assert.Contains("data-default-profile-image", html);
         Assert.Contains("기본 프로필 이미지", html);
+        Assert.Contains("로그인 후 팔로우", html);
         Assert.DoesNotContain("프로필 수정", html);
         Assert.DoesNotContain(email, html, StringComparison.OrdinalIgnoreCase);
 
@@ -197,6 +198,9 @@ public sealed class PublicProfilePageTests
         Assert.Equal(HttpStatusCode.OK, publicResponse.StatusCode);
         Assert.Contains("프로필 수정", publicHtml);
         Assert.Contains("href=\"/Account/Profile\"", publicHtml);
+        Assert.Contains("팔로잉 목록", publicHtml);
+        Assert.Contains("href=\"/Account/Following\"", publicHtml);
+        Assert.DoesNotContain(">팔로우</button>", publicHtml);
 
         using var editResponse = await client.GetAsync(
             "/Account/Profile",
@@ -207,5 +211,7 @@ public sealed class PublicProfilePageTests
         Assert.Equal(HttpStatusCode.OK, editResponse.StatusCode);
         Assert.Contains("공개 프로필 보기", editHtml);
         Assert.Contains($"href=\"/Profiles/{userId}\"", editHtml);
+        Assert.Contains("팔로잉 목록", editHtml);
+        Assert.Contains("href=\"/Account/Following\"", editHtml);
     }
 }

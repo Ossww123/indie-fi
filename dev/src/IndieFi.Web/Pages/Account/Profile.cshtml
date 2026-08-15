@@ -12,6 +12,8 @@
     <a asp-page="/Profiles/Detail"
        asp-route-id="@Model.PublicProfileUserId"
        class="text-link">공개 프로필 보기</a>
+    <span class="mx-2 text-slate-300">|</span>
+    <a asp-page="/Account/Following" class="text-link">팔로잉 목록</a>
 </p>
 
 @if (Model.StatusMessage is not null)

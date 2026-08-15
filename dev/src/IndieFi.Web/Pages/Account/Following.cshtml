@@ -1,0 +1,39 @@
+@page
+@model FollowingModel
+@{
+    ViewData["Title"] = "팔로잉 목록";
+}
+
+<h1 class="page-title mb-2">팔로잉 목록</h1>
+<p class="mb-6 text-sm text-slate-600">내가 팔로우한 사용자만 볼 수 있는 목록입니다.</p>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="alert-neutral">아직 팔로우한 사용자가 없습니다.</div>
+}
+else
+{
+    <div class="surface-list">
+        @foreach (var item in Model.Items)
+        {
+            <a asp-page="/Profiles/Detail"
+               asp-route-id="@item.UserId"
+               class="surface-item surface-link">
+                <div class="flex items-center justify-between gap-4">
+                    <span class="font-semibold">@item.DisplayName</span>
+                    <span class="text-meta">@item.FollowedAt.ToLocalTime().ToString("yyyy-MM-dd")부터 팔로우</span>
+                </div>
+                @if (string.IsNullOrEmpty(item.Biography))
+                {
+                    <div class="text-slate-500">(소개 없음)</div>
+                }
+                else
+                {
+                    <div class="whitespace-pre-line">@item.Biography</div>
+                }
+            </a>
+        }
+    </div>
+}
+
+<a asp-page="/Account/Profile" class="text-link mt-6 inline-block">← 내 프로필 설정으로</a>
