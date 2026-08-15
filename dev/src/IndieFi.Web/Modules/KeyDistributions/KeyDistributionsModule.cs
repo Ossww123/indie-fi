@@ -9,6 +9,7 @@ public static class KeyDistributionsModule
     {
         services.AddScoped<KeyClaimService>();
         services.AddScoped<KeyDropCloseService>();
+        services.AddScoped<KeyDropEligibilityService>();
         services.AddScoped<KeyDropInventoryService>();
         services.AddScoped<KeyDropMutationLock>();
         services.AddScoped<KeyDropSchedulingService>();

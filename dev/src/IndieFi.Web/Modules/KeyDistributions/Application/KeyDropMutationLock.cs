@@ -11,6 +11,10 @@ public sealed record LockedKeyDropMutationState(
     DateTimeOffset? OpensAt,
     int? TotalKeys,
     int? RemainingKeys,
+    int? MinimumAccountAgeDays,
+    int? MinimumCompletedReviewCount,
+    DateTimeOffset? AccountCreatedAt,
+    int CompletedReviewCount,
     DateTimeOffset? ClosedAt,
     long? StateVersion,
     DateTimeOffset DatabaseNow,
@@ -35,6 +39,24 @@ public sealed record LockedKeyDropMutationState(
             TotalKeys.Value,
             RemainingKeys.Value,
             ClosedAt,
+            DatabaseNow);
+    }
+
+    public KeyDropEligibilitySnapshot GetRequiredEligibilitySnapshot()
+    {
+        if (!DropExists)
+        {
+            throw new InvalidOperationException(
+                "A missing key drop does not have eligibility requirements.");
+        }
+
+        return new KeyDropEligibilitySnapshot(
+            DropExists,
+            AccountAvailable,
+            MinimumAccountAgeDays,
+            MinimumCompletedReviewCount,
+            AccountCreatedAt,
+            CompletedReviewCount,
             DatabaseNow);
     }
 }
@@ -65,7 +87,8 @@ public sealed class KeyDropMutationLock
         var rows = await _db.Database
             .SqlQuery<LockRow>($$"""
                 WITH active_user AS MATERIALIZED (
-                    SELECT app_user.id
+                    SELECT app_user.id,
+                           app_user.created_at
                     FROM users AS app_user
                     WHERE app_user.id = {{actorId}}
                       AND app_user.account_status = 'Active'
@@ -77,6 +100,8 @@ public sealed class KeyDropMutationLock
                            key_drop.owner_id AS "OwnerId",
                            key_drop.opens_at AS "OpensAt",
                            key_drop.total_keys AS "TotalKeys",
+                           key_drop.minimum_account_age_days AS "MinimumAccountAgeDays",
+                           key_drop.minimum_completed_review_count AS "MinimumCompletedReviewCount",
                            (
                                SELECT COUNT(*)::integer
                                FROM game_keys AS game_key
@@ -106,11 +131,21 @@ public sealed class KeyDropMutationLock
                        locked_drop."OpensAt",
                        locked_drop."TotalKeys",
                        locked_drop."RemainingKeys",
+                       locked_drop."MinimumAccountAgeDays",
+                       locked_drop."MinimumCompletedReviewCount",
+                       active_user.created_at AS "AccountCreatedAt",
+                       CASE WHEN EXISTS (SELECT 1 FROM active_user) THEN (
+                           SELECT COUNT(*)::integer
+                           FROM review_assignments AS assignment
+                           WHERE assignment.reviewer_id = {{actorId}}
+                             AND assignment.status = 'Completed'
+                       ) ELSE 0 END AS "CompletedReviewCount",
                        locked_drop."ClosedAt",
                        locked_drop."StateVersion",
                        now() AS "DatabaseNow",
                        COALESCE(locked_drop."AlreadyClaimed", false) AS "AlreadyClaimed"
                 FROM (SELECT 1) AS anchor
+                LEFT JOIN active_user ON true
                 LEFT JOIN locked_drop ON true
                 """)
             .ToListAsync(cancellationToken);
@@ -123,6 +158,10 @@ public sealed class KeyDropMutationLock
             row.OpensAt,
             row.TotalKeys,
             row.RemainingKeys,
+            row.MinimumAccountAgeDays,
+            row.MinimumCompletedReviewCount,
+            row.AccountCreatedAt,
+            row.CompletedReviewCount,
             row.ClosedAt,
             row.StateVersion,
             row.DatabaseNow,
@@ -142,6 +181,14 @@ public sealed class KeyDropMutationLock
         public int? TotalKeys { get; init; }
 
         public int? RemainingKeys { get; init; }
+
+        public int? MinimumAccountAgeDays { get; init; }
+
+        public int? MinimumCompletedReviewCount { get; init; }
+
+        public DateTimeOffset? AccountCreatedAt { get; init; }
+
+        public int CompletedReviewCount { get; init; }
 
         public DateTimeOffset? ClosedAt { get; init; }
 

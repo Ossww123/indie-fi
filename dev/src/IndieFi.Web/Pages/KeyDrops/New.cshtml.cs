@@ -36,6 +36,12 @@ public class NewModel : PageModel
     [BindProperty]
     public string? KeysText { get; set; }
 
+    [BindProperty]
+    public int? MinimumAccountAgeDays { get; set; }
+
+    [BindProperty]
+    public int? MinimumCompletedReviewCount { get; set; }
+
     public async Task<IActionResult> OnGetAsync(long gameId)
     {
         var ownerId = _currentUser.GetRequiredUserId();
@@ -57,7 +63,9 @@ public class NewModel : PageModel
             gameId,
             ownerId,
             OpensAt,
-            KeysText);
+            KeysText,
+            MinimumAccountAgeDays,
+            MinimumCompletedReviewCount);
 
         if (result.Outcome is
             ScheduleKeyDropOutcome.GameNotFound or

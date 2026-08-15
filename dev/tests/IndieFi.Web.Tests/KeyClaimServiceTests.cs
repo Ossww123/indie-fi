@@ -89,6 +89,40 @@ public sealed class KeyClaimServiceTests
         Assert.Equal(0, grantCount);
     }
 
+    [Fact]
+    public async Task ClaimAsync_WhenCurrentEligibilityIsNotMet_DoesNotCreateGrant()
+    {
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            var drop = await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1);
+            drop.MinimumAccountAgeDays = 1;
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            dropId = drop.Id;
+        }
+
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ClaimOutcome.NotEligible, result.Outcome);
+        Assert.False(await verificationDb.KeyGrants.AnyAsync(
+            grant => grant.DropId == dropId && grant.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
     // A user can receive only one key from the same drop.
     [Fact]
     public async Task ClaimAsync_WhenSameUserClaimsTwice_GrantsOnceThenReturnsAlreadyClaimed()

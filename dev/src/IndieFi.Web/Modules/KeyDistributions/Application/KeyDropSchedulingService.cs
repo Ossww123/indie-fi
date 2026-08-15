@@ -26,6 +26,9 @@ public sealed class KeyDropSchedulingService
 {
     public const string OpensAtField = "OpensAt";
     public const string KeysField = "KeysText";
+    public const string MinimumAccountAgeDaysField = "MinimumAccountAgeDays";
+    public const string MinimumCompletedReviewCountField =
+        "MinimumCompletedReviewCount";
 
     private static readonly IReadOnlyList<ValidationViolation> NoViolations = [];
 
@@ -44,7 +47,9 @@ public sealed class KeyDropSchedulingService
         long gameId,
         long ownerId,
         DateTimeOffset? opensAt,
-        string? keysText)
+        string? keysText,
+        int? minimumAccountAgeDays = null,
+        int? minimumCompletedReviewCount = null)
     {
         await using var transaction =
             await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
@@ -97,6 +102,22 @@ public sealed class KeyDropSchedulingService
                 OpensAtField,
                 "오픈 시각을 입력해 주세요."));
         }
+
+        if (!KeyDropEligibilityPolicy.IsValidAccountAgeDays(
+                minimumAccountAgeDays))
+        {
+            violations.Add(new ValidationViolation(
+                MinimumAccountAgeDaysField,
+                $"계정 경과 기간은 비워 두거나 {KeyDropEligibilityPolicy.MinimumAccountAgeDays}~{KeyDropEligibilityPolicy.MaximumAccountAgeDays}일로 입력해 주세요."));
+        }
+
+        if (!KeyDropEligibilityPolicy.IsValidCompletedReviewCount(
+                minimumCompletedReviewCount))
+        {
+            violations.Add(new ValidationViolation(
+                MinimumCompletedReviewCountField,
+                $"완료 리뷰 수는 비워 두거나 {KeyDropEligibilityPolicy.MinimumCompletedReviewCount}~{KeyDropEligibilityPolicy.MaximumCompletedReviewCount}개로 입력해 주세요."));
+        }
         else if (opensAt <= DateTimeOffset.Now)
         {
             violations.Add(new ValidationViolation(
@@ -122,6 +143,8 @@ public sealed class KeyDropSchedulingService
             OwnerId = ownerId,
             OpensAt = opensAt!.Value.ToUniversalTime(),
             TotalKeys = keys.Count,
+            MinimumAccountAgeDays = minimumAccountAgeDays,
+            MinimumCompletedReviewCount = minimumCompletedReviewCount,
         };
 
         _db.KeyDrops.Add(keyDrop);

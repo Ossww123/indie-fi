@@ -31,6 +31,31 @@
         </p>
     </div>
 
+    <fieldset class="form-stack rounded-xl border border-slate-200 p-4">
+        <legend class="px-2 font-medium text-slate-700">참여 자격 (선택)</legend>
+        <p class="text-sm text-slate-500">
+            비워 두면 제한하지 않습니다. 두 조건을 모두 설정하면 둘 다 충족해야 합니다.
+        </p>
+        <div class="field-group">
+            <label asp-for="MinimumAccountAgeDays" class="field-label">최소 계정 경과 기간</label>
+            <input asp-for="MinimumAccountAgeDays"
+                   type="number"
+                   min="1"
+                   max="365"
+                   class="field-input" />
+            <span asp-validation-for="MinimumAccountAgeDays" class="field-error"></span>
+        </div>
+        <div class="field-group">
+            <label asp-for="MinimumCompletedReviewCount" class="field-label">최소 완료 리뷰 수</label>
+            <input asp-for="MinimumCompletedReviewCount"
+                   type="number"
+                   min="1"
+                   max="100"
+                   class="field-input" />
+            <span asp-validation-for="MinimumCompletedReviewCount" class="field-error"></span>
+        </div>
+    </fieldset>
+
     <div class="flex flex-wrap gap-2">
         <button type="submit" class="button-primary">드롭 예약</button>
         <a asp-page="/Games/Detail"

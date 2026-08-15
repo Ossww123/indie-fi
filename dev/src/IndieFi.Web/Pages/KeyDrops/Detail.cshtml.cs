@@ -14,6 +14,7 @@ public class DetailModel : PageModel
         new(ClaimOutcome.NotOpen, "notopen", "아직 오픈되지 않았습니다."),
         new(ClaimOutcome.SoldOut, "soldout", "키가 모두 소진되었습니다."),
         new(ClaimOutcome.ClosedEarly, "closed", "조기 마감된 배포입니다."),
+        new(ClaimOutcome.NotEligible, "ineligible", "이 배포의 참여 자격을 충족하지 못했습니다."),
         new(ClaimOutcome.Conflict, "conflict", "동시 요청으로 키를 발급하지 못했습니다. 잠시 후 다시 시도해 주세요."),
     ];
 

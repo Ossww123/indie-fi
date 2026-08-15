@@ -18,6 +18,7 @@ public enum ClaimOutcome
     Conflict,
     DropNotFound,
     AccountUnavailable,
+    NotEligible,
 }
 
 public record ClaimResult(ClaimOutcome Outcome);
@@ -29,15 +30,19 @@ public class KeyClaimService
 
     private readonly AppDbContext _db;
     private readonly KeyDropMutationLock _keyDropMutationLock;
+    private readonly KeyDropEligibilityService _keyDropEligibilityService;
     private readonly ILogger<KeyClaimService> _logger;
 
     public KeyClaimService(
         AppDbContext db,
         KeyDropMutationLock keyDropMutationLock,
-        ILogger<KeyClaimService> logger)
+        ILogger<KeyClaimService> logger,
+        KeyDropEligibilityService? keyDropEligibilityService = null)
     {
         _db = db;
         _keyDropMutationLock = keyDropMutationLock;
+        _keyDropEligibilityService = keyDropEligibilityService
+            ?? new KeyDropEligibilityService(db);
         _logger = logger;
     }
 
@@ -99,6 +104,18 @@ public class KeyClaimService
             return await CompleteAsync(
                 transaction,
                 outcome,
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
+        if (_keyDropEligibilityService.Evaluate(
+                state.GetRequiredEligibilitySnapshot())
+            != KeyDropEligibilityOutcome.Eligible)
+        {
+            return await CompleteAsync(
+                transaction,
+                ClaimOutcome.NotEligible,
                 dropId,
                 userId,
                 cancellationToken);
