@@ -25,7 +25,8 @@ public enum WaitingRoomParticipationOutcome
 
 public sealed record WaitingRoomParticipationResult(
     WaitingRoomParticipationOutcome Outcome,
-    WaitingRoomStoredEntry? Entry = null)
+    WaitingRoomStoredEntry? Entry = null,
+    WaitingRoomSnapshot? Snapshot = null)
 {
     public bool CanJoin => Outcome == WaitingRoomParticipationOutcome.Available;
 }
@@ -71,12 +72,16 @@ public sealed class WaitingRoomParticipationService
 
         try
         {
-            var entry = await _store.GetEntryAsync(dropId, userId, cancellationToken);
-            return entry is null
+            var snapshot = await _store.GetSnapshotAsync(
+                dropId,
+                userId,
+                cancellationToken);
+            return snapshot is null
                 ? evaluation.Result
                 : new WaitingRoomParticipationResult(
                     WaitingRoomParticipationOutcome.Existing,
-                    entry);
+                    snapshot.Entry,
+                    snapshot);
         }
         catch (WaitingRoomUnavailableException)
         {

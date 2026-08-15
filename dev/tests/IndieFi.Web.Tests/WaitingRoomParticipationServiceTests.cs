@@ -108,6 +108,8 @@ public sealed class WaitingRoomParticipationServiceTests
 
         Assert.Equal(WaitingRoomParticipationOutcome.Existing, result.Outcome);
         Assert.Equal(existing, result.Entry);
+        Assert.NotNull(result.Snapshot);
+        Assert.Equal(1, result.Snapshot.PreWaitingCount);
         Assert.Null(store.LastJoinCommand);
     }
 
@@ -170,6 +172,21 @@ public sealed class WaitingRoomParticipationServiceTests
             long userId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(ExistingEntry);
+
+        public Task<WaitingRoomSnapshot?> GetSnapshotAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ExistingEntry is null
+                ? null
+                : new WaitingRoomSnapshot(
+                    ExistingEntry,
+                    Position: null,
+                    AheadCount: null,
+                    WaitingCount: 0,
+                    PreWaitingCount: 1,
+                    AdmittedCount: 0,
+                    OrderFinalized: false));
 
         public Task<WaitingRoomTransitionResult> TransitionAsync(
             WaitingRoomTransitionCommand command,

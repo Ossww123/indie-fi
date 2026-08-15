@@ -214,6 +214,46 @@ public sealed class RedisWaitingRoomStoreTests
     }
 
     [Fact]
+    public async Task GetSnapshotAsync_ReturnsOneAtomicViewBeforeAndAfterFinalization()
+    {
+        var dropId = NextDropId();
+        var store = _fixture.NewStore();
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.PreOpen),
+            TestContext.Current.CancellationToken);
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 2, WaitingRoomJoinMode.PreOpen),
+            TestContext.Current.CancellationToken);
+
+        var before = await store.GetSnapshotAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        await store.FinalizeOrderAsync(
+            dropId,
+            TestContext.Current.CancellationToken);
+        var after = await store.GetSnapshotAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(before);
+        Assert.Equal(WaitingRoomEntryState.PreWaiting, before.Entry.State);
+        Assert.Null(before.Position);
+        Assert.Null(before.AheadCount);
+        Assert.Equal(2, before.PreWaitingCount);
+        Assert.False(before.OrderFinalized);
+
+        Assert.NotNull(after);
+        Assert.Equal(WaitingRoomEntryState.Waiting, after.Entry.State);
+        Assert.NotNull(after.Position);
+        Assert.Equal(after.Position - 1, after.AheadCount);
+        Assert.Equal(2, after.WaitingCount);
+        Assert.Equal(0, after.PreWaitingCount);
+        Assert.True(after.OrderFinalized);
+    }
+
+    [Fact]
     public async Task JoinAsync_RefreshesActiveStateTtlAndHealthCheckUsesRealRedis()
     {
         var dropId = NextDropId();

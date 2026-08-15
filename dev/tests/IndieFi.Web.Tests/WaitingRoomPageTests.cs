@@ -66,6 +66,8 @@ public sealed class WaitingRoomPageTests
         Assert.Contains("대기실에 들어왔습니다.", restoredHtml);
         Assert.Contains("data-waiting-room-state", restoredHtml);
         Assert.Contains("대기 중", restoredHtml);
+        Assert.Contains("data-waiting-room-position", restoredHtml);
+        Assert.Contains("현재 1번 · 앞에 0명", restoredHtml);
         Assert.Single(store.Entries);
     }
 
@@ -171,6 +173,24 @@ public sealed class WaitingRoomPageTests
             return Task.FromResult(entry);
         }
 
+        public Task<WaitingRoomSnapshot?> GetSnapshotAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default)
+        {
+            Entries.TryGetValue((dropId, userId), out var entry);
+            return Task.FromResult(entry is null
+                ? null
+                : new WaitingRoomSnapshot(
+                    entry,
+                    Position: checked((int)entry.Order),
+                    AheadCount: checked((int)entry.Order - 1),
+                    WaitingCount: Entries.Count,
+                    PreWaitingCount: 0,
+                    AdmittedCount: 0,
+                    OrderFinalized: true));
+        }
+
         public Task<WaitingRoomTransitionResult> TransitionAsync(
             WaitingRoomTransitionCommand command,
             CancellationToken cancellationToken = default) =>
@@ -192,6 +212,12 @@ public sealed class WaitingRoomPageTests
             throw new WaitingRoomUnavailableException("test unavailable");
 
         public Task<WaitingRoomStoredEntry?> GetEntryAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default) =>
+            throw new WaitingRoomUnavailableException("test unavailable");
+
+        public Task<WaitingRoomSnapshot?> GetSnapshotAsync(
             long dropId,
             long userId,
             CancellationToken cancellationToken = default) =>

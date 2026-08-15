@@ -221,6 +221,29 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         return {1, order}
         """;
 
+    private const string SnapshotScript = """
+        local entry = redis.call('HGET', KEYS[2], ARGV[1])
+        local waiting_count = redis.call('ZCARD', KEYS[4])
+        local pre_count = redis.call('ZCARD', KEYS[3])
+        local admitted_count = redis.call('ZCARD', KEYS[5])
+        local finalized = redis.call('HGET', KEYS[1], 'order_finalized') == '1' and 1 or 0
+        if not entry then
+            return {0, '', -1, -1, waiting_count, pre_count, admitted_count, finalized}
+        end
+
+        local state = tonumber(string.match(entry, '^1|(%d+)|'))
+        local position = -1
+        local ahead = -1
+        if state == 2 then
+            local rank = redis.call('ZRANK', KEYS[4], ARGV[1])
+            if rank then
+                ahead = rank
+                position = rank + 1
+            end
+        end
+        return {1, entry, position, ahead, waiting_count, pre_count, admitted_count, finalized}
+        """;
+
     private readonly WaitingRoomRedisConnection _connection;
     private readonly WaitingRoomRedisKeys _keys;
     private readonly WaitingRoomPolicyOptions _policy;
@@ -292,6 +315,35 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         {
             throw Unavailable(exception);
         }
+    }
+
+    public async Task<WaitingRoomSnapshot?> GetSnapshotAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(dropId, userId);
+        var result = await EvaluateAsync(
+            SnapshotScript,
+            _keys.All(dropId),
+            [userId],
+            cancellationToken);
+        var parts = GetResultParts(result, expectedLength: 8);
+        if ((int)parts[0] == 0)
+        {
+            return null;
+        }
+
+        var position = (int)parts[2];
+        var aheadCount = (int)parts[3];
+        return new WaitingRoomSnapshot(
+            WaitingRoomRedisValueCodec.Deserialize((RedisValue)parts[1]),
+            position < 0 ? null : position,
+            aheadCount < 0 ? null : aheadCount,
+            checked((int)(long)parts[4]),
+            checked((int)(long)parts[5]),
+            checked((int)(long)parts[6]),
+            (int)parts[7] == 1);
     }
 
     public async Task<WaitingRoomTransitionResult> TransitionAsync(
@@ -389,10 +441,12 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     private static long ToMilliseconds(TimeSpan value) =>
         checked((long)value.TotalMilliseconds);
 
-    private static RedisResult[] GetResultParts(RedisResult result)
+    private static RedisResult[] GetResultParts(
+        RedisResult result,
+        int expectedLength = 2)
     {
         var parts = (RedisResult[]?)result;
-        if (parts is not { Length: 2 })
+        if (parts is null || parts.Length != expectedLength)
         {
             throw new InvalidOperationException(
                 "Redis returned an invalid waiting-room script result.");

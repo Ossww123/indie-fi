@@ -13,6 +13,11 @@ public interface IWaitingRoomStore
         long userId,
         CancellationToken cancellationToken = default);
 
+    Task<WaitingRoomSnapshot?> GetSnapshotAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken = default);
+
     Task<WaitingRoomTransitionResult> TransitionAsync(
         WaitingRoomTransitionCommand command,
         CancellationToken cancellationToken = default);
@@ -73,3 +78,12 @@ public enum WaitingRoomOrderFinalizationOutcome
 public sealed record WaitingRoomOrderFinalizationResult(
     WaitingRoomOrderFinalizationOutcome Outcome,
     int WaitingCount);
+
+public sealed record WaitingRoomSnapshot(
+    WaitingRoomStoredEntry Entry,
+    int? Position,
+    int? AheadCount,
+    int WaitingCount,
+    int PreWaitingCount,
+    int AdmittedCount,
+    bool OrderFinalized);
