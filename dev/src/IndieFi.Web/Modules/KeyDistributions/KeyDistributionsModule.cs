@@ -32,6 +32,7 @@ public static class KeyDistributionsModule
         services.AddScoped<KeyDropInventoryService>();
         services.AddScoped<KeyDropMutationLock>();
         services.AddScoped<KeyDropSchedulingService>();
+        services.AddScoped<WaitingRoomParticipationService>();
         services.AddScoped<GameKeyRegistrationWriter>();
         services.AddScoped<GrantedGameKeyReader>();
         services.AddScoped<PublicKeyDropReader>();

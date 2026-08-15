@@ -76,6 +76,33 @@ public sealed class RedisWaitingRoomStoreTests
     }
 
     [Fact]
+    public async Task JoinAsync_AfterReconnectGrace_RejoinsOpenQueueAtTail()
+    {
+        var dropId = NextDropId();
+        var policy = new WaitingRoomPolicyOptions
+        {
+            ReconnectGrace = TimeSpan.FromMilliseconds(100),
+        };
+        var store = _fixture.NewStore(policy);
+        var first = await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        await Task.Delay(150, TestContext.Current.CancellationToken);
+        var second = await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 2, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+        var rejoined = await store.JoinAsync(
+            new WaitingRoomJoinCommand(dropId, 1, WaitingRoomJoinMode.Open),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, first.Entry!.Order);
+        Assert.Equal(2, second.Entry!.Order);
+        Assert.Equal(WaitingRoomJoinOutcome.Rejoined, rejoined.Outcome);
+        Assert.Equal(3, rejoined.Entry!.Order);
+        Assert.Equal(WaitingRoomEntryState.Waiting, rejoined.Entry.State);
+    }
+
+    [Fact]
     public async Task TransitionAsync_WhenRequestsRace_ChangesExpectedStateOnce()
     {
         var dropId = NextDropId();

@@ -28,11 +28,11 @@ public sealed class RedisFixture : IAsyncLifetime
         await _connection.GetAsync();
     }
 
-    public RedisWaitingRoomStore NewStore() =>
+    public RedisWaitingRoomStore NewStore(WaitingRoomPolicyOptions? policy = null) =>
         new(
             GetConnection(),
             GetKeys(),
-            Options.Create(new WaitingRoomPolicyOptions()));
+            Options.Create(policy ?? new WaitingRoomPolicyOptions()));
 
     public WaitingRoomRedisKeys GetKeys() =>
         _keys ?? throw new InvalidOperationException("Redis fixture is not initialized.");

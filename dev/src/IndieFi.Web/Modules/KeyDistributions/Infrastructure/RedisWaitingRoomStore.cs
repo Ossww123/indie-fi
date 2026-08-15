@@ -39,11 +39,37 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         local ttl = tonumber(ARGV[3])
         if existing then
             local parts = split_entry(existing)
-            parts[4] = tostring(now)
-            existing = table.concat(parts, '|')
+            local state = tonumber(parts[2])
+            local within_grace = now - tonumber(parts[4]) <= tonumber(ARGV[4])
+            local admission_valid = state == 3
+                and parts[5] ~= ''
+                and now < tonumber(parts[5])
+            if state == 4 or state == 6 or admission_valid
+                or (state ~= 5 and within_grace) then
+                parts[4] = tostring(now)
+                existing = table.concat(parts, '|')
+                redis.call('HSET', KEYS[2], user_id, existing)
+                refresh_ttl(ttl)
+                return {2, existing}
+            end
+
+            redis.call('ZREM', KEYS[3], user_id)
+            redis.call('ZREM', KEYS[4], user_id)
+            redis.call('ZREM', KEYS[5], user_id)
+            local order = tonumber(parts[3])
+            local next_state = 1
+            local target_key = KEYS[3]
+            if ARGV[2] == '2' then
+                order = redis.call('HINCRBY', KEYS[1], 'next_order', 1)
+                next_state = 2
+                target_key = KEYS[4]
+            end
+
+            existing = '1|' .. next_state .. '|' .. order .. '|' .. now .. '|'
             redis.call('HSET', KEYS[2], user_id, existing)
+            redis.call('ZADD', target_key, order, user_id)
             refresh_ttl(ttl)
-            return {2, existing}
+            return {4, existing}
         end
 
         local order = redis.call('HINCRBY', KEYS[1], 'next_order', 1)
@@ -151,6 +177,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
                 command.UserId,
                 command.Mode == WaitingRoomJoinMode.PreOpen ? 1 : 2,
                 ToMilliseconds(_policy.ActiveStateTtl),
+                ToMilliseconds(_policy.ReconnectGrace),
             ],
             cancellationToken);
         var parts = GetResultParts(result);
@@ -159,6 +186,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
             1 => WaitingRoomJoinOutcome.Created,
             2 => WaitingRoomJoinOutcome.Existing,
             3 => WaitingRoomJoinOutcome.Terminal,
+            4 => WaitingRoomJoinOutcome.Rejoined,
             var value => throw new InvalidOperationException(
                 $"Redis returned an unknown waiting-room join outcome: {value}."),
         };

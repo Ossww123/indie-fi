@@ -33,6 +33,7 @@ public enum WaitingRoomJoinOutcome
 {
     Created,
     Existing,
+    Rejoined,
     Terminal,
 }
 
