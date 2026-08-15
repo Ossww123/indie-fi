@@ -3,12 +3,12 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Games.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Pages.Games;
 
 [Authorize]
-public class EditModel : PageModel
+public class EditModel : GameFormPageModel
 {
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
@@ -24,16 +24,9 @@ public class EditModel : PageModel
         _gameManagementService = gameManagementService;
     }
 
-    // No validation annotations here — see Games/New for why the service owns the rules.
-    [BindProperty]
-    public string? Title { get; set; }
-
-    [BindProperty]
-    public string? Description { get; set; }
-
     public async Task<IActionResult> OnGetAsync(long id)
     {
-        var game = await _db.Games.FindAsync(id);
+        var game = await _db.Games.FindAsync([id], HttpContext.RequestAborted);
         var ownerId = _currentUser.GetRequiredUserId();
 
         // Return 404 (not 403) when the game is missing OR not owned by the caller —
@@ -46,17 +39,45 @@ public class EditModel : PageModel
 
         Title = game.Title;
         Description = game.Description;
+        Links = await _db.GamePlayLinks
+            .Where(link => link.GameId == id)
+            .OrderBy(link => link.SortOrder)
+            .Select(link => new GamePlayLinkFormInput
+            {
+                DisplayName = link.DisplayName,
+                Provider = link.Provider,
+                TargetPlatform = link.TargetPlatform,
+                Url = link.Url,
+            })
+            .ToListAsync(HttpContext.RequestAborted);
+        EnsureLinkEditorRow();
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync(long id)
     {
         var ownerId = _currentUser.GetRequiredUserId();
+        if (!ModelState.IsValid)
+        {
+            var ownsGame = await _db.Games.AnyAsync(
+                game => game.Id == id && game.OwnerId == ownerId,
+                HttpContext.RequestAborted);
+            if (!ownsGame)
+            {
+                return NotFound();
+            }
+
+            EnsureLinkEditorRow();
+            return Page();
+        }
+
         var result = await _gameManagementService.UpdateAsync(
             id,
             ownerId,
             Title,
-            Description);
+            Description,
+            CreateLinkInputs(),
+            HttpContext.RequestAborted);
 
         if (result.Outcome == UpdateGameOutcome.NotFound)
         {
@@ -70,11 +91,8 @@ public class EditModel : PageModel
 
         if (result.Outcome == UpdateGameOutcome.Invalid)
         {
-            foreach (var violation in result.Violations)
-            {
-                ModelState.AddModelError(violation.Field, violation.Message);
-            }
-
+            AddViolations(result.Violations);
+            EnsureLinkEditorRow();
             return Page();
         }
 

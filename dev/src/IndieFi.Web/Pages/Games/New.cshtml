@@ -21,5 +21,13 @@
         <span asp-validation-for="Description" class="field-error"></span>
     </div>
 
+    <partial name="_GamePlayLinkFields" model="Model" />
+
     <button type="submit" class="button-primary">게임 등록</button>
 </form>
+
+@section Scripts {
+    <script type="module"
+            src="~/js/dist/games/play-links.js"
+            asp-append-version="true"></script>
+}

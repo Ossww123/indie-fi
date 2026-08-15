@@ -82,24 +82,7 @@ public sealed class GamePlayLinkManagementService
                 validation.Violations);
         }
 
-        // Delete and insert are intentionally separate database commands. The
-        // surrounding transaction makes room for reused sort positions while also
-        // restoring the original collection if an insert fails.
-        await _db.GamePlayLinks
-            .Where(link => link.GameId == gameId)
-            .ExecuteDeleteAsync(cancellationToken);
-
-        _db.GamePlayLinks.AddRange(validation.Links.Select((link, sortOrder) =>
-            new GamePlayLink
-            {
-                GameId = gameId,
-                DisplayName = link.DisplayName,
-                Provider = link.Provider,
-                TargetPlatform = link.TargetPlatform,
-                Url = link.Url,
-                SortOrder = sortOrder,
-            }));
-        await _db.SaveChangesAsync(cancellationToken);
+        await ReplaceValidatedAsync(gameId, validation.Links, cancellationToken);
         await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
 
         return new UpdateGamePlayLinksResult(
@@ -115,7 +98,32 @@ public sealed class GamePlayLinkManagementService
 
     public static string UrlField(int index) => $"Links[{index}].Url";
 
-    private static LinkValidationResult Validate(IReadOnlyList<GamePlayLinkInput> links)
+    internal async Task ReplaceValidatedAsync(
+        long gameId,
+        IReadOnlyList<NormalizedGamePlayLink> links,
+        CancellationToken cancellationToken = default)
+    {
+        // Delete and insert are intentionally separate database commands. The
+        // caller's transaction makes room for reused sort positions while also
+        // restoring the original collection if an insert fails.
+        await _db.GamePlayLinks
+            .Where(link => link.GameId == gameId)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        _db.GamePlayLinks.AddRange(links.Select((link, sortOrder) =>
+            new GamePlayLink
+            {
+                GameId = gameId,
+                DisplayName = link.DisplayName,
+                Provider = link.Provider,
+                TargetPlatform = link.TargetPlatform,
+                Url = link.Url,
+                SortOrder = sortOrder,
+            }));
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    internal static LinkValidationResult Validate(IReadOnlyList<GamePlayLinkInput> links)
     {
         var violations = new List<ValidationViolation>();
         var normalizedLinks = new List<NormalizedGamePlayLink>(links.Count);
@@ -208,13 +216,13 @@ public sealed class GamePlayLinkManagementService
             _ => "올바른 외부 플레이 주소를 입력해 주세요.",
         };
 
-    private sealed record NormalizedGamePlayLink(
+    internal sealed record NormalizedGamePlayLink(
         string DisplayName,
         GamePlayLinkProvider Provider,
         GamePlayLinkPlatform? TargetPlatform,
         string Url);
 
-    private sealed record LinkValidationResult(
+    internal sealed record LinkValidationResult(
         IReadOnlyList<NormalizedGamePlayLink> Links,
         IReadOnlyList<ValidationViolation> Violations);
 }
