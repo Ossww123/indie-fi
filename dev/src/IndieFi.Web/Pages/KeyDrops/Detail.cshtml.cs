@@ -205,4 +205,12 @@ public class DetailModel : PageModel
         WaitingRoomEntryState.Terminal => "대기실 종료",
         _ => string.Empty,
     };
+
+    public DateTimeOffset? GetAdmissionExpiresAt()
+    {
+        var unixTimeMilliseconds = WaitingRoom?.Entry?.AdmissionExpiresUnixTimeMilliseconds;
+        return unixTimeMilliseconds is null
+            ? null
+            : DateTimeOffset.FromUnixTimeMilliseconds(unixTimeMilliseconds.Value);
+    }
 }

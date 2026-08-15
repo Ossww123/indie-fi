@@ -94,6 +94,52 @@ public sealed class WaitingRoomPageTests
     }
 
     [Fact]
+    public async Task Join_WhenSlotIsAvailable_ShowsAbsoluteAdmissionDeadline()
+    {
+        var (email, password) = await PageTestSupport
+            .CreateUserWithKnownPasswordAsync(_fixture);
+        var dropId = await CreateActiveDropAsync();
+        var store = new InMemoryWaitingRoomStore
+        {
+            AdmitOnAdvance = true,
+        };
+
+        await using var factory = new WebAppFactory(
+            _fixture.ConnectionString,
+            waitingRoomStore: store);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        using var detailResponse = await client.GetAsync(
+            $"/KeyDrops/Detail/{dropId}",
+            TestContext.Current.CancellationToken);
+        var detailHtml = await detailResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var joinForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(detailHtml),
+        });
+
+        using var joinResponse = await client.PostAsync(
+            $"/KeyDrops/Detail/{dropId}?handler=Join",
+            joinForm,
+            TestContext.Current.CancellationToken);
+        using var restoredResponse = await client.GetAsync(
+            joinResponse.Headers.Location,
+            TestContext.Current.CancellationToken);
+        var restoredHtml = await restoredResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, restoredResponse.StatusCode);
+        Assert.Contains("입장 가능", restoredHtml);
+        Assert.Contains("data-admission-expires-at", restoredHtml);
+        Assert.Contains("재접속해도 입장 가능 시간은 연장되지 않으며", restoredHtml);
+        Assert.Contains("이 상태만으로 키가 예약되지는 않습니다", restoredHtml);
+        Assert.Single(store.Entries);
+        Assert.Equal(WaitingRoomEntryState.Admitted, store.Entries.Single().Value.State);
+    }
+
+    [Fact]
     public async Task Get_WhenRedisIsUnavailable_ShowsFixedFailureWithoutLeakingDetails()
     {
         var (email, password) = await PageTestSupport
@@ -148,6 +194,8 @@ public sealed class WaitingRoomPageTests
             Entries
         { get; } = new();
 
+        public bool AdmitOnAdvance { get; init; }
+
         public Task<WaitingRoomJoinResult> JoinAsync(
             WaitingRoomJoinCommand command,
             CancellationToken cancellationToken = default)
@@ -183,11 +231,19 @@ public sealed class WaitingRoomPageTests
                 ? null
                 : new WaitingRoomSnapshot(
                     entry,
-                    Position: checked((int)entry.Order),
-                    AheadCount: checked((int)entry.Order - 1),
-                    WaitingCount: Entries.Count,
+                    Position: entry.State == WaitingRoomEntryState.Waiting
+                        ? checked((int)entry.Order)
+                        : null,
+                    AheadCount: entry.State == WaitingRoomEntryState.Waiting
+                        ? checked((int)entry.Order - 1)
+                        : null,
+                    WaitingCount: Entries.Count(item =>
+                        item.Key.DropId == dropId
+                        && item.Value.State == WaitingRoomEntryState.Waiting),
                     PreWaitingCount: 0,
-                    AdmittedCount: 0,
+                    AdmittedCount: Entries.Count(item =>
+                        item.Key.DropId == dropId
+                        && item.Value.State == WaitingRoomEntryState.Admitted),
                     OrderFinalized: true));
         }
 
@@ -205,12 +261,34 @@ public sealed class WaitingRoomPageTests
 
         public Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
             long dropId,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WaitingRoomAdmissionAdvanceResult(
+            CancellationToken cancellationToken = default)
+        {
+            var promoted = new List<long>();
+            if (AdmitOnAdvance)
+            {
+                foreach (var item in Entries.Where(item =>
+                             item.Key.DropId == dropId
+                             && item.Value.State == WaitingRoomEntryState.Waiting))
+                {
+                    Entries[item.Key] = item.Value with
+                    {
+                        State = WaitingRoomEntryState.Admitted,
+                        AdmissionExpiresUnixTimeMilliseconds = DateTimeOffset.UtcNow
+                            .AddMinutes(2)
+                            .ToUnixTimeMilliseconds(),
+                    };
+                    promoted.Add(item.Key.UserId);
+                }
+            }
+
+            return Task.FromResult(new WaitingRoomAdmissionAdvanceResult(
                 WaitingRoomAdmissionAdvanceOutcome.Advanced,
+                promoted,
                 [],
-                [],
-                0));
+                Entries.Count(item =>
+                    item.Key.DropId == dropId
+                    && item.Value.State == WaitingRoomEntryState.Admitted)));
+        }
     }
 
     private sealed class UnavailableWaitingRoomStore : IWaitingRoomStore

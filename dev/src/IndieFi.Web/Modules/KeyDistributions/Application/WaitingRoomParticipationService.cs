@@ -72,6 +72,15 @@ public sealed class WaitingRoomParticipationService
 
         try
         {
+            var admission = await AdvanceAdmissionsIfOpenAsync(
+                dropId,
+                evaluation.State!,
+                cancellationToken);
+            if (admission is not null)
+            {
+                return admission;
+            }
+
             var snapshot = await _store.GetSnapshotAsync(
                 dropId,
                 userId,
@@ -118,22 +127,37 @@ public sealed class WaitingRoomParticipationService
             var joined = await _store.JoinAsync(
                 new WaitingRoomJoinCommand(dropId, userId, mode),
                 cancellationToken);
-            return joined.Outcome switch
+            if (joined.Outcome == WaitingRoomJoinOutcome.Terminal)
             {
-                WaitingRoomJoinOutcome.Created => new(
-                    WaitingRoomParticipationOutcome.Joined,
-                    joined.Entry),
-                WaitingRoomJoinOutcome.Existing => new(
-                    WaitingRoomParticipationOutcome.Existing,
-                    joined.Entry),
-                WaitingRoomJoinOutcome.Rejoined => new(
-                    WaitingRoomParticipationOutcome.Rejoined,
-                    joined.Entry),
-                WaitingRoomJoinOutcome.Terminal => new(
-                    WaitingRoomParticipationOutcome.Terminal),
+                return new WaitingRoomParticipationResult(
+                    WaitingRoomParticipationOutcome.Terminal);
+            }
+
+            var admission = await AdvanceAdmissionsIfOpenAsync(
+                dropId,
+                state,
+                cancellationToken);
+            if (admission is not null)
+            {
+                return admission;
+            }
+
+            var snapshot = await _store.GetSnapshotAsync(
+                dropId,
+                userId,
+                cancellationToken);
+            var outcome = joined.Outcome switch
+            {
+                WaitingRoomJoinOutcome.Created => WaitingRoomParticipationOutcome.Joined,
+                WaitingRoomJoinOutcome.Existing => WaitingRoomParticipationOutcome.Existing,
+                WaitingRoomJoinOutcome.Rejoined => WaitingRoomParticipationOutcome.Rejoined,
                 _ => throw new InvalidOperationException(
                     $"Unsupported waiting-room join outcome: {joined.Outcome}"),
             };
+            return new WaitingRoomParticipationResult(
+                outcome,
+                snapshot?.Entry ?? joined.Entry,
+                snapshot);
         }
         catch (WaitingRoomUnavailableException)
         {
@@ -223,6 +247,23 @@ public sealed class WaitingRoomParticipationService
             return new WaitingRoomParticipationResult(
                 WaitingRoomParticipationOutcome.Unavailable);
         }
+    }
+
+    private async Task<WaitingRoomParticipationResult?> AdvanceAdmissionsIfOpenAsync(
+        long dropId,
+        DropState state,
+        CancellationToken cancellationToken)
+    {
+        if (state.DatabaseNow < state.OpensAt)
+        {
+            return null;
+        }
+
+        var result = await _store.AdvanceAdmissionsAsync(dropId, cancellationToken);
+        return result.Outcome == WaitingRoomAdmissionAdvanceOutcome.Terminal
+            ? new WaitingRoomParticipationResult(
+                WaitingRoomParticipationOutcome.Terminal)
+            : null;
     }
 
     private static GateEvaluation Result(

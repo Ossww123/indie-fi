@@ -70,6 +70,29 @@ public sealed class WaitingRoomParticipationServiceTests
     }
 
     [Fact]
+    public async Task JoinAsync_AfterOpen_AdvancesSlotAndReturnsLatestSnapshot()
+    {
+        var arranged = await CreateDropAsync(TimeSpan.FromMinutes(-1));
+        var store = new RecordingWaitingRoomStore
+        {
+            AdmitOnAdvance = true,
+        };
+
+        await using var db = _fixture.NewDbContext();
+        var result = await NewService(db, store).JoinAsync(
+            arranged.DropId,
+            arranged.UserId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(WaitingRoomParticipationOutcome.Joined, result.Outcome);
+        Assert.Equal(1, store.AdvanceCalls);
+        Assert.Equal(WaitingRoomEntryState.Admitted, result.Entry!.State);
+        Assert.NotNull(result.Entry.AdmissionExpiresUnixTimeMilliseconds);
+        Assert.Equal(1, result.Snapshot!.AdmittedCount);
+        Assert.Equal(0, result.Snapshot.WaitingCount);
+    }
+
+    [Fact]
     public async Task JoinAsync_WhenEligibilityIsNotMet_DoesNotWriteRedis()
     {
         var arranged = await CreateDropAsync(
@@ -152,7 +175,11 @@ public sealed class WaitingRoomParticipationServiceTests
     {
         public WaitingRoomJoinCommand? LastJoinCommand { get; private set; }
 
-        public WaitingRoomStoredEntry? ExistingEntry { get; init; }
+        public WaitingRoomStoredEntry? ExistingEntry { get; set; }
+
+        public bool AdmitOnAdvance { get; init; }
+
+        public int AdvanceCalls { get; private set; }
 
         public Task<WaitingRoomJoinResult> JoinAsync(
             WaitingRoomJoinCommand command,
@@ -162,9 +189,10 @@ public sealed class WaitingRoomParticipationServiceTests
             var state = command.Mode == WaitingRoomJoinMode.PreOpen
                 ? WaitingRoomEntryState.PreWaiting
                 : WaitingRoomEntryState.Waiting;
+            ExistingEntry ??= new WaitingRoomStoredEntry(state, 1, 1000);
             return Task.FromResult(new WaitingRoomJoinResult(
                 WaitingRoomJoinOutcome.Created,
-                new WaitingRoomStoredEntry(state, 1, 1000)));
+                ExistingEntry));
         }
 
         public Task<WaitingRoomStoredEntry?> GetEntryAsync(
@@ -181,12 +209,12 @@ public sealed class WaitingRoomParticipationServiceTests
                 ? null
                 : new WaitingRoomSnapshot(
                     ExistingEntry,
-                    Position: null,
-                    AheadCount: null,
-                    WaitingCount: 0,
-                    PreWaitingCount: 1,
-                    AdmittedCount: 0,
-                    OrderFinalized: false));
+                    Position: ExistingEntry.State == WaitingRoomEntryState.Waiting ? 1 : null,
+                    AheadCount: ExistingEntry.State == WaitingRoomEntryState.Waiting ? 0 : null,
+                    WaitingCount: ExistingEntry.State == WaitingRoomEntryState.Waiting ? 1 : 0,
+                    PreWaitingCount: ExistingEntry.State == WaitingRoomEntryState.PreWaiting ? 1 : 0,
+                    AdmittedCount: ExistingEntry.State == WaitingRoomEntryState.Admitted ? 1 : 0,
+                    OrderFinalized: ExistingEntry.State != WaitingRoomEntryState.PreWaiting));
 
         public Task<WaitingRoomTransitionResult> TransitionAsync(
             WaitingRoomTransitionCommand command,
@@ -202,11 +230,25 @@ public sealed class WaitingRoomParticipationServiceTests
 
         public Task<WaitingRoomAdmissionAdvanceResult> AdvanceAdmissionsAsync(
             long dropId,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WaitingRoomAdmissionAdvanceResult(
+            CancellationToken cancellationToken = default)
+        {
+            AdvanceCalls++;
+            if (AdmitOnAdvance && ExistingEntry?.State == WaitingRoomEntryState.Waiting)
+            {
+                ExistingEntry = ExistingEntry with
+                {
+                    State = WaitingRoomEntryState.Admitted,
+                    AdmissionExpiresUnixTimeMilliseconds = DateTimeOffset.UtcNow
+                        .AddMinutes(2)
+                        .ToUnixTimeMilliseconds(),
+                };
+            }
+
+            return Task.FromResult(new WaitingRoomAdmissionAdvanceResult(
                 WaitingRoomAdmissionAdvanceOutcome.Advanced,
                 [],
                 [],
-                0));
+                ExistingEntry?.State == WaitingRoomEntryState.Admitted ? 1 : 0));
+        }
     }
 }
