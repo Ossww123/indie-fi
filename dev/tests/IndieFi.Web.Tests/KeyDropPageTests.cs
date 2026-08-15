@@ -328,11 +328,10 @@ public sealed class KeyDropPageTests
 
         for (var index = 0; index < keyCount; index++)
         {
-            db.GameKeys.Add(new GameKey
-            {
-                DropId = drop.Id,
-                KeyValue = $"TEST-{Guid.NewGuid():N}"
-            });
+            TestAccountProtection.AddGameKey(
+                db,
+                drop,
+                $"TEST-{Guid.NewGuid():N}");
         }
 
         await db.SaveChangesAsync(cancellationToken);

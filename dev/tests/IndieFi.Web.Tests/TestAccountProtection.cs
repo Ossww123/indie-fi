@@ -4,6 +4,7 @@ using IndieFi.Web.Infrastructure.Cryptography;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -39,6 +40,46 @@ internal static class TestAccountProtection
     public static GameKeyProtectionService CreateGameKeyProtectionService()
     {
         return new GameKeyProtectionService(new Provider());
+    }
+
+    public static GameKey AddGameKey(
+        AppDbContext db,
+        KeyDrop drop,
+        string value)
+    {
+        var parsed = GameKeyPolicy.ParseBatch(value);
+        if (!parsed.IsValid || parsed.Keys.Count != 1)
+        {
+            throw new ArgumentException(
+                "A valid test game key is required.",
+                nameof(value));
+        }
+
+        var gameKeyValue = parsed.Keys[0];
+        var protection = CreateGameKeyProtectionService();
+        var protectedKey = protection.Protect(gameKeyValue);
+        var gameKey = new GameKey
+        {
+            Drop = drop,
+            Ciphertext = protectedKey.Ciphertext,
+            Nonce = protectedKey.Nonce,
+            AuthenticationTag = protectedKey.AuthenticationTag,
+            EncryptionKeyId = protectedKey.EncryptionKeyId,
+        };
+        db.GameKeys.Add(gameKey);
+
+        foreach (var fingerprint in
+                 protection.CreateWritableFingerprints(gameKeyValue))
+        {
+            db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
+            {
+                GameKey = gameKey,
+                KeyId = fingerprint.KeyId,
+                Value = fingerprint.Value,
+            });
+        }
+
+        return gameKey;
     }
 
     public static User AddUser(

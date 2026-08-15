@@ -138,7 +138,6 @@ internal static class Program
     {
         long cursor = 0;
         var scanned = 0;
-        var encrypted = 0;
         var reencrypted = 0;
         var fingerprintsAdded = 0;
 
@@ -152,7 +151,6 @@ internal static class Program
 
             cursor = result.NextGameKeyId;
             scanned += result.ScannedCount;
-            encrypted += result.EncryptedCount;
             reencrypted += result.ReencryptedCount;
             fingerprintsAdded += result.AddedFingerprintCount;
             Console.WriteLine($"Processed through game key ID {cursor}.");
@@ -160,7 +158,7 @@ internal static class Program
 
         Console.WriteLine(
             $"Game key migration complete. Scanned={scanned}, "
-            + $"Encrypted={encrypted}, Reencrypted={reencrypted}, "
+            + $"Reencrypted={reencrypted}, "
             + $"FingerprintsAdded={fingerprintsAdded}.");
         return 0;
     }

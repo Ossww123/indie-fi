@@ -20,33 +20,26 @@ public sealed class GameKeyMigrationServiceTests
     }
 
     [Fact]
-    public async Task MigrateBatchAsync_BackfillsPlaintextAndIsIdempotentAfterRestart()
+    public async Task MigrateBatchAsync_BackfillsFingerprintsAndIsIdempotentAfterRestart()
     {
         long firstGameKeyId;
         long secondGameKeyId;
         var firstValue = $"BACKFILL-FIRST-{Guid.NewGuid():N}";
         var secondValue = $"BACKFILL-SECOND-{Guid.NewGuid():N}";
+        var provider = CreateRotationProvider();
+        var protection = new GameKeyProtectionService(provider);
 
         await using (var setupDb = _fixture.NewOwnerDbContext())
         {
             var drop = await CreateDropAsync(setupDb);
-            var first = new GameKey
-            {
-                DropId = drop.Id,
-                KeyValue = firstValue,
-            };
-            var second = new GameKey
-            {
-                DropId = drop.Id,
-                KeyValue = secondValue,
-            };
+            var first = NewEncryptedKey(drop, protection, firstValue);
+            var second = NewEncryptedKey(drop, protection, secondValue);
             setupDb.GameKeys.AddRange(first, second);
             await setupDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             firstGameKeyId = first.Id;
             secondGameKeyId = second.Id;
         }
 
-        var provider = CreateRotationProvider();
         await using (var interruptedDb = _fixture.NewOwnerDbContext())
         {
             var interruptedService = new GameKeyMigrationService(
@@ -58,7 +51,6 @@ public sealed class GameKeyMigrationServiceTests
                 TestContext.Current.CancellationToken);
 
             Assert.Equal(firstGameKeyId, firstBatch.NextGameKeyId);
-            Assert.Equal(1, firstBatch.EncryptedCount);
             Assert.Equal(0, firstBatch.ReencryptedCount);
             Assert.Equal(2, firstBatch.AddedFingerprintCount);
         }
@@ -72,7 +64,6 @@ public sealed class GameKeyMigrationServiceTests
 
         Assert.Equal(secondGameKeyId, resumed.NextGameKeyId);
         Assert.Equal(2, resumed.ScannedCount);
-        Assert.Equal(1, resumed.EncryptedCount);
         Assert.Equal(0, resumed.ReencryptedCount);
         Assert.Equal(2, resumed.AddedFingerprintCount);
 
@@ -96,8 +87,6 @@ public sealed class GameKeyMigrationServiceTests
             gameKey => Assert.Equal(
                 "game-encryption-test-v2",
                 gameKey.EncryptionKeyId));
-        Assert.Equal(firstValue, gameKeys[0].KeyValue);
-        Assert.Equal(secondValue, gameKeys[1].KeyValue);
         Assert.All(
             gameKeys,
             gameKey => Assert.Equal(
@@ -106,7 +95,6 @@ public sealed class GameKeyMigrationServiceTests
                     .Where(item => item.GameKeyId == gameKey.Id)
                     .Select(item => item.KeyId)));
 
-        var protection = new GameKeyProtectionService(provider);
         Assert.Equal(firstValue, Unprotect(protection, gameKeys[0]).Value);
         Assert.Equal(secondValue, Unprotect(protection, gameKeys[1]).Value);
 
@@ -122,7 +110,6 @@ public sealed class GameKeyMigrationServiceTests
             batchSize: 10,
             TestContext.Current.CancellationToken);
         Assert.Equal(2, repeated.ScannedCount);
-        Assert.Equal(0, repeated.EncryptedCount);
         Assert.Equal(0, repeated.ReencryptedCount);
         Assert.Equal(0, repeated.AddedFingerprintCount);
     }
@@ -170,7 +157,6 @@ public sealed class GameKeyMigrationServiceTests
             batchSize: 1,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(0, result.EncryptedCount);
         Assert.Equal(1, result.ReencryptedCount);
         Assert.Equal(1, result.AddedFingerprintCount);
 
@@ -200,27 +186,20 @@ public sealed class GameKeyMigrationServiceTests
         var duplicateValue = $"DUPLICATE-SECRET-{Guid.NewGuid():N}";
         long firstGameKeyId;
         long secondGameKeyId;
+        var provider = CreateRotationProvider();
+        var protection = new GameKeyProtectionService(provider);
 
         await using (var setupDb = _fixture.NewOwnerDbContext())
         {
             var drop = await CreateDropAsync(setupDb);
-            var first = new GameKey
-            {
-                DropId = drop.Id,
-                KeyValue = duplicateValue,
-            };
-            var second = new GameKey
-            {
-                DropId = drop.Id,
-                KeyValue = duplicateValue,
-            };
+            var first = NewEncryptedKey(drop, protection, duplicateValue);
+            var second = NewEncryptedKey(drop, protection, duplicateValue);
             setupDb.GameKeys.AddRange(first, second);
             await setupDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             firstGameKeyId = first.Id;
             secondGameKeyId = second.Id;
         }
 
-        var provider = CreateRotationProvider();
         await using (var migrationDb = _fixture.NewOwnerDbContext())
         {
             var service = new GameKeyMigrationService(migrationDb, provider);
@@ -258,8 +237,11 @@ public sealed class GameKeyMigrationServiceTests
                 fingerprint => fingerprint.GameKeyId == secondGameKeyId,
                 TestContext.Current.CancellationToken);
 
-        Assert.NotNull(storedKeys[0].Ciphertext);
-        Assert.Null(storedKeys[1].Ciphertext);
+        Assert.All(
+            storedKeys,
+            gameKey => Assert.Equal(
+                "game-encryption-test-v2",
+                gameKey.EncryptionKeyId));
         Assert.Equal(0, secondFingerprintCount);
     }
 
@@ -351,6 +333,22 @@ public sealed class GameKeyMigrationServiceTests
             gameKey.Nonce!,
             gameKey.AuthenticationTag!,
             gameKey.EncryptionKeyId!));
+    }
+
+    private static GameKey NewEncryptedKey(
+        KeyDrop drop,
+        GameKeyProtectionService protection,
+        string value)
+    {
+        var protectedKey = protection.Protect(ParseKey(value));
+        return new GameKey
+        {
+            DropId = drop.Id,
+            Ciphertext = protectedKey.Ciphertext,
+            Nonce = protectedKey.Nonce,
+            AuthenticationTag = protectedKey.AuthenticationTag,
+            EncryptionKeyId = protectedKey.EncryptionKeyId,
+        };
     }
 
     private async Task<KeyDrop> CreateDropAsync(AppDbContext db)

@@ -30,7 +30,6 @@ public sealed class GrantedGameKeyReader
                 grant => new { Id = grant.KeyId, grant.DropId },
                 key => new { Id = key.Id, key.DropId },
                 (_, key) => new StoredGrantedGameKey(
-                    key.KeyValue,
                     key.Ciphertext,
                     key.Nonce,
                     key.AuthenticationTag,
@@ -42,21 +41,6 @@ public sealed class GrantedGameKeyReader
             return null;
         }
 
-        if (storedKey.Ciphertext is null)
-        {
-            return storedKey.KeyValue
-                ?? throw new InvalidOperationException(
-                    "The granted game key has no stored value.");
-        }
-
-        if (storedKey.Nonce is null
-            || storedKey.AuthenticationTag is null
-            || storedKey.EncryptionKeyId is null)
-        {
-            throw new InvalidOperationException(
-                "The granted game key has incomplete encryption metadata.");
-        }
-
         return _gameKeyProtection.Unprotect(new ProtectedGameKey(
             storedKey.Ciphertext,
             storedKey.Nonce,
@@ -65,11 +49,10 @@ public sealed class GrantedGameKeyReader
     }
 
     private sealed record StoredGrantedGameKey(
-        string? KeyValue,
-        byte[]? Ciphertext,
-        byte[]? Nonce,
-        byte[]? AuthenticationTag,
-        string? EncryptionKeyId)
+        byte[] Ciphertext,
+        byte[] Nonce,
+        byte[] AuthenticationTag,
+        string EncryptionKeyId)
     {
         public override string ToString() => "[STORED GRANTED GAME KEY]";
     }

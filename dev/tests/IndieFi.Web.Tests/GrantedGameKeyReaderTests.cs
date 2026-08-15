@@ -2,6 +2,7 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
+using System.Security.Cryptography;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -71,23 +72,23 @@ public sealed class GrantedGameKeyReaderTests
     }
 
     [Fact]
-    public async Task GetForUserAsync_WhenLegacyPlaintextKeyWasGranted_ReturnsCompatibilityValue()
+    public async Task GetForUserAsync_WhenCiphertextIsTampered_FailsWithoutExposingKey()
     {
-        const string LegacyKey = "LEGACY-PLAINTEXT-GAME-KEY";
+        const string Secret = "TAMPERED-ENCRYPTED-GAME-KEY";
         long dropId;
         long recipientId;
-        await using (var arrangeDb = _fixture.NewDbContext())
+        long gameKeyId;
+        await using (var arrangeDb = _fixture.NewOwnerDbContext())
         {
             var (drop, recipient, _) = await CreateDropAndUsersAsync(arrangeDb);
             dropId = drop.Id;
             recipientId = recipient.Id;
-            var gameKey = new GameKey
-            {
-                DropId = drop.Id,
-                KeyValue = LegacyKey,
-            };
-            arrangeDb.GameKeys.Add(gameKey);
+            var gameKey = TestAccountProtection.AddGameKey(
+                arrangeDb,
+                drop,
+                Secret);
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            gameKeyId = gameKey.Id;
             arrangeDb.KeyGrants.Add(new KeyGrant
             {
                 DropId = drop.Id,
@@ -95,60 +96,22 @@ public sealed class GrantedGameKeyReaderTests
                 KeyId = gameKey.Id,
             });
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
 
-        await using var readDb = _fixture.NewDbContext();
-        var result = await NewReader(readDb).GetForUserAsync(
-            dropId,
-            recipientId,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(LegacyKey, result);
-    }
-
-    [Fact]
-    public async Task GetForUserAsync_DuringBackfill_PrefersAuthenticatedCiphertext()
-    {
-        const string Secret = "AUTHENTICATED-BACKFILL-GAME-KEY";
-        const string StalePlaintext = "DO-NOT-RETURN-THIS-VALUE";
-        long dropId;
-        long recipientId;
-        await using (var arrangeDb = _fixture.NewDbContext())
-        {
-            var (drop, recipient, _) = await CreateDropAndUsersAsync(arrangeDb);
-            dropId = drop.Id;
-            recipientId = recipient.Id;
-            var protectedKey = TestAccountProtection
-                .CreateGameKeyProtectionService()
-                .Protect(ParseKey(Secret));
-            var gameKey = new GameKey
-            {
-                DropId = drop.Id,
-                KeyValue = StalePlaintext,
-                Ciphertext = protectedKey.Ciphertext,
-                Nonce = protectedKey.Nonce,
-                AuthenticationTag = protectedKey.AuthenticationTag,
-                EncryptionKeyId = protectedKey.EncryptionKeyId,
-            };
-            arrangeDb.GameKeys.Add(gameKey);
-            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-            arrangeDb.KeyGrants.Add(new KeyGrant
-            {
-                DropId = drop.Id,
-                UserId = recipient.Id,
-                KeyId = gameKey.Id,
-            });
+            var tamperedTag = gameKey.AuthenticationTag.ToArray();
+            tamperedTag[0] ^= 0xff;
+            gameKey.AuthenticationTag = tamperedTag;
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using var readDb = _fixture.NewDbContext();
-        var result = await NewReader(readDb).GetForUserAsync(
-            dropId,
-            recipientId,
-            TestContext.Current.CancellationToken);
+        var exception = await Assert.ThrowsAsync<AuthenticationTagMismatchException>(() =>
+            NewReader(readDb).GetForUserAsync(
+                dropId,
+                recipientId,
+                TestContext.Current.CancellationToken));
 
-        Assert.Equal(Secret, result);
-        Assert.NotEqual(StalePlaintext, result);
+        Assert.True(gameKeyId > 0);
+        Assert.DoesNotContain(Secret, exception.ToString(), StringComparison.Ordinal);
     }
 
     private static GrantedGameKeyReader NewReader(AppDbContext db) => new(

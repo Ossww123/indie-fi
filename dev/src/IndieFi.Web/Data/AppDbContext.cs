@@ -553,19 +553,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             gameKey.ToTable("game_keys", table =>
             {
                 table.HasCheckConstraint(
-                    "CK_game_keys_storage_present",
-                    "key_value IS NOT NULL OR ciphertext IS NOT NULL");
-                table.HasCheckConstraint(
                     "CK_game_keys_encryption_shape",
-                    "num_nonnulls(ciphertext, nonce, authentication_tag, "
-                    + "encryption_key_id) = 0 OR ("
-                    + "num_nonnulls(ciphertext, nonce, authentication_tag, "
-                    + "encryption_key_id) = 4 AND "
-                    + "octet_length(ciphertext) BETWEEN 1 AND 800 AND "
+                    "octet_length(ciphertext) BETWEEN 1 AND 800 AND "
                     + "octet_length(nonce) = 12 AND "
                     + "octet_length(authentication_tag) = 16 AND "
                     + "char_length(encryption_key_id) BETWEEN 1 AND 100 AND "
-                    + "encryption_key_id = btrim(encryption_key_id))");
+                    + "encryption_key_id = btrim(encryption_key_id)");
             });
 
             gameKey.HasKey(key => key.Id);
@@ -575,21 +568,22 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("drop_id")
                 .IsRequired();
 
-            gameKey.Property(key => key.KeyValue)
-                .HasColumnName("key_value");
-
             gameKey.Property(key => key.Ciphertext)
-                .HasColumnName("ciphertext");
+                .HasColumnName("ciphertext")
+                .IsRequired();
 
             gameKey.Property(key => key.Nonce)
-                .HasColumnName("nonce");
+                .HasColumnName("nonce")
+                .IsRequired();
 
             gameKey.Property(key => key.AuthenticationTag)
-                .HasColumnName("authentication_tag");
+                .HasColumnName("authentication_tag")
+                .IsRequired();
 
             gameKey.Property(key => key.EncryptionKeyId)
                 .HasColumnName("encryption_key_id")
-                .HasMaxLength(100);
+                .HasMaxLength(100)
+                .IsRequired();
 
             gameKey.Property(key => key.CreatedAt)
                 .HasColumnName("created_at")

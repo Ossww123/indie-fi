@@ -186,15 +186,6 @@ public sealed class KeyDropSchedulingService
     private async Task<bool> ContainsRegisteredKeyAsync(
         IReadOnlyList<GameKeyValue> keys)
     {
-        var plaintextValues = keys.Select(key => key.Value).ToArray();
-        if (await _db.GameKeys
-            .AsNoTracking()
-            .AnyAsync(key =>
-                key.KeyValue != null && plaintextValues.Contains(key.KeyValue)))
-        {
-            return true;
-        }
-
         var readableFingerprints = keys
             .SelectMany(_gameKeyProtection.CreateReadableFingerprints)
             .GroupBy(fingerprint => fingerprint.KeyId, StringComparer.Ordinal);

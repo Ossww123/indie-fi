@@ -219,11 +219,10 @@ public sealed class AccountMutationBlockingTests
                 TotalKeys = 1,
             };
             arrangeDb.KeyDrops.Add(drop);
-            arrangeDb.GameKeys.Add(new GameKey
-            {
-                Drop = drop,
-                KeyValue = $"BLOCKED-{Guid.NewGuid():N}",
-            });
+            TestAccountProtection.AddGameKey(
+                arrangeDb,
+                drop,
+                $"BLOCKED-{Guid.NewGuid():N}");
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             gameId = game.Id;
             dropId = drop.Id;

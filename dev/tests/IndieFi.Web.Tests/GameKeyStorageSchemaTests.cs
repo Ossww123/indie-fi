@@ -43,12 +43,10 @@ public sealed class GameKeyStorageSchemaTests
         db.KeyDrops.AddRange(firstDrop, secondDrop);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var gameKey = new GameKey
-        {
-            DropId = secondDrop.Id,
-            KeyValue = $"KEY-{Guid.NewGuid():N}",
-        };
-        db.GameKeys.Add(gameKey);
+        var gameKey = TestAccountProtection.AddGameKey(
+            db,
+            secondDrop,
+            $"KEY-{Guid.NewGuid():N}");
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         db.KeyGrants.Add(new KeyGrant
@@ -70,34 +68,14 @@ public sealed class GameKeyStorageSchemaTests
     }
 
     [Fact]
-    public async Task Database_AcceptsPlaintextAndEncryptedOnlyRowsDuringTransition()
+    public async Task Database_StoresEncryptedRowsAndHasNoPlaintextColumn()
     {
         await using var db = _fixture.NewDbContext();
         var drop = await CreateDropAsync(db);
-        var service = TestAccountProtection.CreateGameKeyProtectionService();
-        var gameKeyValue = ParseKey($"ENCRYPTED-{Guid.NewGuid():N}");
-        var protectedKey = service.Protect(gameKeyValue);
-        var fingerprint = service.CreateWritableFingerprints(gameKeyValue).Single();
-        var plaintextKey = new GameKey
-        {
-            DropId = drop.Id,
-            KeyValue = $"PLAINTEXT-{Guid.NewGuid():N}",
-        };
-        var encryptedKey = new GameKey
-        {
-            DropId = drop.Id,
-            Ciphertext = protectedKey.Ciphertext,
-            Nonce = protectedKey.Nonce,
-            AuthenticationTag = protectedKey.AuthenticationTag,
-            EncryptionKeyId = protectedKey.EncryptionKeyId,
-        };
-        db.GameKeys.AddRange(plaintextKey, encryptedKey);
-        db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
-        {
-            GameKey = encryptedKey,
-            KeyId = fingerprint.KeyId,
-            Value = fingerprint.Value,
-        });
+        var encryptedKey = TestAccountProtection.AddGameKey(
+            db,
+            drop,
+            $"ENCRYPTED-{Guid.NewGuid():N}");
 
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -109,11 +87,24 @@ public sealed class GameKeyStorageSchemaTests
             item => item.GameKeyId == encryptedKey.Id,
             TestContext.Current.CancellationToken);
 
-        Assert.Null(storedEncryptedKey.KeyValue);
         Assert.NotNull(storedEncryptedKey.Ciphertext);
-        Assert.True(protectedKey.Ciphertext.SequenceEqual(storedEncryptedKey.Ciphertext));
-        Assert.Equal(protectedKey.EncryptionKeyId, storedEncryptedKey.EncryptionKeyId);
+        Assert.Equal(GameKeyProtectionService.NonceSize, storedEncryptedKey.Nonce.Length);
+        Assert.Equal(
+            GameKeyProtectionService.AuthenticationTagSize,
+            storedEncryptedKey.AuthenticationTag.Length);
         Assert.Equal(GameKeyProtectionService.FingerprintSize, storedFingerprint.Value.Length);
+
+        var columns = await db.Database
+            .SqlQueryRaw<string>(
+                """
+                SELECT column_name AS "Value"
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'game_keys'
+                """)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain("key_value", columns);
+        Assert.Contains("ciphertext", columns);
     }
 
     [Fact]
@@ -124,7 +115,6 @@ public sealed class GameKeyStorageSchemaTests
         db.GameKeys.Add(new GameKey
         {
             DropId = drop.Id,
-            KeyValue = $"PLAINTEXT-{Guid.NewGuid():N}",
             Ciphertext = [1],
         });
 
@@ -138,7 +128,7 @@ public sealed class GameKeyStorageSchemaTests
     }
 
     [Fact]
-    public async Task Database_RejectsGameKeyWithoutPlaintextOrCiphertext()
+    public async Task Database_RejectsGameKeyWithoutEncryptedMaterial()
     {
         await using var db = _fixture.NewDbContext();
         var drop = await CreateDropAsync(db);
@@ -153,7 +143,7 @@ public sealed class GameKeyStorageSchemaTests
             exception.InnerException);
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, postgresException.SqlState);
-        Assert.Equal("CK_game_keys_storage_present", postgresException.ConstraintName);
+        Assert.Equal("CK_game_keys_encryption_shape", postgresException.ConstraintName);
     }
 
     [Theory]
@@ -192,8 +182,8 @@ public sealed class GameKeyStorageSchemaTests
     {
         await using var db = _fixture.NewDbContext();
         var drop = await CreateDropAsync(db);
-        var firstKey = NewPlaintextKey(drop);
-        var secondKey = NewPlaintextKey(drop);
+        var firstKey = NewEncryptedKey(drop);
+        var secondKey = NewEncryptedKey(drop);
         db.GameKeys.AddRange(firstKey, secondKey);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -231,7 +221,7 @@ public sealed class GameKeyStorageSchemaTests
     {
         await using var db = _fixture.NewDbContext();
         var drop = await CreateDropAsync(db);
-        var gameKey = NewPlaintextKey(drop);
+        var gameKey = NewEncryptedKey(drop);
         db.GameKeys.Add(gameKey);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.GameKeyFingerprints.Add(new StoredGameKeyFingerprint
@@ -257,7 +247,7 @@ public sealed class GameKeyStorageSchemaTests
     {
         await using var db = _fixture.NewDbContext();
         var drop = await CreateDropAsync(db);
-        var gameKey = NewPlaintextKey(drop);
+        var gameKey = NewEncryptedKey(drop);
         db.GameKeys.Add(gameKey);
         var sharedValue = Enumerable.Repeat((byte)43, 32).ToArray();
         db.GameKeyFingerprints.AddRange(
@@ -290,17 +280,17 @@ public sealed class GameKeyStorageSchemaTests
         await using (var arrangeDb = _fixture.NewDbContext())
         {
             var drop = await CreateDropAsync(arrangeDb);
-            var gameKey = NewPlaintextKey(drop);
+            var gameKey = NewEncryptedKey(drop);
             arrangeDb.GameKeys.Add(gameKey);
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             gameKeyId = gameKey.Id;
         }
 
         await using var updateDb = _fixture.NewDbContext();
-        const string ReplacementValue = "UPDATED";
+        var replacementCiphertext = new byte[] { 1 };
         var updateException = await Assert.ThrowsAsync<PostgresException>(() =>
             updateDb.Database.ExecuteSqlInterpolatedAsync(
-                $"UPDATE game_keys SET key_value = {ReplacementValue} WHERE id = {gameKeyId}",
+                $"UPDATE game_keys SET ciphertext = {replacementCiphertext} WHERE id = {gameKeyId}",
                 TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, updateException.SqlState);
 
@@ -331,11 +321,21 @@ public sealed class GameKeyStorageSchemaTests
         return drop;
     }
 
-    private static GameKey NewPlaintextKey(KeyDrop drop) => new()
+    private static GameKey NewEncryptedKey(KeyDrop drop)
     {
-        DropId = drop.Id,
-        KeyValue = $"KEY-{Guid.NewGuid():N}",
-    };
+        var value = ParseKey($"KEY-{Guid.NewGuid():N}");
+        var protectedKey = TestAccountProtection
+            .CreateGameKeyProtectionService()
+            .Protect(value);
+        return new GameKey
+        {
+            DropId = drop.Id,
+            Ciphertext = protectedKey.Ciphertext,
+            Nonce = protectedKey.Nonce,
+            AuthenticationTag = protectedKey.AuthenticationTag,
+            EncryptionKeyId = protectedKey.EncryptionKeyId,
+        };
+    }
 
     private static GameKeyValue ParseKey(string value)
     {

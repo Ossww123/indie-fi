@@ -63,12 +63,11 @@ public sealed class KeyDropSchedulingServiceTests
             TimeSpan.FromMilliseconds(1));
         Assert.All(keys, key =>
         {
-            Assert.Null(key.KeyValue);
             Assert.NotNull(key.Ciphertext);
-            Assert.Equal(GameKeyProtectionService.NonceSize, key.Nonce?.Length);
+            Assert.Equal(GameKeyProtectionService.NonceSize, key.Nonce.Length);
             Assert.Equal(
                 GameKeyProtectionService.AuthenticationTagSize,
-                key.AuthenticationTag?.Length);
+                key.AuthenticationTag.Length);
             Assert.Equal("game-encryption-test-v1", key.EncryptionKeyId);
         });
         Assert.Equal(["KEY-ONE", "KEY-TWO"], decryptedKeys);
@@ -181,9 +180,6 @@ public sealed class KeyDropSchedulingServiceTests
         Assert.False(await verificationDb.KeyDrops.AnyAsync(
             drop => drop.GameId == gameId,
             TestContext.Current.CancellationToken));
-        Assert.False(await verificationDb.GameKeys.AnyAsync(
-            key => key.KeyValue == secretKey,
-            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -254,51 +250,6 @@ public sealed class KeyDropSchedulingServiceTests
         Assert.Equal(KeyDropSchedulingService.KeysField, violation.Field);
         Assert.DoesNotContain(secretKey, violation.Message);
         Assert.Single(drops);
-    }
-
-    [Fact]
-    public async Task ScheduleAsync_WhenLegacyPlaintextKeyExists_RejectsWholeNewDrop()
-    {
-        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
-        const string secretKey = "LEGACY-GLOBALLY-DUPLICATE-KEY";
-        await using (var arrangeDb = _fixture.NewOwnerDbContext())
-        {
-            var legacyDrop = new KeyDrop
-            {
-                GameId = gameId,
-                OwnerId = ownerId,
-                OpensAt = DateTimeOffset.UtcNow.AddHours(1),
-                TotalKeys = 1,
-            };
-            arrangeDb.KeyDrops.Add(legacyDrop);
-            arrangeDb.GameKeys.Add(new GameKey
-            {
-                Drop = legacyDrop,
-                KeyValue = secretKey,
-            });
-            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        ScheduleKeyDropResult duplicate;
-        await using (var serviceDb = _fixture.NewDbContext())
-        {
-            duplicate = await NewService(serviceDb).ScheduleAsync(
-                gameId,
-                ownerId,
-                DateTimeOffset.UtcNow.AddHours(2),
-                secretKey);
-        }
-
-        await using var verificationDb = _fixture.NewDbContext();
-        Assert.Equal(ScheduleKeyDropOutcome.Invalid, duplicate.Outcome);
-        Assert.DoesNotContain(
-            secretKey,
-            Assert.Single(duplicate.Violations).Message);
-        Assert.Equal(
-            1,
-            await verificationDb.KeyDrops.CountAsync(
-                drop => drop.GameId == gameId,
-                TestContext.Current.CancellationToken));
     }
 
     private async Task<(long OwnerId, long GameId)> CreateOwnerAndGameAsync()

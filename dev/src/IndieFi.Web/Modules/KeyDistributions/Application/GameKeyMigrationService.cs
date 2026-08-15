@@ -60,7 +60,6 @@ public sealed class GameKeyMigrationService
                 afterGameKeyId,
                 0,
                 0,
-                0,
                 0);
         }
 
@@ -76,7 +75,6 @@ public sealed class GameKeyMigrationService
             (string KeyId, string Value),
             long>();
 
-        var encryptedCount = 0;
         var reencryptedCount = 0;
         var addedFingerprintCount = 0;
 
@@ -139,21 +137,13 @@ public sealed class GameKeyMigrationService
                 continue;
             }
 
-            var wasEncrypted = HasCompleteEncryption(gameKey);
             var protectedKey = _gameKeyProtection.Protect(value);
             gameKey.Ciphertext = protectedKey.Ciphertext;
             gameKey.Nonce = protectedKey.Nonce;
             gameKey.AuthenticationTag = protectedKey.AuthenticationTag;
             gameKey.EncryptionKeyId = protectedKey.EncryptionKeyId;
 
-            if (wasEncrypted)
-            {
-                reencryptedCount++;
-            }
-            else
-            {
-                encryptedCount++;
-            }
+            reencryptedCount++;
         }
 
         try
@@ -174,7 +164,6 @@ public sealed class GameKeyMigrationService
         return new GameKeyMigrationBatchResult(
             gameKeys[^1].Id,
             gameKeys.Count,
-            encryptedCount,
             reencryptedCount,
             addedFingerprintCount);
     }
@@ -214,8 +203,7 @@ public sealed class GameKeyMigrationService
 
         foreach (var gameKey in gameKeys)
         {
-            if (!HasCompleteEncryption(gameKey)
-                || !string.Equals(
+            if (!string.Equals(
                     gameKey.EncryptionKeyId,
                     currentEncryptionKeyId,
                     StringComparison.Ordinal))
@@ -318,56 +306,11 @@ public sealed class GameKeyMigrationService
 
     private GameKeyValue ReadGameKey(GameKey gameKey)
     {
-        var hasAnyEncryption = gameKey.Ciphertext is not null
-            || gameKey.Nonce is not null
-            || gameKey.AuthenticationTag is not null
-            || gameKey.EncryptionKeyId is not null;
-        GameKeyValue value;
-
-        if (hasAnyEncryption)
-        {
-            if (!HasCompleteEncryption(gameKey))
-            {
-                throw new InvalidOperationException(
-                    $"Game key {gameKey.Id} has incomplete encryption metadata.");
-            }
-
-            value = _gameKeyProtection.Unprotect(new ProtectedGameKey(
-                gameKey.Ciphertext!,
-                gameKey.Nonce!,
-                gameKey.AuthenticationTag!,
-                gameKey.EncryptionKeyId!));
-        }
-        else
-        {
-            if (gameKey.KeyValue is null)
-            {
-                throw new InvalidOperationException(
-                    $"Game key {gameKey.Id} has no stored key material.");
-            }
-
-            try
-            {
-                value = new GameKeyValue(gameKey.KeyValue);
-            }
-            catch (ArgumentException)
-            {
-                throw new InvalidOperationException(
-                    $"Game key {gameKey.Id} violates the game key policy.");
-            }
-        }
-
-        if (gameKey.KeyValue is not null
-            && !string.Equals(
-                gameKey.KeyValue,
-                value.Value,
-                StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                $"Game key {gameKey.Id} has mismatched plaintext and ciphertext.");
-        }
-
-        return value;
+        return _gameKeyProtection.Unprotect(new ProtectedGameKey(
+            gameKey.Ciphertext,
+            gameKey.Nonce,
+            gameKey.AuthenticationTag,
+            gameKey.EncryptionKeyId));
     }
 
     private string[] GetWritableFingerprintKeyIds()
@@ -395,14 +338,6 @@ public sealed class GameKeyMigrationService
             throw new InvalidOperationException(
                 $"Fingerprint key '{keyId}' is still current, readable, or writable.");
         }
-    }
-
-    private static bool HasCompleteEncryption(GameKey gameKey)
-    {
-        return gameKey.Ciphertext is not null
-            && gameKey.Nonce is not null
-            && gameKey.AuthenticationTag is not null
-            && gameKey.EncryptionKeyId is not null;
     }
 
     private static InvalidOperationException DuplicateGameKeyInBatch(
@@ -441,7 +376,6 @@ public sealed class GameKeyMigrationService
 public sealed record GameKeyMigrationBatchResult(
     long NextGameKeyId,
     int ScannedCount,
-    int EncryptedCount,
     int ReencryptedCount,
     int AddedFingerprintCount);
 
