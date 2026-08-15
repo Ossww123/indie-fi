@@ -86,6 +86,7 @@ public class IndexModel : PageModel
 
     public IReadOnlyList<ReviewListItem> Items { get; private set; } = [];
     public IReadOnlyList<ReviewAssignmentListItem> MyAssignments { get; private set; } = [];
+    public IReadOnlyList<ReviewAssignmentHistoryItem> AssignmentHistory { get; private set; } = [];
     public ClaimNotice? ClaimMessage { get; private set; }
     public SubmitNotice? SubmitMessage { get; private set; }
     public SweepNotice? SweepMessage { get; private set; }
@@ -116,15 +117,29 @@ public class IndexModel : PageModel
 
         MyAssignments = await (
             from assignment in _db.ReviewAssignments
-            join reviewRequest in _db.ReviewRequests on assignment.RequestId equals reviewRequest.Id
-            join game in _db.Games on reviewRequest.GameId equals game.Id
+            join game in _db.Games on assignment.GameId equals game.Id
             where assignment.ReviewerId == userId
             where assignment.Status == ReviewAssignmentStatus.Active
             orderby assignment.LeasedUntil
             select new ReviewAssignmentListItem(
                 assignment.Id,
                 game.Title,
+                assignment.CreatedAt,
                 assignment.LeasedUntil))
+            .ToListAsync();
+
+        AssignmentHistory = await (
+            from assignment in _db.ReviewAssignments
+            join game in _db.Games on assignment.GameId equals game.Id
+            where assignment.ReviewerId == userId
+            where assignment.Status == ReviewAssignmentStatus.Completed
+                || assignment.Status == ReviewAssignmentStatus.Expired
+            orderby assignment.Id descending
+            select new ReviewAssignmentHistoryItem(
+                game.Title,
+                assignment.Status,
+                assignment.CreatedAt,
+                assignment.CompletedAt ?? assignment.ExpiredAt ?? assignment.CreatedAt))
             .ToListAsync();
 
         var queuedItems = await (
@@ -196,5 +211,16 @@ public class IndexModel : PageModel
     public sealed record ReviewAssignmentListItem(
         long AssignmentId,
         string GameTitle,
+        DateTimeOffset AssignedAt,
         DateTimeOffset LeasedUntil);
+
+    public sealed record ReviewAssignmentHistoryItem(
+        string GameTitle,
+        ReviewAssignmentStatus Status,
+        DateTimeOffset AssignedAt,
+        DateTimeOffset EndedAt)
+    {
+        public bool IsCompleted => Status == ReviewAssignmentStatus.Completed;
+        public string StatusText => IsCompleted ? "완료" : "만료";
+    }
 }

@@ -42,6 +42,7 @@ public sealed class ReceivedFeedbackPageTests
         Assert.Contains(
             UserDisplayIdentifier.Format(feedback.ReviewerId),
             decodedHtml);
+        Assert.Contains("· 제출 ", decodedHtml);
         Assert.DoesNotContain(feedback.ReviewerEmail, decodedHtml);
     }
 

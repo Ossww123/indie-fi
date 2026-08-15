@@ -92,8 +92,16 @@ else
             {
                 <div class="surface-item flex items-center justify-between gap-4">
                     <span>
-                        @request.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                        · @request.StatusText
+                        <span>
+                            요청 @request.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            · @request.StatusText
+                        </span>
+                        @if (request.CompletedAt is DateTimeOffset completedAt)
+                        {
+                            <span class="text-meta block">
+                                완료 @completedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            </span>
+                        }
                     </span>
                     @* Hiding this button is only UX; the service enforces ownership and status. *@
                     @if (request.IsCancellable)

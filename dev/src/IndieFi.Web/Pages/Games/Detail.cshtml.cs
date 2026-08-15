@@ -105,7 +105,8 @@ public class DetailModel : PageModel
                 .Select(reviewRequest => new RequestListItem(
                     reviewRequest.Id,
                     reviewRequest.CreatedAt,
-                    reviewRequest.Status))
+                    reviewRequest.Status,
+                    reviewRequest.CompletedAt))
                 .ToListAsync();
         }
         else
@@ -197,7 +198,8 @@ public class DetailModel : PageModel
     public sealed record RequestListItem(
         long Id,
         DateTimeOffset CreatedAt,
-        ReviewRequestStatus Status)
+        ReviewRequestStatus Status,
+        DateTimeOffset? CompletedAt)
     {
         public bool IsCancellable => Status == ReviewRequestStatus.Queued;
 

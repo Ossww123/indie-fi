@@ -24,6 +24,7 @@ public sealed class GameDetailPageTests
         long queuedRequestId;
         long cancelledRequestId;
         string queuedCreatedAt;
+        string completedAt;
 
         await using (var arrangeDb = _fixture.NewDbContext())
         {
@@ -65,7 +66,10 @@ public sealed class GameDetailPageTests
 
             assignedRequest.Status = ReviewRequestStatus.Assigned;
             completedRequest.Status = ReviewRequestStatus.Completed;
-            completedRequest.CompletedAt = DateTimeOffset.UtcNow;
+            completedRequest.CompletedAt = completedRequest.CreatedAt.AddMinutes(1);
+            completedAt = completedRequest.CompletedAt.Value
+                .ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm");
             cancelledRequest.Status = ReviewRequestStatus.Cancelled;
             cancelledRequest.CancelledAt = DateTimeOffset.UtcNow;
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -87,6 +91,7 @@ public sealed class GameDetailPageTests
         Assert.Contains("배정됨", html);
         Assert.Contains("완료", html);
         Assert.Contains(queuedCreatedAt, html);
+        Assert.Contains($"완료 {completedAt}", html);
         Assert.DoesNotContain("Cancelled", html);
         Assert.Contains("handler=CancelRequest", html);
         Assert.True(Guid.TryParse(

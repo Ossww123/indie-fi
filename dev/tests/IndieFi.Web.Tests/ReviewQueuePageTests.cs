@@ -210,6 +210,107 @@ public sealed class ReviewQueuePageTests
             TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task Get_ReviewsPage_ShowsCompletedAndExpiredAssignmentHistory()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var reviewerId = await FindUserIdAsync(email);
+        const string CompletedGameTitle = "Completed history game";
+        const string ExpiredGameTitle = "Expired history game";
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, 2);
+            var completedGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            completedGame.Title = CompletedGameTitle;
+            await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                completedGame.Id);
+            var expiredGame = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            expiredGame.Title = ExpiredGameTitle;
+            await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                expiredGame.Id);
+        }
+
+        long completedAssignmentId;
+        await using (var claimDb = _fixture.NewDbContext())
+        {
+            var result = await new ReviewClaimService(
+                claimDb,
+                NullLogger<ReviewClaimService>.Instance)
+                .ClaimNextAsync(reviewerId, Guid.NewGuid());
+            Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
+            completedAssignmentId = await claimDb.ReviewAssignments
+                .Where(assignment => assignment.RequestId == result.RequestId)
+                .Select(assignment => assignment.Id)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var submissionDb = _fixture.NewDbContext())
+        {
+            var result = await new FeedbackSubmissionService(
+                submissionDb,
+                NullLogger<FeedbackSubmissionService>.Instance)
+                .SubmitAsync(
+                    completedAssignmentId,
+                    reviewerId,
+                    "This completed history feedback is intentionally long enough.");
+            Assert.Equal(FeedbackSubmissionOutcome.Submitted, result.Outcome);
+        }
+
+        long expiredAssignmentId;
+        await using (var claimDb = _fixture.NewDbContext())
+        {
+            var result = await new ReviewClaimService(
+                claimDb,
+                NullLogger<ReviewClaimService>.Instance)
+                .ClaimNextAsync(reviewerId, Guid.NewGuid());
+            Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
+            expiredAssignmentId = await claimDb.ReviewAssignments
+                .Where(assignment => assignment.RequestId == result.RequestId)
+                .Select(assignment => assignment.Id)
+                .SingleAsync(TestContext.Current.CancellationToken);
+            await claimDb.ReviewAssignments
+                .Where(assignment => assignment.Id == expiredAssignmentId)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        assignment => assignment.LeasedUntil,
+                        DateTimeOffset.UtcNow.AddMinutes(-1)),
+                    TestContext.Current.CancellationToken);
+        }
+
+        await using (var sweepDb = _fixture.NewDbContext())
+        {
+            var result = await new ReviewLeaseSweepService(
+                sweepDb,
+                NullLogger<ReviewLeaseSweepService>.Instance).SweepAsync();
+            Assert.Equal(1, result.ExpiredCount);
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+        using var response = await client.GetAsync(
+            "/Reviews",
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("내 작업 이력 2개", html);
+        Assert.Contains(CompletedGameTitle, html);
+        Assert.Contains(ExpiredGameTitle, html);
+        Assert.Contains("완료", html);
+        Assert.Contains("만료", html);
+        Assert.True(
+            html.IndexOf(ExpiredGameTitle, StringComparison.Ordinal)
+            < html.IndexOf(CompletedGameTitle, StringComparison.Ordinal));
+    }
+
     private async Task<long> FindUserIdAsync(string email)
     {
         await using var db = _fixture.NewDbContext();
