@@ -31,6 +31,12 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
             [KeyPurpose.AccountRequestIpLookup] = LoadPurpose(
                 purposesSection,
                 KeyPurpose.AccountRequestIpLookup),
+            [KeyPurpose.GameKeyEncryption] = LoadPurpose(
+                purposesSection,
+                KeyPurpose.GameKeyEncryption),
+            [KeyPurpose.GameKeyFingerprint] = LoadPurpose(
+                purposesSection,
+                KeyPurpose.GameKeyFingerprint),
         };
 
         RejectSharedSecrets(_purposes.Values);
@@ -212,7 +218,7 @@ public sealed class ConfigurationKeyProvider : IKeyProvider
                                 secondKey.Secret.Span))
                         {
                             throw new InvalidOperationException(
-                                "Account protection purposes must not share key material.");
+                                "Protection purposes must not share key material.");
                         }
                     }
                 }

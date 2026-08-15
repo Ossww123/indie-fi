@@ -12,7 +12,25 @@ public sealed record GameKeyInputViolation(
     GameKeyInputError Error,
     int? LineNumber = null);
 
-public sealed record GameKeyValue(string Value);
+public sealed record GameKeyValue
+{
+    internal GameKeyValue(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || !string.Equals(value, value.Trim(), StringComparison.Ordinal)
+            || value.Length > GameKeyPolicy.MaxLength
+            || value.Any(char.IsControl))
+        {
+            throw new ArgumentException("The game key value is invalid.", nameof(value));
+        }
+
+        Value = value;
+    }
+
+    public string Value { get; }
+
+    public override string ToString() => "[REDACTED GAME KEY]";
+}
 
 public sealed record GameKeyBatchParseResult(
     IReadOnlyList<GameKeyValue> Keys,
