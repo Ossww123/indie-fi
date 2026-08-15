@@ -15,6 +15,10 @@ public class KeyDrop
 
     public int TotalKeys { get; set; }
 
+    public int? MinimumAccountAgeDays { get; set; }
+
+    public int? MinimumCompletedReviewCount { get; set; }
+
     public DateTimeOffset? ClosedAt { get; set; }
 
     public long StateVersion { get; set; }
