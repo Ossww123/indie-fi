@@ -1,0 +1,72 @@
+@page
+@model IndieFi.Web.Pages.Account.NotificationsModel
+@{
+    ViewData["Title"] = "알림 설정";
+}
+
+<div class="mb-6">
+    <h1 class="page-title">알림 설정</h1>
+    <p class="mt-2 text-sm text-slate-600">
+        이벤트별 웹 알림과 이메일 수신 여부를 선택할 수 있습니다. 변경한 값은 이후 생성되는 알림부터 적용됩니다.
+    </p>
+</div>
+
+@if (Model.StatusMessage is not null)
+{
+    <div class="alert-success mb-6" role="status">@Model.StatusMessage</div>
+}
+
+<form method="post" class="form-stack">
+    <div asp-validation-summary="ModelOnly"></div>
+
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50 text-left text-sm text-slate-700">
+                <tr>
+                    <th scope="col" class="px-4 py-3 font-semibold">이벤트</th>
+                    <th scope="col" class="px-4 py-3 text-center font-semibold">웹</th>
+                    <th scope="col" class="px-4 py-3 text-center font-semibold">이메일</th>
+                    <th scope="col" class="px-4 py-3 font-semibold">기본값</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @for (var index = 0; index < Model.Preferences.Count; index++)
+                {
+                    var item = Model.Preferences[index];
+                    <tr>
+                        <td class="px-4 py-3 text-sm text-slate-900">
+                            <input type="hidden" asp-for="Preferences[index].Kind" />
+                            <span class="font-medium">@NotificationsModel.GetLabel(item.Kind)</span>
+                            @if (item.IsMandatory)
+                            {
+                                <span class="badge-neutral ml-2">필수</span>
+                            }
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <input asp-for="Preferences[index].WebEnabled"
+                                   disabled="@(item.IsMandatory ? "disabled" : null)"
+                                   aria-label="@NotificationsModel.GetLabel(item.Kind) 웹 알림" />
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <input asp-for="Preferences[index].EmailEnabled"
+                                   disabled="@(item.IsMandatory ? "disabled" : null)"
+                                   aria-label="@NotificationsModel.GetLabel(item.Kind) 이메일 알림" />
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-500">
+                            웹 @(item.DefaultWebEnabled ? "켬" : "끔") · 이메일 @(item.DefaultEmailEnabled ? "켬" : "끔")
+                            @if (item.IsMandatory)
+                            {
+                                <span class="block">해제할 수 없는 계정 알림입니다.</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+        <button type="submit" class="button-primary">설정 저장</button>
+        <a asp-page="/Notifications/Index" class="button-outline">알림함으로 돌아가기</a>
+    </div>
+</form>

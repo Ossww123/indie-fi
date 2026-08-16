@@ -2,6 +2,9 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Games.Domain;
+using IndieFi.Web.Modules.Notifications.Domain;
+using MassTransit;
+using MassTransit.EntityFrameworkCoreIntegration;
 using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
@@ -34,6 +37,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<UserFollow> UserFollows => Set<UserFollow>();
     public DbSet<FavoriteGame> FavoriteGames => Set<FavoriteGame>();
+
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationDelivery> NotificationDeliveries =>
+        Set<NotificationDelivery>();
+    public DbSet<NotificationPreference> NotificationPreferences =>
+        Set<NotificationPreference>();
+    public DbSet<KeyDropSubscription> KeyDropSubscriptions =>
+        Set<KeyDropSubscription>();
 
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GamePlayLink> GamePlayLinks => Set<GamePlayLink>();
@@ -559,6 +570,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             keyDrop.Property(d => d.ClosedAt)
                 .HasColumnName("closed_at");
 
+            keyDrop.Property(d => d.OpenNotificationStagedAt)
+                .HasColumnName("open_notification_staged_at");
+
             keyDrop.Property(d => d.StateVersion)
                 .HasColumnName("state_version")
                 .HasDefaultValue(0L)
@@ -569,6 +583,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
                 .ValueGeneratedOnAdd();
+
+            keyDrop.HasIndex(d => d.OpensAt)
+                .HasFilter("open_notification_staged_at IS NULL AND closed_at IS NULL");
 
             keyDrop.HasOne<Game>()
                 .WithMany()
@@ -703,6 +720,219 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             // A game key can be granted to only one user.
             keyGrant.HasIndex(g => g.KeyId).IsUnique();
+        });
+
+        modelBuilder.Entity<Notification>(notification =>
+        {
+            notification.ToTable("notifications", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_notifications_event_id",
+                    "event_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+                table.HasCheckConstraint(
+                    "CK_notifications_source",
+                    "source_id > 0 AND length(btrim(source_type)) > 0");
+                table.HasCheckConstraint(
+                    "CK_notifications_lifetime",
+                    "occurred_at <= created_at AND expires_at > created_at");
+                table.HasCheckConstraint(
+                    "CK_notifications_destination_path",
+                    "destination_path IS NULL OR "
+                    + "(destination_path LIKE '/%' AND destination_path NOT LIKE '//%')");
+                table.HasCheckConstraint(
+                    "CK_notifications_content_shape",
+                    "(content_removed_at IS NULL AND title IS NOT NULL AND body IS NOT NULL "
+                    + "AND length(btrim(title)) > 0 AND length(btrim(body)) > 0) OR "
+                    + "(content_removed_at IS NOT NULL AND content_removed_at >= created_at "
+                    + "AND title IS NULL AND body IS NULL AND destination_path IS NULL "
+                    + "AND is_web_visible = FALSE)");
+                table.HasCheckConstraint(
+                    "CK_notifications_read_shape",
+                    "read_at IS NULL OR "
+                    + "(is_web_visible = TRUE AND read_at >= created_at)");
+                table.HasCheckConstraint(
+                    "CK_notifications_kind",
+                    "kind IN ('ReviewAssigned', 'ReviewDeadlineSoon', 'ReviewExpired', "
+                    + "'FeedbackCompleted', 'KeyDropOpened', "
+                    + "'FavoriteGameKeyDropCreated', 'FollowedUserGamePublished', "
+                    + "'ReportResolved', 'AccountStatusChanged')");
+            });
+
+            notification.HasKey(item => item.Id);
+            notification.Property(item => item.Id).HasColumnName("id");
+            notification.Property(item => item.UserId).HasColumnName("user_id");
+            notification.Property(item => item.EventId).HasColumnName("event_id");
+            notification.Property(item => item.Kind)
+                .HasColumnName("kind")
+                .HasConversion<string>()
+                .HasMaxLength(40);
+            notification.Property(item => item.SourceType)
+                .HasColumnName("source_type")
+                .HasMaxLength(NotificationPolicy.SourceTypeMaxLength);
+            notification.Property(item => item.SourceId).HasColumnName("source_id");
+            notification.Property(item => item.Title)
+                .HasColumnName("title")
+                .HasMaxLength(NotificationPolicy.TitleMaxLength);
+            notification.Property(item => item.Body)
+                .HasColumnName("body")
+                .HasMaxLength(NotificationPolicy.BodyMaxLength);
+            notification.Property(item => item.DestinationPath)
+                .HasColumnName("destination_path")
+                .HasMaxLength(NotificationPolicy.DestinationPathMaxLength);
+            notification.Property(item => item.IsWebVisible)
+                .HasColumnName("is_web_visible");
+            notification.Property(item => item.OccurredAt).HasColumnName("occurred_at");
+            notification.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            notification.Property(item => item.ExpiresAt).HasColumnName("expires_at");
+            notification.Property(item => item.ReadAt).HasColumnName("read_at");
+            notification.Property(item => item.ContentRemovedAt)
+                .HasColumnName("content_removed_at");
+            notification.HasIndex(item => new { item.UserId, item.EventId }).IsUnique();
+            notification.HasIndex(item => new { item.UserId, item.CreatedAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("IX_notifications_user_created_at");
+            notification.HasIndex(item => new
+                {
+                    item.UserId,
+                    item.ReadAt,
+                    item.CreatedAt,
+                })
+                .IsDescending(false, false, true)
+                .HasFilter("is_web_visible = TRUE AND read_at IS NULL "
+                    + "AND content_removed_at IS NULL")
+                .HasDatabaseName("IX_notifications_user_unread");
+            notification.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationDelivery>(delivery =>
+        {
+            delivery.ToTable("notification_deliveries", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_notification_deliveries_message_id",
+                    "message_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+                table.HasCheckConstraint(
+                    "CK_notification_deliveries_attempt_count",
+                    "attempt_count >= 0");
+                table.HasCheckConstraint(
+                    "CK_notification_deliveries_channel",
+                    "channel IN ('Web', 'Email')");
+                table.HasCheckConstraint(
+                    "CK_notification_deliveries_status",
+                    "status IN ('Suppressed', 'Pending', 'Delivered', 'Failed', 'Expired')");
+                table.HasCheckConstraint(
+                    "CK_notification_deliveries_timestamp_order",
+                    "(next_attempt_at IS NULL OR next_attempt_at >= created_at) AND "
+                    + "(last_attempt_at IS NULL OR last_attempt_at >= created_at) AND "
+                    + "(delivered_at IS NULL OR delivered_at >= created_at) AND "
+                    + "(failed_at IS NULL OR failed_at >= created_at)");
+                table.HasCheckConstraint(
+                    "CK_notification_deliveries_state_shape",
+                    "(status = 'Suppressed' AND attempt_count = 0 AND next_attempt_at IS NULL "
+                    + "AND delivered_at IS NULL AND failed_at IS NULL) OR "
+                    + "(status = 'Pending' AND next_attempt_at IS NOT NULL "
+                    + "AND delivered_at IS NULL AND failed_at IS NULL) OR "
+                    + "(status = 'Delivered' AND next_attempt_at IS NULL "
+                    + "AND delivered_at IS NOT NULL AND failed_at IS NULL) OR "
+                    + "(status IN ('Failed', 'Expired') AND next_attempt_at IS NULL "
+                    + "AND delivered_at IS NULL AND failed_at IS NOT NULL)");
+            });
+
+            delivery.HasKey(item => item.Id);
+            delivery.Property(item => item.Id).HasColumnName("id");
+            delivery.Property(item => item.NotificationId)
+                .HasColumnName("notification_id");
+            delivery.Property(item => item.MessageId).HasColumnName("message_id");
+            delivery.Property(item => item.Channel)
+                .HasColumnName("channel")
+                .HasConversion<string>()
+                .HasMaxLength(16);
+            delivery.Property(item => item.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .HasMaxLength(16);
+            delivery.Property(item => item.AttemptCount)
+                .HasColumnName("attempt_count");
+            delivery.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            delivery.Property(item => item.NextAttemptAt)
+                .HasColumnName("next_attempt_at");
+            delivery.Property(item => item.LastAttemptAt)
+                .HasColumnName("last_attempt_at");
+            delivery.Property(item => item.DeliveredAt).HasColumnName("delivered_at");
+            delivery.Property(item => item.FailedAt).HasColumnName("failed_at");
+            delivery.Property(item => item.LastErrorCode)
+                .HasColumnName("last_error_code")
+                .HasMaxLength(NotificationPolicy.ErrorCodeMaxLength);
+            delivery.HasIndex(item => item.MessageId).IsUnique();
+            delivery.HasIndex(item => new { item.NotificationId, item.Channel }).IsUnique();
+            delivery.HasIndex(item => new { item.Status, item.NextAttemptAt });
+            delivery.HasOne(item => item.Notification)
+                .WithMany(item => item.Deliveries)
+                .HasForeignKey(item => item.NotificationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationPreference>(preference =>
+        {
+            preference.ToTable("notification_preferences", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_notification_preferences_kind",
+                    "kind IN ('ReviewAssigned', 'ReviewDeadlineSoon', 'ReviewExpired', "
+                    + "'FeedbackCompleted', 'KeyDropOpened', "
+                    + "'FavoriteGameKeyDropCreated', 'FollowedUserGamePublished', "
+                    + "'ReportResolved', 'AccountStatusChanged')");
+                table.HasCheckConstraint(
+                    "CK_notification_preferences_mandatory",
+                    "kind <> 'AccountStatusChanged' OR "
+                    + "(web_enabled = TRUE AND email_enabled = TRUE)");
+            });
+
+            preference.HasKey(item => new { item.UserId, item.Kind });
+            preference.Property(item => item.UserId).HasColumnName("user_id");
+            preference.Property(item => item.Kind)
+                .HasColumnName("kind")
+                .HasConversion<string>()
+                .HasMaxLength(40);
+            preference.Property(item => item.WebEnabled).HasColumnName("web_enabled");
+            preference.Property(item => item.EmailEnabled).HasColumnName("email_enabled");
+            preference.Property(item => item.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasDefaultValueSql("now()");
+            preference.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KeyDropSubscription>(subscription =>
+        {
+            subscription.ToTable("key_drop_subscriptions");
+            subscription.HasKey(item => new { item.UserId, item.DropId });
+            subscription.Property(item => item.UserId).HasColumnName("user_id");
+            subscription.Property(item => item.DropId).HasColumnName("drop_id");
+            subscription.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            subscription.HasIndex(item => item.DropId);
+            subscription.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            subscription.HasOne<KeyDrop>()
+                .WithMany()
+                .HasForeignKey(item => item.DropId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Credit history is append-only: rows are never updated or deleted, and
@@ -915,6 +1145,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             reviewAssignment.Property(a => a.ExpiredAt)
                 .HasColumnName("expired_at");
 
+            reviewAssignment.Property(a => a.DeadlineNotificationStagedAt)
+                .HasColumnName("deadline_notification_staged_at");
+
             reviewAssignment.Property(a => a.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
@@ -953,6 +1186,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             reviewAssignment.HasIndex(a => new { a.ReviewerId, a.ClaimOperationId })
                 .IsUnique();
+
+            reviewAssignment.HasIndex(a => new { a.Status, a.LeasedUntil })
+                .HasFilter("deadline_notification_staged_at IS NULL");
         });
 
         modelBuilder.Entity<FeedbackSubmission>(feedbackSubmission =>
@@ -1010,5 +1246,53 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // A ledger movement can pay for only one feedback submission.
             feedbackSubmission.HasIndex(s => s.EarnEntryId).IsUnique();
         });
+
+        modelBuilder.AddInboxStateEntity(entity =>
+            entity.ToTable("message_inbox_states"));
+        modelBuilder.AddOutboxMessageEntity(entity =>
+            entity.ToTable("message_outbox_messages"));
+        modelBuilder.AddOutboxStateEntity(entity =>
+            entity.ToTable("message_outbox_states"));
+
+        MapMassTransitColumnsToSnakeCase(modelBuilder);
+    }
+
+    private static void MapMassTransitColumnsToSnakeCase(ModelBuilder modelBuilder)
+    {
+        Type[] outboxEntityTypes =
+        [
+            typeof(InboxState),
+            typeof(OutboxMessage),
+            typeof(OutboxState),
+        ];
+
+        foreach (var entityType in outboxEntityTypes)
+        {
+            var metadata = modelBuilder.Model.FindEntityType(entityType)
+                ?? throw new InvalidOperationException(
+                    $"MassTransit outbox entity '{entityType.Name}' is not configured.");
+
+            foreach (var property in metadata.GetProperties())
+            {
+                property.SetColumnName(ToSnakeCase(property.Name));
+            }
+        }
+    }
+
+    private static string ToSnakeCase(string value)
+    {
+        var buffer = new System.Text.StringBuilder(value.Length + 8);
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (char.IsUpper(character) && index > 0)
+            {
+                buffer.Append('_');
+            }
+
+            buffer.Append(char.ToLowerInvariant(character));
+        }
+
+        return buffer.ToString();
     }
 }

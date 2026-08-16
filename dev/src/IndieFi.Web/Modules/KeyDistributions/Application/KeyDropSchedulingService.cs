@@ -3,6 +3,8 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.KeyDistributions.Application;
@@ -34,13 +36,16 @@ public sealed class KeyDropSchedulingService
 
     private readonly AppDbContext _db;
     private readonly GameKeyRegistrationWriter _gameKeyRegistrationWriter;
+    private readonly IKeyDropNotificationFanoutPublisher _notificationFanout;
 
     public KeyDropSchedulingService(
         AppDbContext db,
-        GameKeyRegistrationWriter gameKeyRegistrationWriter)
+        GameKeyRegistrationWriter gameKeyRegistrationWriter,
+        IKeyDropNotificationFanoutPublisher notificationFanout)
     {
         _db = db;
         _gameKeyRegistrationWriter = gameKeyRegistrationWriter;
+        _notificationFanout = notificationFanout;
     }
 
     public async Task<ScheduleKeyDropResult> ScheduleAsync(
@@ -151,6 +156,14 @@ public sealed class KeyDropSchedulingService
         _gameKeyRegistrationWriter.StageForNewDrop(keyDrop, keys);
         try
         {
+            await _db.SaveChangesAsync();
+            await _notificationFanout.StageFavoriteGameCreatedAsync(
+                NotificationEventId.Create(
+                    NotificationKind.FavoriteGameKeyDropCreated,
+                    keyDrop.Id,
+                    ownerId),
+                keyDrop.Id,
+                keyDrop.CreatedAt);
             await _db.SaveChangesAsync();
         }
         catch (DbUpdateException exception)

@@ -2,6 +2,8 @@ using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Domain;
 
 namespace IndieFi.Web.Modules.Games.Application;
 
@@ -42,11 +44,15 @@ public sealed class GameManagementService
 
     private readonly AppDbContext _db;
     private readonly GamePlayLinkManagementService _gamePlayLinkManagementService;
+    private readonly ISocialNotificationFanoutPublisher _notificationFanout;
 
-    public GameManagementService(AppDbContext db)
+    public GameManagementService(
+        AppDbContext db,
+        ISocialNotificationFanoutPublisher notificationFanout)
     {
         _db = db;
         _gamePlayLinkManagementService = new GamePlayLinkManagementService(db);
+        _notificationFanout = notificationFanout;
     }
 
     public Task<CreateGameResult> CreateAsync(
@@ -98,6 +104,16 @@ public sealed class GameManagementService
                 linkValidation.Links,
                 cancellationToken);
         }
+
+        await _notificationFanout.StageGamePublishedAsync(
+            NotificationEventId.Create(
+                NotificationKind.FollowedUserGamePublished,
+                game.Id,
+                ownerId),
+            game.Id,
+            game.CreatedAt,
+            cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
 
         await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
 

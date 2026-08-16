@@ -249,6 +249,10 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("minimum_completed_review_count");
 
+                    b.Property<DateTimeOffset?>("OpenNotificationStagedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("open_notification_staged_at");
+
                     b.Property<DateTimeOffset>("OpensAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("opens_at");
@@ -271,6 +275,9 @@ namespace IndieFi.Web.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("GameId");
+
+                    b.HasIndex("OpensAt")
+                        .HasFilter("open_notification_staged_at IS NULL AND closed_at IS NULL");
 
                     b.HasIndex("OwnerId");
 
@@ -351,6 +358,10 @@ namespace IndieFi.Web.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<DateTimeOffset?>("DeadlineNotificationStagedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deadline_notification_staged_at");
+
                     b.Property<DateTimeOffset?>("ExpiredAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expired_at");
@@ -391,6 +402,9 @@ namespace IndieFi.Web.Migrations
                     b.HasIndex("ReviewerId", "GameId")
                         .IsUnique()
                         .HasFilter("status <> 'Expired'");
+
+                    b.HasIndex("Status", "LeasedUntil")
+                        .HasFilter("deadline_notification_staged_at IS NULL");
 
                     b.ToTable("review_assignments", null, t =>
                         {
@@ -967,6 +981,256 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.KeyDropSubscription", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("DropId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("drop_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("UserId", "DropId");
+
+                    b.HasIndex("DropId");
+
+                    b.ToTable("key_drop_subscriptions", (string)null);
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.Notification", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Body")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset?>("ContentRemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("content_removed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DestinationPath")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("destination_path");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("IsWebVisible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_web_visible");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<long>("SourceId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("source_type");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("title");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_notifications_user_created_at");
+
+                    b.HasIndex("UserId", "EventId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "ReadAt", "CreatedAt")
+                        .IsDescending(false, false, true)
+                        .HasDatabaseName("IX_notifications_user_unread")
+                        .HasFilter("is_web_visible = TRUE AND read_at IS NULL AND content_removed_at IS NULL");
+
+                    b.ToTable("notifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_notifications_content_shape", "(content_removed_at IS NULL AND title IS NOT NULL AND body IS NOT NULL AND length(btrim(title)) > 0 AND length(btrim(body)) > 0) OR (content_removed_at IS NOT NULL AND content_removed_at >= created_at AND title IS NULL AND body IS NULL AND destination_path IS NULL AND is_web_visible = FALSE)");
+
+                            t.HasCheckConstraint("CK_notifications_destination_path", "destination_path IS NULL OR (destination_path LIKE '/%' AND destination_path NOT LIKE '//%')");
+
+                            t.HasCheckConstraint("CK_notifications_event_id", "event_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_notifications_kind", "kind IN ('ReviewAssigned', 'ReviewDeadlineSoon', 'ReviewExpired', 'FeedbackCompleted', 'KeyDropOpened', 'FavoriteGameKeyDropCreated', 'FollowedUserGamePublished', 'ReportResolved', 'AccountStatusChanged')");
+
+                            t.HasCheckConstraint("CK_notifications_lifetime", "occurred_at <= created_at AND expires_at > created_at");
+
+                            t.HasCheckConstraint("CK_notifications_read_shape", "read_at IS NULL OR (is_web_visible = TRUE AND read_at >= created_at)");
+
+                            t.HasCheckConstraint("CK_notifications_source", "source_id > 0 AND length(btrim(source_type)) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.NotificationDelivery", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("channel");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered_at");
+
+                    b.Property<DateTimeOffset?>("FailedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("failed_at");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempt_at");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("last_error_code");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("message_id");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<long>("NotificationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("notification_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId")
+                        .IsUnique();
+
+                    b.HasIndex("NotificationId", "Channel")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("notification_deliveries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_notification_deliveries_attempt_count", "attempt_count >= 0");
+
+                            t.HasCheckConstraint("CK_notification_deliveries_channel", "channel IN ('Web', 'Email')");
+
+                            t.HasCheckConstraint("CK_notification_deliveries_message_id", "message_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_notification_deliveries_state_shape", "(status = 'Suppressed' AND attempt_count = 0 AND next_attempt_at IS NULL AND delivered_at IS NULL AND failed_at IS NULL) OR (status = 'Pending' AND next_attempt_at IS NOT NULL AND delivered_at IS NULL AND failed_at IS NULL) OR (status = 'Delivered' AND next_attempt_at IS NULL AND delivered_at IS NOT NULL AND failed_at IS NULL) OR (status IN ('Failed', 'Expired') AND next_attempt_at IS NULL AND delivered_at IS NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_notification_deliveries_status", "status IN ('Suppressed', 'Pending', 'Delivered', 'Failed', 'Expired')");
+
+                            t.HasCheckConstraint("CK_notification_deliveries_timestamp_order", "(next_attempt_at IS NULL OR next_attempt_at >= created_at) AND (last_attempt_at IS NULL OR last_attempt_at >= created_at) AND (delivered_at IS NULL OR delivered_at >= created_at) AND (failed_at IS NULL OR failed_at >= created_at)");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.NotificationPreference", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Kind")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<bool>("EmailEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("email_enabled");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<bool>("WebEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("web_enabled");
+
+                    b.HasKey("UserId", "Kind");
+
+                    b.ToTable("notification_preferences", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_notification_preferences_kind", "kind IN ('ReviewAssigned', 'ReviewDeadlineSoon', 'ReviewExpired', 'FeedbackCompleted', 'KeyDropOpened', 'FavoriteGameKeyDropCreated', 'FollowedUserGamePublished', 'ReportResolved', 'AccountStatusChanged')");
+
+                            t.HasCheckConstraint("CK_notification_preferences_mandatory", "kind <> 'AccountStatusChanged' OR (web_enabled = TRUE AND email_enabled = TRUE)");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.FavoriteGame", b =>
                 {
                     b.Property<long>("UserId")
@@ -1069,6 +1333,212 @@ namespace IndieFi.Web.Migrations
 
                             t.HasCheckConstraint("CK_user_profiles_timestamps", "updated_at >= created_at AND (nickname_changed_at IS NULL OR nickname_changed_at >= created_at)");
                         });
+                });
+
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("Consumed")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed");
+
+                    b.Property<Guid>("ConsumerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("consumer_id");
+
+                    b.Property<DateTime?>("Delivered")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered");
+
+                    b.Property<DateTime?>("ExpirationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiration_time");
+
+                    b.Property<long?>("LastSequenceNumber")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_sequence_number");
+
+                    b.Property<Guid>("LockId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lock_id");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("message_id");
+
+                    b.Property<int>("ReceiveCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("receive_count");
+
+                    b.Property<DateTime>("Received")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Delivered");
+
+                    b.ToTable("message_inbox_states", (string)null);
+                });
+
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
+                {
+                    b.Property<long>("SequenceNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence_number");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("SequenceNumber"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("content_type");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<Guid?>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<string>("DestinationAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("destination_address");
+
+                    b.Property<DateTime?>("EnqueueTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("enqueue_time");
+
+                    b.Property<DateTime?>("ExpirationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiration_time");
+
+                    b.Property<string>("FaultAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("fault_address");
+
+                    b.Property<string>("Headers")
+                        .HasColumnType("text")
+                        .HasColumnName("headers");
+
+                    b.Property<Guid?>("InboxConsumerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inbox_consumer_id");
+
+                    b.Property<Guid?>("InboxMessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inbox_message_id");
+
+                    b.Property<Guid?>("InitiatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("initiator_id");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("message_id");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message_type");
+
+                    b.Property<Guid?>("OutboxId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("outbox_id");
+
+                    b.Property<string>("Properties")
+                        .HasColumnType("text")
+                        .HasColumnName("properties");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<string>("ResponseAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("response_address");
+
+                    b.Property<DateTime>("SentTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_time");
+
+                    b.Property<string>("SourceAddress")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("source_address");
+
+                    b.HasKey("SequenceNumber");
+
+                    b.HasIndex("EnqueueTime");
+
+                    b.HasIndex("ExpirationTime");
+
+                    b.HasIndex("OutboxId", "SequenceNumber")
+                        .IsUnique();
+
+                    b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber")
+                        .IsUnique();
+
+                    b.ToTable("message_outbox_messages", (string)null);
+                });
+
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxState", b =>
+                {
+                    b.Property<Guid>("OutboxId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("outbox_id");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created");
+
+                    b.Property<DateTime?>("Delivered")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered");
+
+                    b.Property<long?>("LastSequenceNumber")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_sequence_number");
+
+                    b.Property<Guid>("LockId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lock_id");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea")
+                        .HasColumnName("row_version");
+
+                    b.HasKey("OutboxId");
+
+                    b.HasIndex("Created");
+
+                    b.ToTable("message_outbox_states", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
@@ -1310,6 +1780,50 @@ namespace IndieFi.Web.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.KeyDropSubscription", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.KeyDrop", null)
+                        .WithMany()
+                        .HasForeignKey("DropId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.Notification", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.NotificationDelivery", b =>
+                {
+                    b.HasOne("IndieFi.Web.Modules.Notifications.Domain.Notification", "Notification")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Notification");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.NotificationPreference", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Profiles.Domain.FavoriteGame", b =>
                 {
                     b.HasOne("IndieFi.Web.Entities.Game", null)
@@ -1347,6 +1861,23 @@ namespace IndieFi.Web.Migrations
                         .HasForeignKey("IndieFi.Web.Modules.Profiles.Domain.UserProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
+                {
+                    b.HasOne("MassTransit.EntityFrameworkCoreIntegration.OutboxState", null)
+                        .WithMany()
+                        .HasForeignKey("OutboxId");
+
+                    b.HasOne("MassTransit.EntityFrameworkCoreIntegration.InboxState", null)
+                        .WithMany()
+                        .HasForeignKey("InboxMessageId", "InboxConsumerId")
+                        .HasPrincipalKey("MessageId", "ConsumerId");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.Notification", b =>
+                {
+                    b.Navigation("Deliveries");
                 });
 #pragma warning restore 612, 618
         }

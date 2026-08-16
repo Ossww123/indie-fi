@@ -1,6 +1,7 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
+using IndieFi.Web.Modules.Notifications.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -42,19 +43,22 @@ public class DetailModel : PageModel
     private readonly KeyClaimService _keyClaimService;
     private readonly GrantedGameKeyReader _grantedGameKeyReader;
     private readonly WaitingRoomParticipationService _waitingRoomParticipationService;
+    private readonly KeyDropSubscriptionService _keyDropSubscriptions;
 
     public DetailModel(
         PublicKeyDropReader publicKeyDropReader,
         ICurrentUser currentUser,
         KeyClaimService keyClaimService,
         GrantedGameKeyReader grantedGameKeyReader,
-        WaitingRoomParticipationService waitingRoomParticipationService)
+        WaitingRoomParticipationService waitingRoomParticipationService,
+        KeyDropSubscriptionService keyDropSubscriptions)
     {
         _publicKeyDropReader = publicKeyDropReader;
         _currentUser = currentUser;
         _keyClaimService = keyClaimService;
         _grantedGameKeyReader = grantedGameKeyReader;
         _waitingRoomParticipationService = waitingRoomParticipationService;
+        _keyDropSubscriptions = keyDropSubscriptions;
     }
 
     public PublicKeyDropDetail Drop { get; private set; } = null!;
@@ -64,13 +68,16 @@ public class DetailModel : PageModel
     public string? ClosureMessage { get; private set; }
     public string? WaitingRoomMessage { get; private set; }
     public WaitingRoomParticipationResult? WaitingRoom { get; private set; }
+    public bool IsOpenNotificationSubscribed { get; private set; }
+    public string? OpenNotificationMessage { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(
         long id,
         string? claim,
         string? inventory,
         string? closure,
-        string? waiting)
+        string? waiting,
+        string? notification)
     {
         // Query strings are user-controlled, so only known codes may select displayed text.
         ClaimMessage = ClaimNotices
@@ -89,6 +96,13 @@ public class DetailModel : PageModel
             && WaitingNotices.TryGetValue(waiting, out var waitingMessage)
                 ? waitingMessage
                 : null;
+        OpenNotificationMessage = notification switch
+        {
+            "subscribed" => "배포 오픈 알림을 신청했습니다.",
+            "unsubscribed" => "배포 오픈 알림 신청을 취소했습니다.",
+            "not-scheduled" => "이미 열렸거나 종료된 배포의 오픈 알림은 변경할 수 없습니다.",
+            _ => null,
+        };
 
         var drop = await _publicKeyDropReader.GetAsync(
             id,
@@ -116,10 +130,21 @@ public class DetailModel : PageModel
                 id,
                 userId,
                 HttpContext.RequestAborted);
+            IsOpenNotificationSubscribed = await _keyDropSubscriptions
+                .IsSubscribedAsync(
+                    userId,
+                    id,
+                    HttpContext.RequestAborted);
         }
 
         return Page();
     }
+
+    public Task<IActionResult> OnPostSubscribeNotificationAsync(long id) =>
+        ChangeOpenNotificationAsync(id, subscribe: true);
+
+    public Task<IActionResult> OnPostUnsubscribeNotificationAsync(long id) =>
+        ChangeOpenNotificationAsync(id, subscribe: false);
 
     public async Task<IActionResult> OnPostClaimAsync(long id)
     {
@@ -250,6 +275,45 @@ public class DetailModel : PageModel
         return unixTimeMilliseconds is null
             ? null
             : DateTimeOffset.FromUnixTimeMilliseconds(unixTimeMilliseconds.Value);
+    }
+
+    private async Task<IActionResult> ChangeOpenNotificationAsync(
+        long id,
+        bool subscribe)
+    {
+        if (!_currentUser.IsAuthenticated)
+        {
+            return Challenge();
+        }
+
+        var result = subscribe
+            ? await _keyDropSubscriptions.SubscribeAsync(
+                _currentUser.GetRequiredUserId(),
+                id,
+                HttpContext.RequestAborted)
+            : await _keyDropSubscriptions.UnsubscribeAsync(
+                _currentUser.GetRequiredUserId(),
+                id,
+                HttpContext.RequestAborted);
+        if (result.Outcome == KeyDropSubscriptionOutcome.DropNotFound)
+        {
+            return NotFound();
+        }
+
+        if (result.Outcome == KeyDropSubscriptionOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
+        var code = result.Outcome switch
+        {
+            KeyDropSubscriptionOutcome.Subscribed => "subscribed",
+            KeyDropSubscriptionOutcome.Unsubscribed => "unsubscribed",
+            KeyDropSubscriptionOutcome.NotScheduled => "not-scheduled",
+            _ => throw new InvalidOperationException(
+                $"Unsupported subscription outcome: {result.Outcome}"),
+        };
+        return RedirectToPage(new { id, notification = code });
     }
 
     public sealed record WaitingRoomClientSnapshot(

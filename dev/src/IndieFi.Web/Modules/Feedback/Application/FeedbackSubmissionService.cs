@@ -1,5 +1,8 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Contracts;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -80,13 +83,16 @@ public class FeedbackSubmissionService
 
     private readonly AppDbContext _db;
     private readonly ILogger<FeedbackSubmissionService> _logger;
+    private readonly INotificationEventPublisher _notificationPublisher;
 
     public FeedbackSubmissionService(
         AppDbContext db,
-        ILogger<FeedbackSubmissionService> logger)
+        ILogger<FeedbackSubmissionService> logger,
+        INotificationEventPublisher notificationPublisher)
     {
         _db = db;
         _logger = logger;
+        _notificationPublisher = notificationPublisher;
     }
 
     public async Task<FeedbackSubmissionResult> SubmitAsync(
@@ -115,6 +121,8 @@ public class FeedbackSubmissionService
 
         if (submittedAssignmentIds.Count != 0)
         {
+            await StageFeedbackCompletedAsync(assignmentId);
+            await _db.SaveChangesAsync();
             await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(FeedbackSubmissionOutcome.Submitted, assignmentId, reviewerId);
         }
@@ -127,6 +135,8 @@ public class FeedbackSubmissionService
             .SingleAsync();
         if (alreadySubmitted)
         {
+            await StageFeedbackCompletedAsync(assignmentId);
+            await _db.SaveChangesAsync();
             await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(FeedbackSubmissionOutcome.Submitted, assignmentId, reviewerId);
         }
@@ -149,6 +159,36 @@ public class FeedbackSubmissionService
 
         await AccountMutationGuard.CommitIfOwnedAsync(transaction);
         return Result(FeedbackSubmissionOutcome.NotSubmittable, assignmentId, reviewerId);
+    }
+
+    private async Task StageFeedbackCompletedAsync(long assignmentId)
+    {
+        var source = await (
+                from submission in _db.FeedbackSubmissions.AsNoTracking()
+                join assignment in _db.ReviewAssignments.AsNoTracking()
+                    on submission.AssignmentId equals assignment.Id
+                join request in _db.ReviewRequests.AsNoTracking()
+                    on assignment.RequestId equals request.Id
+                join game in _db.Games.AsNoTracking()
+                    on request.GameId equals game.Id
+                where submission.AssignmentId == assignmentId
+                select new
+                {
+                    submission.Id,
+                    RecipientUserId = game.OwnerId,
+                    submission.CreatedAt,
+                })
+            .SingleAsync();
+        await _notificationPublisher.StageAsync(
+            NotificationEventId.Create(
+                NotificationKind.FeedbackCompleted,
+                source.Id,
+                source.RecipientUserId),
+            source.RecipientUserId,
+            NotificationKind.FeedbackCompleted,
+            NotificationSourceTypes.FeedbackSubmission,
+            source.Id,
+            source.CreatedAt);
     }
 
     private FeedbackSubmissionResult Result(

@@ -279,7 +279,8 @@ public sealed class AccountStatusSecurityFlowTests
             ((NpgsqlConnection)suspensionDb.Database.GetDbConnection()).ProcessID;
         var submissionService = new FeedbackSubmissionService(
             submissionDb,
-            NullLogger<FeedbackSubmissionService>.Instance);
+            NullLogger<FeedbackSubmissionService>.Instance,
+            new TestNotificationEventPublisher());
         var suspensionService = new AccountStatusTransitionService(
             suspensionDb,
             TimeProvider.System);

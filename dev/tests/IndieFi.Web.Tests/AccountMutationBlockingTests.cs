@@ -232,7 +232,9 @@ public sealed class AccountMutationBlockingTests
 
         await using (var gameDb = _fixture.NewDbContext())
         {
-            var games = new GameManagementService(gameDb);
+            var games = new GameManagementService(
+                gameDb,
+                new TestSocialNotificationFanoutPublisher());
             var create = await games.CreateAsync(userId, "Blocked game", null);
             var update = await games.UpdateAsync(
                 gameId,
@@ -249,7 +251,8 @@ public sealed class AccountMutationBlockingTests
                 scheduleDb,
                 new GameKeyRegistrationWriter(
                     scheduleDb,
-                    TestAccountProtection.CreateGameKeyProtectionService())).ScheduleAsync(
+                    TestAccountProtection.CreateGameKeyProtectionService()),
+                new TestKeyDropNotificationFanoutPublisher()).ScheduleAsync(
                 gameId,
                 userId,
                 DateTimeOffset.UtcNow.AddHours(1),
@@ -337,18 +340,21 @@ public sealed class AccountMutationBlockingTests
         {
             submission = await new FeedbackSubmissionService(
                     reviewerDb,
-                    NullLogger<FeedbackSubmissionService>.Instance)
+                    NullLogger<FeedbackSubmissionService>.Instance,
+                    new TestNotificationEventPublisher())
                 .SubmitAsync(
                     assignment.AssignmentId,
                     assignment.ReviewerId,
                     "This feedback must not be stored for a suspended reviewer.");
             claim = await new ReviewClaimService(
                     reviewerDb,
-                    NullLogger<ReviewClaimService>.Instance)
+                    NullLogger<ReviewClaimService>.Instance,
+                    new TestNotificationEventPublisher())
                 .ClaimNextAsync(assignment.ReviewerId);
             sweep = await new ReviewLeaseSweepService(
                     reviewerDb,
-                    NullLogger<ReviewLeaseSweepService>.Instance)
+                    NullLogger<ReviewLeaseSweepService>.Instance,
+                    new TestNotificationEventPublisher())
                 .SweepAsync(assignment.ReviewerId);
         }
 

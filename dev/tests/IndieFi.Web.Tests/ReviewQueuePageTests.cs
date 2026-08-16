@@ -155,7 +155,8 @@ public sealed class ReviewQueuePageTests
         {
             var claimResult = await new ReviewClaimService(
                 claimDb,
-                NullLogger<ReviewClaimService>.Instance).ClaimNextAsync(reviewerId);
+                NullLogger<ReviewClaimService>.Instance,
+                new TestNotificationEventPublisher()).ClaimNextAsync(reviewerId);
             assignmentId = await claimDb.ReviewAssignments
                 .Where(assignment => assignment.RequestId == requestId)
                 .Select(assignment => assignment.Id)
@@ -246,7 +247,8 @@ public sealed class ReviewQueuePageTests
         {
             var result = await new ReviewClaimService(
                 claimDb,
-                NullLogger<ReviewClaimService>.Instance)
+                NullLogger<ReviewClaimService>.Instance,
+                new TestNotificationEventPublisher())
                 .ClaimNextAsync(reviewerId, Guid.NewGuid());
             Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
             completedAssignmentId = await claimDb.ReviewAssignments
@@ -259,7 +261,8 @@ public sealed class ReviewQueuePageTests
         {
             var result = await new FeedbackSubmissionService(
                 submissionDb,
-                NullLogger<FeedbackSubmissionService>.Instance)
+                NullLogger<FeedbackSubmissionService>.Instance,
+                new TestNotificationEventPublisher())
                 .SubmitAsync(
                     completedAssignmentId,
                     reviewerId,
@@ -272,7 +275,8 @@ public sealed class ReviewQueuePageTests
         {
             var result = await new ReviewClaimService(
                 claimDb,
-                NullLogger<ReviewClaimService>.Instance)
+                NullLogger<ReviewClaimService>.Instance,
+                new TestNotificationEventPublisher())
                 .ClaimNextAsync(reviewerId, Guid.NewGuid());
             Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
             expiredAssignmentId = await claimDb.ReviewAssignments
@@ -292,7 +296,8 @@ public sealed class ReviewQueuePageTests
         {
             var result = await new ReviewLeaseSweepService(
                 sweepDb,
-                NullLogger<ReviewLeaseSweepService>.Instance).SweepAsync();
+                NullLogger<ReviewLeaseSweepService>.Instance,
+                new TestNotificationEventPublisher()).SweepAsync();
             Assert.Equal(1, result.ExpiredCount);
         }
 

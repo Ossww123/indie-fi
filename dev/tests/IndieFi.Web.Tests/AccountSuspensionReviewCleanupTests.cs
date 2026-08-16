@@ -90,8 +90,9 @@ public sealed class AccountSuspensionReviewCleanupTests
         await using (var submissionDb = _fixture.NewDbContext())
         {
             var submitted = await new FeedbackSubmissionService(
-                    submissionDb,
-                    NullLogger<FeedbackSubmissionService>.Instance)
+                submissionDb,
+                NullLogger<FeedbackSubmissionService>.Instance,
+                new TestNotificationEventPublisher())
                 .SubmitAsync(
                     assignment.AssignmentId,
                     assignment.ReviewerId,
@@ -233,7 +234,8 @@ public sealed class AccountSuspensionReviewCleanupTests
         {
             var service = new ReviewClaimService(
                 claimDb,
-                NullLogger<ReviewClaimService>.Instance);
+                NullLogger<ReviewClaimService>.Instance,
+                new TestNotificationEventPublisher());
             for (var index = 0; index < 2; index++)
             {
                 var result = await service.ClaimNextAsync(reviewerId);

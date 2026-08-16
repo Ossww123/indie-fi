@@ -2,6 +2,8 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -310,6 +312,66 @@ public sealed class KeyDropSchedulingServiceTests
         Assert.Single(drops);
     }
 
+    [Fact]
+    public async Task ScheduleAsync_StagesOneStableFavoriteFanoutAfterDropIdExists()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+        var fanout = new TestKeyDropNotificationFanoutPublisher();
+        await using var serviceDb = _fixture.NewDbContext();
+
+        var result = await NewService(serviceDb, fanout).ScheduleAsync(
+            gameId,
+            ownerId,
+            DateTimeOffset.UtcNow.AddHours(1),
+            "KEY-FOR-FAVORITE-FANOUT");
+
+        Assert.Equal(ScheduleKeyDropOutcome.Scheduled, result.Outcome);
+        var staged = Assert.Single(fanout.Events);
+        Assert.Equal(result.KeyDropId, staged.DropId);
+        Assert.Equal(
+            NotificationEventId.Create(
+                NotificationKind.FavoriteGameKeyDropCreated,
+                staged.DropId,
+                ownerId),
+            staged.FanoutId);
+        var createdAt = await serviceDb.KeyDrops
+            .Where(item => item.Id == staged.DropId)
+            .Select(item => item.CreatedAt)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(createdAt, staged.OccurredAt);
+    }
+
+    [Fact]
+    public async Task ScheduleAsync_WhenFanoutStagingFails_RollsBackDropAndKeys()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var service = NewService(
+                serviceDb,
+                new TestKeyDropNotificationFanoutPublisher
+                {
+                    Failure = new InvalidOperationException("fanout staging failed"),
+                });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddHours(1),
+                "KEY-MUST-ROLL-BACK"));
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.KeyDrops.AnyAsync(
+            item => item.GameId == gameId,
+            TestContext.Current.CancellationToken));
+        Assert.False(await (
+                from key in verificationDb.GameKeys
+                join drop in verificationDb.KeyDrops on key.DropId equals drop.Id
+                where drop.GameId == gameId
+                select key.Id)
+            .AnyAsync(TestContext.Current.CancellationToken));
+    }
+
     private async Task<(long OwnerId, long GameId)> CreateOwnerAndGameAsync()
     {
         await using var db = _fixture.NewDbContext();
@@ -318,9 +380,12 @@ public sealed class KeyDropSchedulingServiceTests
         return (owner.Id, game.Id);
     }
 
-    private static KeyDropSchedulingService NewService(AppDbContext db) => new(
+    private static KeyDropSchedulingService NewService(
+        AppDbContext db,
+        TestKeyDropNotificationFanoutPublisher? fanout = null) => new(
         db,
         new GameKeyRegistrationWriter(
             db,
-            TestAccountProtection.CreateGameKeyProtectionService()));
+            TestAccountProtection.CreateGameKeyProtectionService()),
+        fanout ?? new TestKeyDropNotificationFanoutPublisher());
 }

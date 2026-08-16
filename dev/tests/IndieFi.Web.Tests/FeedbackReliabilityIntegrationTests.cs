@@ -230,7 +230,8 @@ public sealed class FeedbackReliabilityIntegrationTests
         await using var db = _fixture.NewDbContext();
         return await new ReviewClaimService(
             db,
-            NullLogger<ReviewClaimService>.Instance)
+            NullLogger<ReviewClaimService>.Instance,
+            new TestNotificationEventPublisher())
             .ClaimNextAsync(reviewerId, operationId);
     }
 

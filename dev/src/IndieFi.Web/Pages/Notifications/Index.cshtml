@@ -1,0 +1,76 @@
+@page "/Notifications"
+@model IndieFi.Web.Pages.Notifications.IndexModel
+@{
+    ViewData["Title"] = "알림";
+}
+
+<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+        <h1 class="page-title">알림</h1>
+        <p class="mt-2 text-sm text-slate-600">
+            읽지 않은 알림 <strong data-notification-unread-count>@Model.Snapshot.UnreadCount</strong>개
+        </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+        <a asp-page="/Account/Notifications" class="button-outline">알림 설정</a>
+        @if (Model.Snapshot.UnreadCount > 0)
+        {
+            <form method="post" asp-page-handler="ReadAll">
+                <button type="submit" class="button-outline">모두 읽음</button>
+            </form>
+        }
+    </div>
+</div>
+
+@if (Model.Notice is not null)
+{
+    <div class="alert-success" role="status">@Model.Notice</div>
+}
+
+@if (Model.Snapshot.Items.Count == 0)
+{
+    <div class="alert-neutral">표시할 알림이 없습니다.</div>
+}
+else
+{
+    <div class="surface-list" data-notification-list>
+        @foreach (var item in Model.Snapshot.Items)
+        {
+            <article class="surface-item @(item.ReadAt is null ? "bg-indigo-50/40" : null)"
+                     data-notification-id="@item.Id"
+                     data-notification-read="@(item.ReadAt is not null ? "true" : "false")">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <h2 class="font-semibold text-slate-950">@item.Title</h2>
+                        <p class="mt-1 whitespace-pre-line text-sm text-slate-700">@item.Body</p>
+                        <time class="mt-2 block text-meta"
+                              datetime="@item.CreatedAt.ToString("O")">
+                            @item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        </time>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        @if (item.DestinationPath is not null)
+                        {
+                            <a href="@item.DestinationPath" class="button-link">확인</a>
+                        }
+                        <form method="post" asp-page-handler="SetRead">
+                            <input type="hidden" name="id" value="@item.Id" />
+                            <input type="hidden" name="isRead" value="@(item.ReadAt is null ? "true" : "false")" />
+                            <button type="submit" class="button-outline">
+                                @(item.ReadAt is null ? "읽음" : "읽지 않음")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@if (Model.Snapshot.NextCursor is { } next)
+{
+    <a asp-page="/Notifications/Index"
+       asp-route-before="@next.CreatedAt.ToString("O")"
+       asp-route-beforeId="@next.NotificationId"
+       class="button-outline mt-6">이전 알림 더 보기</a>
+}

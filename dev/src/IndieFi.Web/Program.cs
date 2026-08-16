@@ -3,6 +3,7 @@ using System.Net;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Infrastructure.Authentication;
+using IndieFi.Web.Infrastructure.Realtime;
 using IndieFi.Web.Modules.Accounts;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Credits;
@@ -10,6 +11,8 @@ using IndieFi.Web.Modules.Feedback;
 using IndieFi.Web.Modules.Games;
 using IndieFi.Web.Modules.KeyDistributions;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.Notifications;
+using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Profiles;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -108,7 +111,9 @@ builder.Services.AddProfilesModule();
 builder.Services.AddGamesModule();
 builder.Services.AddCreditsModule();
 builder.Services.AddFeedbackModule();
+builder.Services.AddIndieFiRealtime(builder.Configuration);
 builder.Services.AddKeyDistributionsModule(builder.Configuration);
+builder.Services.AddNotificationsModule(builder.Configuration);
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);
@@ -206,6 +211,8 @@ app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
 app.MapHub<WaitingRoomHub>("/hubs/waiting-room")
+   .RequireAuthorization();
+app.MapHub<NotificationHub>("/hubs/notifications")
    .RequireAuthorization();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {

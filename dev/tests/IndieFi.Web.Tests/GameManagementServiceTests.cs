@@ -1,6 +1,9 @@
 using System.Data.Common;
+using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Games.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
@@ -27,9 +30,10 @@ public sealed class GameManagementServiceTests
         }
 
         CreateGameResult result;
+        var publisher = new TestSocialNotificationFanoutPublisher();
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new GameManagementService(serviceDb)
+            result = await NewService(serviceDb, publisher)
                 .CreateAsync(ownerId, "New Game", "   ");
         }
 
@@ -43,6 +47,15 @@ public sealed class GameManagementServiceTests
         Assert.Equal(ownerId, game.OwnerId);
         Assert.Equal("New Game", game.Title);
         Assert.Null(game.Description);
+        var staged = Assert.Single(publisher.Events);
+        Assert.Equal(game.Id, staged.GameId);
+        Assert.Equal(game.CreatedAt, staged.OccurredAt);
+        Assert.Equal(
+            NotificationEventId.Create(
+                NotificationKind.FollowedUserGamePublished,
+                game.Id,
+                ownerId),
+            staged.FanoutId);
     }
 
     [Fact]
@@ -57,7 +70,7 @@ public sealed class GameManagementServiceTests
         CreateGameResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new GameManagementService(serviceDb)
+            result = await NewService(serviceDb)
                 .CreateAsync(ownerId, "   ", null);
         }
 
@@ -86,7 +99,7 @@ public sealed class GameManagementServiceTests
         CreateGameResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new GameManagementService(serviceDb).CreateAsync(
+            result = await NewService(serviceDb).CreateAsync(
                 ownerId,
                 new string('T', 201),
                 new string('D', 2001));
@@ -118,7 +131,7 @@ public sealed class GameManagementServiceTests
         UpdateGameResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new GameManagementService(serviceDb)
+            result = await NewService(serviceDb)
                 .UpdateAsync(gameId, ownerId, "Updated Game", "Updated description");
         }
 
@@ -151,7 +164,7 @@ public sealed class GameManagementServiceTests
         UpdateGameResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new GameManagementService(serviceDb)
+            result = await NewService(serviceDb)
                 .UpdateAsync(gameId, otherUserId, "Attacker Title", "Attacker description");
         }
 
@@ -182,7 +195,7 @@ public sealed class GameManagementServiceTests
         UpdateGameResult result;
         await using (var serviceDb = _fixture.NewDbContext())
         {
-            result = await new GameManagementService(serviceDb)
+            result = await NewService(serviceDb)
                 .UpdateAsync(gameId, ownerId, "   ", null);
         }
 
@@ -211,7 +224,7 @@ public sealed class GameManagementServiceTests
         await using (var serviceDb = _fixture.NewDbContext(new ThrowOnLinkInsertInterceptor()))
         {
             var exception = await Assert.ThrowsAsync<DbUpdateException>(() =>
-                new GameManagementService(serviceDb).CreateAsync(
+                NewService(serviceDb).CreateAsync(
                     ownerId,
                     title,
                     null,
@@ -223,6 +236,42 @@ public sealed class GameManagementServiceTests
         await using var verificationDb = _fixture.NewDbContext();
         Assert.False(await verificationDb.Games.AnyAsync(
             game => game.Title == title,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenFanoutStagingFails_RollsBackGameAndLinks()
+    {
+        long ownerId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            ownerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+        }
+
+        var title = $"Fanout rollback {Guid.NewGuid():N}";
+        var publisher = new TestSocialNotificationFanoutPublisher
+        {
+            Failure = new InvalidOperationException("Forced fan-out failure."),
+        };
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                NewService(serviceDb, publisher).CreateAsync(
+                    ownerId,
+                    title,
+                    null,
+                    [NewLink("Rolled back link")],
+                    TestContext.Current.CancellationToken));
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.Games.AnyAsync(
+            game => game.Title == title,
+            TestContext.Current.CancellationToken));
+        Assert.False(await verificationDb.GamePlayLinks.AnyAsync(
+            link => link.DisplayName == "Rolled back link",
             TestContext.Current.CancellationToken));
     }
 
@@ -252,7 +301,7 @@ public sealed class GameManagementServiceTests
         await using (var serviceDb = _fixture.NewDbContext(new ThrowOnLinkInsertInterceptor()))
         {
             var exception = await Assert.ThrowsAsync<DbUpdateException>(() =>
-                new GameManagementService(serviceDb).UpdateAsync(
+                NewService(serviceDb).UpdateAsync(
                     gameId,
                     ownerId,
                     "Changed title",
@@ -279,6 +328,12 @@ public sealed class GameManagementServiceTests
         GamePlayLinkProvider.Other,
         null,
         $"https://example.com/{displayName.ToLowerInvariant().Replace(' ', '-')}");
+
+    private static GameManagementService NewService(
+        AppDbContext db,
+        TestSocialNotificationFanoutPublisher? publisher = null) => new(
+            db,
+            publisher ?? new TestSocialNotificationFanoutPublisher());
 
     private sealed class ThrowOnLinkInsertInterceptor : DbCommandInterceptor
     {

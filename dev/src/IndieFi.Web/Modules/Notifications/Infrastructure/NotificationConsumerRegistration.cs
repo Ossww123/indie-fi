@@ -1,0 +1,16 @@
+using MassTransit;
+
+namespace IndieFi.Web.Modules.Notifications.Infrastructure;
+
+public static class NotificationConsumerRegistration
+{
+    public static void AddNotificationConsumers(
+        this IBusRegistrationConfigurator registration)
+    {
+        registration.AddConsumer<UserNotificationRequestedConsumer>();
+        registration.AddConsumer<UserNotificationsChangedConsumer>();
+        registration.AddConsumer<FavoriteGameKeyDropCreatedFanoutConsumer>();
+        registration.AddConsumer<SubscribedKeyDropOpenedFanoutConsumer>();
+        registration.AddConsumer<FollowedUserGamePublishedFanoutConsumer>();
+    }
+}

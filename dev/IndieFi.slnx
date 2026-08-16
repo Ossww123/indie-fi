@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/IndieFi.Web/IndieFi.Web.csproj" />
+    <Project Path="src/IndieFi.Worker/IndieFi.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IndieFi.Web.Tests/IndieFi.Web.Tests.csproj" />
