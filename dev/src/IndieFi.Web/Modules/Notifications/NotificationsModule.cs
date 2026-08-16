@@ -3,6 +3,7 @@ using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Notifications.Domain;
 using IndieFi.Web.Modules.Notifications.Infrastructure;
 using MassTransit;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace IndieFi.Web.Modules.Notifications;
 
@@ -75,6 +76,8 @@ public static class NotificationsModule
             INotificationEventPublisher,
             MassTransitNotificationEventPublisher>();
         services.AddSingleton<NotificationFactory>();
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddScoped<NotificationProjectionService>();
         return services;
     }
 }
