@@ -17,7 +17,8 @@ public enum NotificationProjectionOutcome
 
 public sealed record NotificationProjectionResult(
     NotificationProjectionOutcome Outcome,
-    long? NotificationId = null);
+    long? NotificationId = null,
+    bool IsWebVisible = false);
 
 public sealed class NotificationProjectionService
 {
@@ -126,7 +127,10 @@ public sealed class NotificationProjectionService
             createdAt);
         _db.Notifications.Add(notification);
         await _db.SaveChangesAsync(cancellationToken);
-        return new(NotificationProjectionOutcome.Created, notification.Id);
+        return new(
+            NotificationProjectionOutcome.Created,
+            notification.Id,
+            notification.IsWebVisible);
     }
 
     private Task<NotificationContent?> ResolveContentAsync(

@@ -8,13 +8,16 @@ public sealed class UserNotificationRequestedConsumer :
     IConsumer<UserNotificationRequestedV1>
 {
     private readonly NotificationProjectionService _projection;
+    private readonly INotificationRealtimeNotifier _realtime;
     private readonly ILogger<UserNotificationRequestedConsumer> _logger;
 
     public UserNotificationRequestedConsumer(
         NotificationProjectionService projection,
+        INotificationRealtimeNotifier realtime,
         ILogger<UserNotificationRequestedConsumer> logger)
     {
         _projection = projection;
+        _realtime = realtime;
         _logger = logger;
     }
 
@@ -30,6 +33,14 @@ public sealed class UserNotificationRequestedConsumer :
                 "Notification projection ignored an invalid {NotificationKind} contract.",
                 context.Message.Kind);
             return;
+        }
+
+        if (result.Outcome == NotificationProjectionOutcome.Created
+            && result.IsWebVisible)
+        {
+            await _realtime.NotifyChangedAsync(
+                context.Message.RecipientUserId,
+                context.CancellationToken);
         }
 
         _logger.LogInformation(

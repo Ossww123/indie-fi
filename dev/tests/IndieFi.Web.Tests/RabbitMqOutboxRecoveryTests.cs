@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using IndieFi.Web.Data;
+using IndieFi.Web.Infrastructure.Realtime;
 using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Notifications.Contracts;
@@ -173,6 +174,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         builder.Services.AddSingleton(recorder);
         builder.Services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(_postgres.ConnectionString));
+        builder.Services.AddIndieFiRealtime(builder.Configuration);
         builder.Services.AddNotificationsModule(
             builder.Configuration,
             registration =>
