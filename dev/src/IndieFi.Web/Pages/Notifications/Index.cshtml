@@ -11,12 +11,15 @@
             읽지 않은 알림 <strong data-notification-unread-count>@Model.Snapshot.UnreadCount</strong>개
         </p>
     </div>
-    @if (Model.Snapshot.UnreadCount > 0)
-    {
-        <form method="post" asp-page-handler="ReadAll">
-            <button type="submit" class="button-outline">모두 읽음</button>
-        </form>
-    }
+    <div class="flex flex-wrap gap-2">
+        <a asp-page="/Account/Notifications" class="button-outline">알림 설정</a>
+        @if (Model.Snapshot.UnreadCount > 0)
+        {
+            <form method="post" asp-page-handler="ReadAll">
+                <button type="submit" class="button-outline">모두 읽음</button>
+            </form>
+        }
+    </div>
 </div>
 
 @if (Model.Notice is not null)
