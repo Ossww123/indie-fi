@@ -249,7 +249,8 @@ public sealed class AccountMutationBlockingTests
                 scheduleDb,
                 new GameKeyRegistrationWriter(
                     scheduleDb,
-                    TestAccountProtection.CreateGameKeyProtectionService())).ScheduleAsync(
+                    TestAccountProtection.CreateGameKeyProtectionService()),
+                new TestKeyDropNotificationFanoutPublisher()).ScheduleAsync(
                 gameId,
                 userId,
                 DateTimeOffset.UtcNow.AddHours(1),

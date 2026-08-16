@@ -75,12 +75,16 @@ public static class NotificationsModule
         services.AddScoped<
             INotificationEventPublisher,
             MassTransitNotificationEventPublisher>();
+        services.AddScoped<
+            IKeyDropNotificationFanoutPublisher,
+            MassTransitKeyDropNotificationFanoutPublisher>();
         services.AddSingleton<NotificationFactory>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<NotificationProjectionService>();
         services.AddScoped<NotificationInboxService>();
         services.AddScoped<NotificationPreferenceService>();
         services.AddScoped<KeyDropSubscriptionService>();
+        services.AddScoped<FavoriteGameKeyDropFanoutService>();
         services.AddSignalR();
         services.AddSingleton<
             INotificationRealtimeNotifier,
