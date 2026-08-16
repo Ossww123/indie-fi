@@ -487,7 +487,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<GameGenre>(genre =>
         {
-            genre.ToTable("game_genres");
+            genre.ToTable("game_genres", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_genres_code_format",
+                    "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+                table.HasCheckConstraint(
+                    "CK_game_genres_display_name_format",
+                    "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+                table.HasCheckConstraint(
+                    "CK_game_genres_sort_order_range",
+                    $"sort_order >= 0 AND sort_order <= {GameClassificationPolicy.MaxSortOrder}");
+            });
             genre.HasKey(item => item.Id);
             genre.Property(item => item.Id)
                 .HasColumnName("id")
@@ -506,6 +517,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             genre.Property(item => item.IsActive)
                 .HasColumnName("is_active")
                 .IsRequired();
+            genre.HasIndex(item => item.Code).IsUnique();
+            genre.HasIndex(item => item.DisplayName).IsUnique();
+            genre.HasIndex(item => new { item.SortOrder, item.Code })
+                .HasDatabaseName("IX_game_genres_active_sort")
+                .HasFilter("is_active = TRUE");
             genre.HasData(GameClassificationCatalog.Genres.Select(item => new GameGenre
             {
                 Id = item.Id,
@@ -518,7 +534,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<GameTag>(tag =>
         {
-            tag.ToTable("game_tags");
+            tag.ToTable("game_tags", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_tags_code_format",
+                    "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+                table.HasCheckConstraint(
+                    "CK_game_tags_display_name_format",
+                    "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+                table.HasCheckConstraint(
+                    "CK_game_tags_sort_order_range",
+                    $"sort_order >= 0 AND sort_order <= {GameClassificationPolicy.MaxSortOrder}");
+            });
             tag.HasKey(item => item.Id);
             tag.Property(item => item.Id)
                 .HasColumnName("id")
@@ -537,6 +564,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             tag.Property(item => item.IsActive)
                 .HasColumnName("is_active")
                 .IsRequired();
+            tag.HasIndex(item => item.Code).IsUnique();
+            tag.HasIndex(item => item.DisplayName).IsUnique();
+            tag.HasIndex(item => new { item.SortOrder, item.Code })
+                .HasDatabaseName("IX_game_tags_active_sort")
+                .HasFilter("is_active = TRUE");
             tag.HasData(GameClassificationCatalog.Tags.Select(item => new GameTag
             {
                 Id = item.Id,
@@ -549,7 +581,18 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
         modelBuilder.Entity<GamePlatform>(platform =>
         {
-            platform.ToTable("game_platforms");
+            platform.ToTable("game_platforms", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_platforms_code_format",
+                    "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+                table.HasCheckConstraint(
+                    "CK_game_platforms_display_name_format",
+                    "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+                table.HasCheckConstraint(
+                    "CK_game_platforms_sort_order_range",
+                    $"sort_order >= 0 AND sort_order <= {GameClassificationPolicy.MaxSortOrder}");
+            });
             platform.HasKey(item => item.Id);
             platform.Property(item => item.Id)
                 .HasColumnName("id")
@@ -568,6 +611,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             platform.Property(item => item.IsActive)
                 .HasColumnName("is_active")
                 .IsRequired();
+            platform.HasIndex(item => item.Code).IsUnique();
+            platform.HasIndex(item => item.DisplayName).IsUnique();
+            platform.HasIndex(item => new { item.SortOrder, item.Code })
+                .HasDatabaseName("IX_game_platforms_active_sort")
+                .HasFilter("is_active = TRUE");
             platform.HasData(GameClassificationCatalog.Platforms.Select(item => new GamePlatform
             {
                 Id = item.Id,

@@ -1017,7 +1017,24 @@ namespace IndieFi.Web.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("game_genres", (string)null);
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("DisplayName")
+                        .IsUnique();
+
+                    b.HasIndex("SortOrder", "Code")
+                        .HasDatabaseName("IX_game_genres_active_sort")
+                        .HasFilter("is_active = TRUE");
+
+                    b.ToTable("game_genres", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_game_genres_code_format", "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+
+                            t.HasCheckConstraint("CK_game_genres_display_name_format", "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+
+                            t.HasCheckConstraint("CK_game_genres_sort_order_range", "sort_order >= 0 AND sort_order <= 10000");
+                        });
 
                     b.HasData(
                         new
@@ -1218,7 +1235,24 @@ namespace IndieFi.Web.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("game_platforms", (string)null);
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("DisplayName")
+                        .IsUnique();
+
+                    b.HasIndex("SortOrder", "Code")
+                        .HasDatabaseName("IX_game_platforms_active_sort")
+                        .HasFilter("is_active = TRUE");
+
+                    b.ToTable("game_platforms", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_game_platforms_code_format", "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+
+                            t.HasCheckConstraint("CK_game_platforms_display_name_format", "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+
+                            t.HasCheckConstraint("CK_game_platforms_sort_order_range", "sort_order >= 0 AND sort_order <= 10000");
+                        });
 
                     b.HasData(
                         new
@@ -1372,7 +1406,24 @@ namespace IndieFi.Web.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("game_tags", (string)null);
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("DisplayName")
+                        .IsUnique();
+
+                    b.HasIndex("SortOrder", "Code")
+                        .HasDatabaseName("IX_game_tags_active_sort")
+                        .HasFilter("is_active = TRUE");
+
+                    b.ToTable("game_tags", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_game_tags_code_format", "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+
+                            t.HasCheckConstraint("CK_game_tags_display_name_format", "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+
+                            t.HasCheckConstraint("CK_game_tags_sort_order_range", "sort_order >= 0 AND sort_order <= 10000");
+                        });
 
                     b.HasData(
                         new
