@@ -773,7 +773,10 @@ public sealed class ReviewRequestServiceTests
         new(db, NullLogger<ReviewRequestService>.Instance);
 
     private static ReviewClaimService NewClaimService(AppDbContext db) =>
-        new(db, NullLogger<ReviewClaimService>.Instance);
+        new(
+            db,
+            NullLogger<ReviewClaimService>.Instance,
+            new TestNotificationEventPublisher());
 
     private async Task<int> BalanceAsync(long userId)
     {

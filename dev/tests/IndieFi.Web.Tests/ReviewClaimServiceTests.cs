@@ -1,6 +1,9 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Contracts;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
@@ -779,6 +782,101 @@ public sealed class ReviewClaimServiceTests
     }
 
     [Fact]
+    public async Task ClaimNextAsync_StagesStableAssignmentEventForReviewer()
+    {
+        long reviewerId;
+        var operationId = Guid.NewGuid();
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(
+                TestContext.Current.CancellationToken);
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, 1);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id);
+        }
+
+        var publisher = new TestNotificationEventPublisher();
+        await using var serviceDb = _fixture.NewDbContext();
+        var service = new ReviewClaimService(
+            serviceDb,
+            NullLogger<ReviewClaimService>.Instance,
+            publisher);
+
+        var first = await service.ClaimNextAsync(reviewerId, operationId);
+        var replay = await service.ClaimNextAsync(reviewerId, operationId);
+
+        Assert.Equal(ReviewClaimOutcome.Claimed, first.Outcome);
+        Assert.Equal(first.RequestId, replay.RequestId);
+        var assignment = await serviceDb.ReviewAssignments
+            .SingleAsync(
+                item => item.ReviewerId == reviewerId
+                    && item.ClaimOperationId == operationId,
+                TestContext.Current.CancellationToken);
+        Assert.Equal(2, publisher.Events.Count);
+        Assert.All(publisher.Events, staged =>
+        {
+            Assert.Equal(
+                NotificationEventId.Create(
+                    NotificationKind.ReviewAssigned,
+                    assignment.Id,
+                    reviewerId),
+                staged.EventId);
+            Assert.Equal(reviewerId, staged.RecipientUserId);
+            Assert.Equal(NotificationKind.ReviewAssigned, staged.Kind);
+            Assert.Equal(NotificationSourceTypes.ReviewAssignment, staged.SourceType);
+            Assert.Equal(assignment.Id, staged.SourceId);
+            Assert.Equal(assignment.CreatedAt, staged.OccurredAt);
+        });
+    }
+
+    [Fact]
+    public async Task ClaimNextAsync_WhenEventStagingFails_RollsBackAssignment()
+    {
+        long reviewerId;
+        long requestId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(
+                TestContext.Current.CancellationToken);
+            var requester = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, 1);
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requester.Id);
+            requestId = (await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requester.Id,
+                game.Id)).Id;
+        }
+
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var service = new ReviewClaimService(
+                serviceDb,
+                NullLogger<ReviewClaimService>.Instance,
+                new TestNotificationEventPublisher
+                {
+                    Failure = new InvalidOperationException("staging failed"),
+                });
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.ClaimNextAsync(reviewerId, Guid.NewGuid()));
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.ReviewAssignments.AnyAsync(
+            item => item.RequestId == requestId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(
+            ReviewRequestStatus.Queued,
+            await verificationDb.ReviewRequests
+                .Where(item => item.Id == requestId)
+                .Select(item => item.Status)
+                .SingleAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ClaimNextAsync_WhenOperationIdIsEmpty_WritesNothing()
     {
         await using var db = _fixture.NewDbContext();
@@ -794,5 +892,8 @@ public sealed class ReviewClaimServiceTests
 
     // The service only uses its logger for outcome records; these tests assert database state.
     private static ReviewClaimService NewService(AppDbContext db) =>
-        new(db, NullLogger<ReviewClaimService>.Instance);
+        new(
+            db,
+            NullLogger<ReviewClaimService>.Instance,
+            new TestNotificationEventPublisher());
 }

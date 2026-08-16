@@ -100,7 +100,8 @@ internal static class ReviewTestData
         await using var claimDb = fixture.NewDbContext();
         var claimResult = await new ReviewClaimService(
             claimDb,
-            NullLogger<ReviewClaimService>.Instance).ClaimNextAsync(reviewerId);
+            NullLogger<ReviewClaimService>.Instance,
+            new TestNotificationEventPublisher()).ClaimNextAsync(reviewerId);
         var assignmentId = await claimDb.ReviewAssignments
             .Where(item => item.RequestId == requestId)
             .Select(item => item.Id)

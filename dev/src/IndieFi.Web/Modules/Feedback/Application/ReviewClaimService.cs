@@ -1,4 +1,8 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Contracts;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -109,11 +113,16 @@ public class ReviewClaimService
 
     private readonly AppDbContext _db;
     private readonly ILogger<ReviewClaimService> _logger;
+    private readonly INotificationEventPublisher _notificationPublisher;
 
-    public ReviewClaimService(AppDbContext db, ILogger<ReviewClaimService> logger)
+    public ReviewClaimService(
+        AppDbContext db,
+        ILogger<ReviewClaimService> logger,
+        INotificationEventPublisher notificationPublisher)
     {
         _db = db;
         _logger = logger;
+        _notificationPublisher = notificationPublisher;
     }
 
     public Task<ReviewClaimResult> ClaimNextAsync(long reviewerId)
@@ -130,17 +139,25 @@ public class ReviewClaimService
             return Result(ReviewClaimOutcome.InvalidOperationId, reviewerId, null);
         }
 
-        List<long> claimMarkers;
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        var activeTransaction = _db.Database.CurrentTransaction
+            ?? throw new InvalidOperationException("Review claim requires a transaction.");
+        const string savepointName = "review_claim_attempt";
+        await activeTransaction.CreateSavepointAsync(savepointName);
+        long claimMarker;
 
         try
         {
-            claimMarkers = await _db.Database
+            var claimMarkers = await _db.Database
                 .SqlQueryRaw<long>(
                     ClaimSql,
                     new NpgsqlParameter("reviewerId", reviewerId),
                     new NpgsqlParameter("operationId", operationId),
                     new NpgsqlParameter("leaseMinutes", LeaseMinutes))
                 .ToListAsync();
+            claimMarker = claimMarkers.Single();
+            await activeTransaction.ReleaseSavepointAsync(savepointName);
         }
         // The prefilter sees only its own snapshot, so two claims from one reviewer can both
         // pass and lock different request rows that SKIP LOCKED cannot coordinate; only that
@@ -149,23 +166,27 @@ public class ReviewClaimService
             when (exception.SqlState == UniqueViolation
                 && exception.ConstraintName == ReviewerOperationIndex)
         {
-            var existingRequestId = await _db.ReviewAssignments
+            await activeTransaction.RollbackToSavepointAsync(savepointName);
+            await activeTransaction.ReleaseSavepointAsync(savepointName);
+            claimMarker = await _db.ReviewAssignments
                 .Where(assignment => assignment.ReviewerId == reviewerId)
                 .Where(assignment => assignment.ClaimOperationId == operationId)
                 .Select(assignment => assignment.RequestId)
                 .SingleAsync();
-            return Result(ReviewClaimOutcome.Claimed, reviewerId, existingRequestId);
         }
         catch (PostgresException exception)
             when (exception.SqlState == UniqueViolation
                 && exception.ConstraintName == ReviewerGameIndex)
         {
+            await activeTransaction.RollbackToSavepointAsync(savepointName);
+            await activeTransaction.ReleaseSavepointAsync(savepointName);
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(ReviewClaimOutcome.AlreadyHasThatGame, reviewerId, null);
         }
 
-        var claimMarker = claimMarkers.Single();
         if (claimMarker == -2)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(
                 ReviewClaimOutcome.AccountUnavailable,
                 reviewerId,
@@ -174,8 +195,28 @@ public class ReviewClaimService
 
         if (claimMarker == -1)
         {
+            await AccountMutationGuard.CommitIfOwnedAsync(transaction);
             return Result(ReviewClaimOutcome.NoneAvailable, reviewerId, null);
         }
+
+        var assignment = await _db.ReviewAssignments
+            .AsNoTracking()
+            .Where(item => item.ReviewerId == reviewerId
+                && item.ClaimOperationId == operationId)
+            .Select(item => new { item.Id, item.CreatedAt })
+            .SingleAsync();
+        await _notificationPublisher.StageAsync(
+            NotificationEventId.Create(
+                NotificationKind.ReviewAssigned,
+                assignment.Id,
+                reviewerId),
+            reviewerId,
+            NotificationKind.ReviewAssigned,
+            NotificationSourceTypes.ReviewAssignment,
+            assignment.Id,
+            assignment.CreatedAt);
+        await _db.SaveChangesAsync();
+        await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
         return Result(ReviewClaimOutcome.Claimed, reviewerId, claimMarker);
     }

@@ -344,7 +344,8 @@ public sealed class AccountMutationBlockingTests
                     "This feedback must not be stored for a suspended reviewer.");
             claim = await new ReviewClaimService(
                     reviewerDb,
-                    NullLogger<ReviewClaimService>.Instance)
+                    NullLogger<ReviewClaimService>.Instance,
+                    new TestNotificationEventPublisher())
                 .ClaimNextAsync(assignment.ReviewerId);
             sweep = await new ReviewLeaseSweepService(
                     reviewerDb,

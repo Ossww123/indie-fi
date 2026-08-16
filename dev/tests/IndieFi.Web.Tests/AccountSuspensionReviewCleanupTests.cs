@@ -233,7 +233,8 @@ public sealed class AccountSuspensionReviewCleanupTests
         {
             var service = new ReviewClaimService(
                 claimDb,
-                NullLogger<ReviewClaimService>.Instance);
+                NullLogger<ReviewClaimService>.Instance,
+                new TestNotificationEventPublisher());
             for (var index = 0; index < 2; index++)
             {
                 var result = await service.ClaimNextAsync(reviewerId);
