@@ -1,4 +1,5 @@
 using System.Net;
+using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
 using IndieFi.Web.Modules.Media.Application;
@@ -13,6 +14,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
     private readonly TimeProvider _timeProvider;
     private readonly string _bucketName;
     private readonly TimeSpan _operationTimeout;
+    private readonly Protocol _signedUrlProtocol;
     private readonly bool _useR2UploadCompatibility;
 
     public S3MediaObjectStorage(
@@ -28,6 +30,9 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         _timeProvider = timeProvider;
         _bucketName = options.Value.BucketName;
         _operationTimeout = options.Value.OperationTimeout;
+        _signedUrlProtocol = new Uri(options.Value.ServiceUrl).Scheme == Uri.UriSchemeHttp
+            ? Protocol.HTTP
+            : Protocol.HTTPS;
         _useR2UploadCompatibility = string.Equals(
             options.Value.Region,
             "auto",
@@ -46,6 +51,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
             Verb = HttpVerb.PUT,
             ContentType = request.ContentType,
             Expires = ExpiresAt(MediaObjectAccessPolicy.UploadUrlLifetime),
+            Protocol = _signedUrlProtocol,
         };
         signingRequest.Headers.ContentLength = request.ContentLength;
         return CreateSignedUriAsync(signingRequest, cancellationToken);
@@ -63,6 +69,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
                 Key = request.ObjectKey.Value,
                 Verb = HttpVerb.GET,
                 Expires = ExpiresAt(MediaObjectAccessPolicy.DownloadUrlLifetime),
+                Protocol = _signedUrlProtocol,
             },
             cancellationToken);
     }

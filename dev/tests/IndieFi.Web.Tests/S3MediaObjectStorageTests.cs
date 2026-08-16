@@ -70,6 +70,23 @@ public sealed class S3MediaObjectStorageTests
     }
 
     [Fact]
+    public async Task SignedUrls_ForLocalEndpoint_KeepHttpProtocol()
+    {
+        using var client = new RecordingS3Client();
+        var storage = CreateStorage(client, region: "us-east-1");
+
+        var upload = await storage.CreateUploadUrlAsync(
+            MediaObjectAccessPolicy.CreateUploadUrlRequest(
+                StagingKey,
+                MediaUploadKind.GameImage,
+                "image/png",
+                4),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(Uri.UriSchemeHttp, upload.Scheme);
+    }
+
+    [Fact]
     public async Task MetadataAndRead_MapObjectPropertiesAndDisposeResponseStream()
     {
         using var client = new RecordingS3Client
@@ -422,6 +439,9 @@ public sealed class S3MediaObjectStorageTests
             Options.Create(new MediaObjectStorageOptions
             {
                 Enabled = true,
+                ServiceUrl = region == "auto"
+                    ? "https://storage.example.test"
+                    : "http://127.0.0.1:9000",
                 BucketName = "media-private",
                 Region = region,
                 OperationTimeout = operationTimeout ?? TimeSpan.FromSeconds(10),
