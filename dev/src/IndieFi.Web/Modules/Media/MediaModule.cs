@@ -72,6 +72,7 @@ public static class MediaModule
         services.AddSingleton<S3MediaObjectStorage>();
         services.AddSingleton<IMediaObjectStorage>(provider =>
             provider.GetRequiredService<S3MediaObjectStorage>());
+        services.AddSingleton<MediaObjectDeletionService>();
         services.AddScoped<
             IMediaProcessingPublisher,
             MassTransitMediaProcessingPublisher>();
@@ -86,6 +87,11 @@ public static class MediaModule
             services.AddScoped<
                 IMediaProcessingAttemptExecutor,
                 MediaProcessingAttemptExecutor>();
+            services.AddScoped<MediaDeletionWorkExecutor>();
+            services.AddScoped<IMediaDeletionWorkExecutor>(provider =>
+                provider.GetRequiredService<MediaDeletionWorkExecutor>());
+            services.AddScoped<MediaCleanupService>();
+            services.AddHostedService<MediaCleanupWorker>();
         }
 
         services.AddScoped<MediaStatusQueryService>();
