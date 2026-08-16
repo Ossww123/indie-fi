@@ -1,4 +1,5 @@
 using Amazon.S3;
+using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
 using IndieFi.Web.Modules.Media.Application;
 using IndieFi.Web.Modules.Media.Infrastructure;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -13,6 +14,17 @@ public static class MediaModule
         IConfiguration configuration)
     {
         services.AddScoped<MediaUploadReservationService>();
+        services.AddOptions<MediaUploadRateLimitOptions>()
+            .Bind(configuration.GetSection(MediaUploadRateLimitOptions.SectionName))
+            .Validate(
+                MediaUploadRateLimitOptions.IsValid,
+                "Media upload rate-limit settings are invalid.")
+            .ValidateOnStart();
+        services.TryAddSingleton<WaitingRoomRedisConnection>();
+        services.AddSingleton<MediaUploadRateLimitKeys>();
+        services.AddSingleton<
+            IMediaUploadIssueRateLimiter,
+            RedisMediaUploadIssueRateLimiter>();
         services.AddOptions<MediaObjectStorageOptions>()
             .Bind(configuration.GetSection(MediaObjectStorageOptions.SectionName))
             .ValidateOnStart();
@@ -35,6 +47,7 @@ public static class MediaModule
         services.AddSingleton<S3MediaObjectStorage>();
         services.AddSingleton<IMediaObjectStorage>(provider =>
             provider.GetRequiredService<S3MediaObjectStorage>());
+        services.AddScoped<MediaUploadUrlService>();
         services.AddHealthChecks()
             .AddCheck<MediaObjectStorageHealthCheck>("media-object-storage");
         return services;
