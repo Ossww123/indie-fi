@@ -10,17 +10,23 @@ public class NewModel : GameFormPageModel
 {
     private readonly ICurrentUser _currentUser;
     private readonly GameManagementService _gameManagementService;
+    private readonly GameClassificationCatalogQueryService _classificationCatalog;
 
     public NewModel(
         ICurrentUser currentUser,
-        GameManagementService gameManagementService)
+        GameManagementService gameManagementService,
+        GameClassificationCatalogQueryService classificationCatalog)
     {
         _currentUser = currentUser;
         _gameManagementService = gameManagementService;
+        _classificationCatalog = classificationCatalog;
     }
 
-    public void OnGet()
+    public async Task OnGetAsync()
     {
+        await LoadActiveClassificationCatalogAsync(
+            _classificationCatalog,
+            HttpContext.RequestAborted);
         EnsureLinkEditorRow();
     }
 
@@ -28,6 +34,9 @@ public class NewModel : GameFormPageModel
     {
         if (!ModelState.IsValid)
         {
+            await LoadActiveClassificationCatalogAsync(
+                _classificationCatalog,
+                HttpContext.RequestAborted);
             EnsureLinkEditorRow();
             return Page();
         }
@@ -39,12 +48,16 @@ public class NewModel : GameFormPageModel
             ownerId,
             Title,
             Description,
+            CreateClassificationInput(),
             CreateLinkInputs(),
             HttpContext.RequestAborted);
 
         if (result.Outcome == CreateGameOutcome.Invalid)
         {
             AddViolations(result.Violations);
+            await LoadActiveClassificationCatalogAsync(
+                _classificationCatalog,
+                HttpContext.RequestAborted);
             EnsureLinkEditorRow();
             return Page();
         }

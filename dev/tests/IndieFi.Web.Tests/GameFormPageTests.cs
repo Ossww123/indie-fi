@@ -33,6 +33,11 @@ public sealed class GameFormPageTests
         Assert.Contains("data-play-links", html);
         Assert.Contains("data-max-links=\"5\"", html);
         Assert.Contains("name=\"Links[0].DisplayName\"", html);
+        Assert.Contains("name=\"GenreCode\"", html);
+        Assert.Contains("name=\"TagCodes\"", html);
+        Assert.Contains("name=\"PlatformCodes\"", html);
+        Assert.Contains("value=\"action\"", html);
+        Assert.DoesNotContain("value=\"unspecified\"", html);
         Assert.Contains("/js/dist/games/play-links", html);
 
         using var moduleResponse = await client.GetAsync(
@@ -55,6 +60,9 @@ public sealed class GameFormPageTests
         {
             ["Title"] = title,
             ["Description"] = "Linked game description",
+            ["GenreCode"] = "action",
+            ["TagCodes"] = "single-player",
+            ["PlatformCodes"] = "web",
             ["Links[0].DisplayName"] = "  Browser build  ",
             ["Links[0].Provider"] = "DeveloperWebsite",
             ["Links[0].TargetPlatform"] = "Web",
@@ -82,10 +90,23 @@ public sealed class GameFormPageTests
             .ToListAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, links.Count);
+        Assert.Equal(10, game.GenreId);
         Assert.Equal(["Browser build", "Steam"], links.Select(link => link.DisplayName));
         Assert.Equal([0, 1], links.Select(link => link.SortOrder));
         Assert.Equal(GamePlayLinkPlatform.Web, links[0].TargetPlatform);
         Assert.Null(links[1].TargetPlatform);
+        Assert.Equal(
+            [10],
+            await verificationDb.GameTagAssignments
+                .Where(item => item.GameId == game.Id)
+                .Select(item => item.TagId)
+                .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            [13],
+            await verificationDb.GamePlatformAssignments
+                .Where(item => item.GameId == game.Id)
+                .Select(item => item.PlatformId)
+                .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -102,6 +123,8 @@ public sealed class GameFormPageTests
         {
             ["Title"] = "   ",
             ["Description"] = string.Empty,
+            ["GenreCode"] = "action",
+            ["PlatformCodes"] = "windows",
             ["Links[0].DisplayName"] = string.Empty,
             ["Links[0].Provider"] = "Other",
             ["Links[0].TargetPlatform"] = string.Empty,
@@ -177,6 +200,9 @@ public sealed class GameFormPageTests
         {
             ["Title"] = updatedTitle,
             ["Description"] = "Updated description",
+            ["GenreCode"] = "role-playing",
+            ["TagCodes"] = "pixel-art",
+            ["PlatformCodes"] = "linux",
             ["Links[0].DisplayName"] = "Second updated",
             ["Links[0].Provider"] = "ItchIo",
             ["Links[0].TargetPlatform"] = "Multiple",
@@ -205,8 +231,21 @@ public sealed class GameFormPageTests
 
         Assert.Equal(updatedTitle, game.Title);
         Assert.Equal("Updated description", game.Description);
+        Assert.Equal(12, game.GenreId);
         Assert.Equal(["Second updated", "First"], links.Select(link => link.DisplayName));
         Assert.Equal([0, 1], links.Select(link => link.SortOrder));
+        Assert.Equal(
+            [28],
+            await verificationDb.GameTagAssignments
+                .Where(item => item.GameId == owner.GameId)
+                .Select(item => item.TagId)
+                .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            [12],
+            await verificationDb.GamePlatformAssignments
+                .Where(item => item.GameId == owner.GameId)
+                .Select(item => item.PlatformId)
+                .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -224,6 +263,8 @@ public sealed class GameFormPageTests
         {
             ["Title"] = "Should not be stored",
             ["Description"] = "Should not be stored",
+            ["GenreCode"] = "unspecified",
+            ["PlatformCodes"] = "windows",
             ["Links[0].DisplayName"] = "Private address",
             ["Links[0].Provider"] = "Other",
             ["Links[0].TargetPlatform"] = "Web",

@@ -62,30 +62,6 @@ public sealed class GameManagementService
     public Task<CreateGameResult> CreateAsync(
         long ownerId,
         string? title,
-        string? description)
-    {
-        return CreateAsync(ownerId, title, description, [], CancellationToken.None);
-    }
-
-    public async Task<CreateGameResult> CreateAsync(
-        long ownerId,
-        string? title,
-        string? description,
-        IReadOnlyList<GamePlayLinkInput> links,
-        CancellationToken cancellationToken)
-    {
-        return await CreateCoreAsync(
-            ownerId,
-            title,
-            description,
-            classification: null,
-            links,
-            cancellationToken);
-    }
-
-    public Task<CreateGameResult> CreateAsync(
-        long ownerId,
-        string? title,
         string? description,
         GameClassificationInput classification,
         IReadOnlyList<GamePlayLinkInput> links,
@@ -105,26 +81,23 @@ public sealed class GameManagementService
         long ownerId,
         string? title,
         string? description,
-        GameClassificationInput? classification,
+        GameClassificationInput classification,
         IReadOnlyList<GamePlayLinkInput> links,
         CancellationToken cancellationToken)
     {
         var violations = Validate(title, description);
         var linkValidation = GamePlayLinkManagementService.Validate(links);
         violations.AddRange(linkValidation.Violations);
-        GameClassificationValidationResult? classificationValidation = null;
-        if (classification is not null)
-        {
-            classificationValidation = await _classificationSelectionService
-                .ValidateForCreateAsync(classification, cancellationToken);
-            violations.AddRange(classificationValidation.Violations);
-        }
+        var classificationValidation = await _classificationSelectionService
+            .ValidateForCreateAsync(classification, cancellationToken);
+        violations.AddRange(classificationValidation.Violations);
 
         if (violations.Count > 0)
         {
             return new CreateGameResult(CreateGameOutcome.Invalid, violations);
         }
 
+        var selection = classificationValidation.Selection!;
         await using var transaction =
             await AccountMutationGuard.BeginTransactionIfNeededAsync(_db, cancellationToken);
         if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId, cancellationToken))
@@ -138,19 +111,15 @@ public sealed class GameManagementService
         var game = new Game
         {
             OwnerId = ownerId,
-            GenreId = classificationValidation?.Selection?.GenreId
-                ?? GameClassificationCatalog.UnspecifiedGenreId,
+            GenreId = selection.GenreId,
             Title = title!.Trim(),
             Description = NormalizeDescription(description),
         };
 
         _db.Games.Add(game);
         await _db.SaveChangesAsync(cancellationToken);
-        if (classificationValidation?.Selection is { } selection)
-        {
-            AddClassificationAssignments(game.Id, selection);
-            await _db.SaveChangesAsync(cancellationToken);
-        }
+        AddClassificationAssignments(game.Id, selection);
+        await _db.SaveChangesAsync(cancellationToken);
 
         if (linkValidation.Links.Count > 0)
         {

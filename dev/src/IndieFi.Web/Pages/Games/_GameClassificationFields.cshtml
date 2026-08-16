@@ -1,0 +1,51 @@
+@model GameFormPageModel
+
+<div class="field-group">
+    <label asp-for="GenreCode" class="field-label">장르</label>
+    <select asp-for="GenreCode" class="field-input">
+        <option value="">장르를 선택하세요</option>
+        @foreach (var option in Model.ClassificationCatalog.Genres)
+        {
+            <option value="@option.Code">
+                @option.DisplayName@if (!option.IsActive) {<text> (현재 비활성)</text>}
+            </option>
+        }
+    </select>
+    <span asp-validation-for="GenreCode" class="field-error"></span>
+</div>
+
+<fieldset class="field-group">
+    <legend class="field-label">태그 <span class="text-meta">(선택, 최대 8개)</span></legend>
+    <div class="flex flex-wrap gap-2">
+        @foreach (var option in Model.ClassificationCatalog.Tags)
+        {
+            var isChecked = Model.TagCodes.Contains(option.Code, StringComparer.Ordinal);
+            <label class="button-outline cursor-pointer px-3 py-1.5">
+                <input type="checkbox"
+                       name="TagCodes"
+                       value="@option.Code"
+                       checked="@isChecked" />
+                <span>@option.DisplayName@if (!option.IsActive) {<text> (현재 비활성)</text>}</span>
+            </label>
+        }
+    </div>
+    <span asp-validation-for="TagCodes" class="field-error"></span>
+</fieldset>
+
+<fieldset class="field-group">
+    <legend class="field-label">지원 플랫폼 <span class="text-meta">(1개 이상)</span></legend>
+    <div class="flex flex-wrap gap-2">
+        @foreach (var option in Model.ClassificationCatalog.Platforms)
+        {
+            var isChecked = Model.PlatformCodes.Contains(option.Code, StringComparer.Ordinal);
+            <label class="button-outline cursor-pointer px-3 py-1.5">
+                <input type="checkbox"
+                       name="PlatformCodes"
+                       value="@option.Code"
+                       checked="@isChecked" />
+                <span>@option.DisplayName@if (!option.IsActive) {<text> (현재 비활성)</text>}</span>
+            </label>
+        }
+    </div>
+    <span asp-validation-for="PlatformCodes" class="field-error"></span>
+</fieldset>

@@ -34,7 +34,13 @@ public sealed class GameManagementServiceTests
         await using (var serviceDb = _fixture.NewDbContext())
         {
             result = await NewService(serviceDb, publisher)
-                .CreateAsync(ownerId, "New Game", "   ");
+                .CreateAsync(
+                    ownerId,
+                    "New Game",
+                    "   ",
+                    ValidClassification(),
+                    [],
+                    TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -71,7 +77,13 @@ public sealed class GameManagementServiceTests
         await using (var serviceDb = _fixture.NewDbContext())
         {
             result = await NewService(serviceDb)
-                .CreateAsync(ownerId, "   ", null);
+                .CreateAsync(
+                    ownerId,
+                    "   ",
+                    null,
+                    ValidClassification(),
+                    [],
+                    TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -102,7 +114,10 @@ public sealed class GameManagementServiceTests
             result = await NewService(serviceDb).CreateAsync(
                 ownerId,
                 new string('T', 201),
-                new string('D', 2001));
+                new string('D', 2001),
+                ValidClassification(),
+                [],
+                TestContext.Current.CancellationToken);
         }
 
         await using var verificationDb = _fixture.NewDbContext();
@@ -228,6 +243,7 @@ public sealed class GameManagementServiceTests
                     ownerId,
                     title,
                     null,
+                    ValidClassification(),
                     [NewLink("New link")],
                     TestContext.Current.CancellationToken));
             Assert.IsType<InvalidOperationException>(exception.InnerException);
@@ -262,6 +278,7 @@ public sealed class GameManagementServiceTests
                     ownerId,
                     title,
                     null,
+                    ValidClassification(),
                     [NewLink("Rolled back link")],
                     TestContext.Current.CancellationToken));
         }
@@ -328,6 +345,11 @@ public sealed class GameManagementServiceTests
         GamePlayLinkProvider.Other,
         null,
         $"https://example.com/{displayName.ToLowerInvariant().Replace(' ', '-')}");
+
+    private static GameClassificationInput ValidClassification() => new(
+        "action",
+        [],
+        ["windows"]);
 
     private static GameManagementService NewService(
         AppDbContext db,

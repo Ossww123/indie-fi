@@ -679,7 +679,10 @@ public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
                     .CreateAsync(
                         ownerId,
                         $"Rabbit fan-out {Guid.NewGuid():N}",
-                        "Actual social notification path.");
+                        "Actual social notification path.",
+                        new GameClassificationInput("action", [], ["windows"]),
+                        [],
+                        TestContext.Current.CancellationToken);
             }
 
             Assert.Equal(CreateGameOutcome.Created, result.Outcome);

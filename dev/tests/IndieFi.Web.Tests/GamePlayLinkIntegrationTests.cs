@@ -263,6 +263,8 @@ public sealed class GamePlayLinkIntegrationTests
         {
             new("Title", title),
             new("Description", string.Empty),
+            new("GenreCode", "action"),
+            new("PlatformCodes", "windows"),
             new("__RequestVerificationToken", token),
         };
 

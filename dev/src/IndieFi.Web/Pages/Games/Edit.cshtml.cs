@@ -13,15 +13,18 @@ public class EditModel : GameFormPageModel
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly GameManagementService _gameManagementService;
+    private readonly GameClassificationCatalogQueryService _classificationCatalog;
 
     public EditModel(
         AppDbContext db,
         ICurrentUser currentUser,
-        GameManagementService gameManagementService)
+        GameManagementService gameManagementService,
+        GameClassificationCatalogQueryService classificationCatalog)
     {
         _db = db;
         _currentUser = currentUser;
         _gameManagementService = gameManagementService;
+        _classificationCatalog = classificationCatalog;
     }
 
     public async Task<IActionResult> OnGetAsync(long id)
@@ -39,6 +42,15 @@ public class EditModel : GameFormPageModel
 
         Title = game.Title;
         Description = game.Description;
+        if (!await LoadEditorClassificationCatalogAsync(
+                _classificationCatalog,
+                id,
+                loadSelections: true,
+                HttpContext.RequestAborted))
+        {
+            return NotFound();
+        }
+
         Links = await _db.GamePlayLinks
             .Where(link => link.GameId == id)
             .OrderBy(link => link.SortOrder)
@@ -67,6 +79,11 @@ public class EditModel : GameFormPageModel
                 return NotFound();
             }
 
+            await LoadEditorClassificationCatalogAsync(
+                _classificationCatalog,
+                id,
+                loadSelections: false,
+                HttpContext.RequestAborted);
             EnsureLinkEditorRow();
             return Page();
         }
@@ -76,6 +93,7 @@ public class EditModel : GameFormPageModel
             ownerId,
             Title,
             Description,
+            CreateClassificationInput(),
             CreateLinkInputs(),
             HttpContext.RequestAborted);
 
@@ -92,6 +110,11 @@ public class EditModel : GameFormPageModel
         if (result.Outcome == UpdateGameOutcome.Invalid)
         {
             AddViolations(result.Violations);
+            await LoadEditorClassificationCatalogAsync(
+                _classificationCatalog,
+                id,
+                loadSelections: false,
+                HttpContext.RequestAborted);
             EnsureLinkEditorRow();
             return Page();
         }
