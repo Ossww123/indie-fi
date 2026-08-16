@@ -1,12 +1,15 @@
 using System.Collections.Concurrent;
 using IndieFi.Web.Data;
+using IndieFi.Web.Entities;
 using IndieFi.Web.Infrastructure.Realtime;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Notifications.Contracts;
 using IndieFi.Web.Modules.Notifications.Domain;
 using IndieFi.Web.Modules.Notifications.Infrastructure;
+using IndieFi.Web.Modules.Profiles.Domain;
 using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.EntityFrameworkCore;
@@ -359,6 +362,185 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task RabbitMq_KeyDropFanouts_RespectRelationshipsAndPreferences()
+    {
+        await ClearMessagingStateAsync();
+        await using (var cleanupDb = _postgres.NewDbContext())
+        {
+            var now = DateTimeOffset.UtcNow;
+            await cleanupDb.KeyDrops
+                .Where(item => item.OpensAt <= now
+                    && item.ClosedAt == null
+                    && item.OpenNotificationStagedAt == null)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        item => item.OpenNotificationStagedAt,
+                        now),
+                    TestContext.Current.CancellationToken);
+        }
+
+        long ownerId;
+        long recipientId;
+        long cancelledRecipientId;
+        long gameId;
+        await using (var arrangeDb = _postgres.NewDbContext())
+        {
+            ownerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            recipientId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            cancelledRecipientId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, ownerId);
+            gameId = game.Id;
+            arrangeDb.FavoriteGames.AddRange(
+                Favorite(ownerId, gameId),
+                Favorite(recipientId, gameId));
+            arrangeDb.NotificationPreferences.Add(new NotificationPreference
+            {
+                UserId = recipientId,
+                Kind = NotificationKind.FavoriteGameKeyDropCreated,
+                WebEnabled = false,
+                EmailEnabled = false,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var settings = BuildMessagingSettings();
+        var recorder = new ProbeDeliveryRecorder();
+        using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
+        using var producerHost = BuildHost(settings, recorder, addConsumer: false);
+        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
+        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            ScheduleKeyDropResult schedule;
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                schedule = await scope.ServiceProvider
+                    .GetRequiredService<KeyDropSchedulingService>()
+                    .ScheduleAsync(
+                        gameId,
+                        ownerId,
+                        DateTimeOffset.UtcNow.AddHours(1),
+                        $"KEY-{Guid.NewGuid():N}");
+            }
+
+            Assert.Equal(ScheduleKeyDropOutcome.Scheduled, schedule.Outcome);
+            var dropId = schedule.KeyDropId!.Value;
+            var favoriteEventId = NotificationEventId.Create(
+                NotificationKind.FavoriteGameKeyDropCreated,
+                dropId,
+                recipientId);
+            await WaitForNotificationAsync(favoriteEventId, recipientId);
+            var favoriteFanoutId = NotificationEventId.Create(
+                NotificationKind.FavoriteGameKeyDropCreated,
+                dropId,
+                ownerId);
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var publisher = scope.ServiceProvider
+                    .GetRequiredService<IKeyDropNotificationFanoutPublisher>();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                await publisher.StageFavoriteGameCreatedAsync(
+                    favoriteFanoutId,
+                    dropId,
+                    DateTimeOffset.UtcNow,
+                    TestContext.Current.CancellationToken);
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+            await WaitUntilOutboxIsEmptyAsync(
+                favoriteFanoutId,
+                TimeSpan.FromSeconds(30));
+
+            DateTimeOffset opensAt;
+            await using (var arrangeDb = _postgres.NewDbContext())
+            {
+                var drop = await arrangeDb.KeyDrops.SingleAsync(
+                    item => item.Id == dropId,
+                    TestContext.Current.CancellationToken);
+                opensAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+                drop.OpensAt = opensAt;
+                arrangeDb.KeyDropSubscriptions.AddRange(
+                    Subscription(ownerId, dropId),
+                    Subscription(recipientId, dropId),
+                    Subscription(cancelledRecipientId, dropId));
+                await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+                await arrangeDb.KeyDropSubscriptions
+                    .Where(item => item.UserId == cancelledRecipientId
+                        && item.DropId == dropId)
+                    .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+            }
+
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var opens = scope.ServiceProvider
+                    .GetRequiredService<KeyDropOpenNotificationService>();
+                Assert.Equal(
+                    1,
+                    (await opens.StageDueAsync(
+                        cancellationToken: TestContext.Current.CancellationToken))
+                    .StagedCount);
+                Assert.Equal(
+                    0,
+                    (await opens.StageDueAsync(
+                        cancellationToken: TestContext.Current.CancellationToken))
+                    .StagedCount);
+            }
+
+            var openedEventId = NotificationEventId.Create(
+                NotificationKind.KeyDropOpened,
+                dropId,
+                recipientId);
+            await WaitForNotificationAsync(openedEventId, recipientId);
+
+            await using var verificationDb = _postgres.NewDbContext();
+            var notifications = await verificationDb.Notifications
+                .Include(item => item.Deliveries)
+                .Where(item => item.SourceType == NotificationSourceTypes.KeyDrop
+                    && item.SourceId == dropId)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(2, notifications.Count);
+            Assert.DoesNotContain(notifications, item => item.UserId == ownerId);
+            Assert.DoesNotContain(
+                notifications,
+                item => item.UserId == cancelledRecipientId);
+
+            var favorite = Assert.Single(
+                notifications,
+                item => item.Kind == NotificationKind.FavoriteGameKeyDropCreated);
+            Assert.False(favorite.IsWebVisible);
+            Assert.All(
+                favorite.Deliveries,
+                delivery => Assert.Equal(
+                    NotificationDeliveryStatus.Suppressed,
+                    delivery.Status));
+
+            var opened = Assert.Single(
+                notifications,
+                item => item.Kind == NotificationKind.KeyDropOpened);
+            Assert.True(opened.IsWebVisible);
+            Assert.Contains(
+                opened.Deliveries,
+                delivery => delivery.Channel == NotificationChannel.Web
+                    && delivery.Status == NotificationDeliveryStatus.Delivered);
+            Assert.Contains(
+                opened.Deliveries,
+                delivery => delivery.Channel == NotificationChannel.Email
+                    && delivery.Status == NotificationDeliveryStatus.Pending);
+        }
+        finally
+        {
+            await producerHost.StopAsync(CancellationToken.None);
+            await consumerHost.StopAsync(CancellationToken.None);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _rabbitMq.DisposeAsync();
@@ -390,6 +572,11 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         builder.Services.AddScoped<FeedbackSubmissionService>();
         builder.Services.AddScoped<ReviewDeadlineNotificationService>();
         builder.Services.AddScoped<ReviewLeaseSweepService>();
+        builder.Services.AddSingleton(
+            TestAccountProtection.CreateGameKeyProtectionService());
+        builder.Services.AddScoped<GameKeyRegistrationWriter>();
+        builder.Services.AddScoped<KeyDropSchedulingService>();
+        builder.Services.AddScoped<KeyDropOpenNotificationService>();
         return builder.Build();
     }
 
@@ -462,6 +649,18 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                 item => item.EventId == eventId && item.UserId == userId,
                 TestContext.Current.CancellationToken);
         }, TimeSpan.FromSeconds(30));
+
+    private static FavoriteGame Favorite(long userId, long gameId) => new()
+    {
+        UserId = userId,
+        GameId = gameId,
+    };
+
+    private static KeyDropSubscription Subscription(long userId, long dropId) => new()
+    {
+        UserId = userId,
+        DropId = dropId,
+    };
 
     private static async Task WaitUntilAsync(
         Func<bool> condition,

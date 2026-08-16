@@ -66,6 +66,8 @@ public sealed class NotificationSnapshotEndpointTests
     [Fact]
     public async Task Layout_LoadsRealtimeClientOnlyForAuthenticatedUser()
     {
+        const string realtimeModuleTag =
+            "<script type=\"module\" src=\"/js/dist/notifications/realtime";
         await using var factory = new WebAppFactory(_fixture.ConnectionString);
         using var client = factory.CreateClient();
         using var anonymousResponse = await client.GetAsync(
@@ -73,7 +75,7 @@ public sealed class NotificationSnapshotEndpointTests
             TestContext.Current.CancellationToken);
         var anonymousHtml = await anonymousResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
-        Assert.DoesNotContain("notifications/realtime.js", anonymousHtml);
+        Assert.DoesNotContain(realtimeModuleTag, anonymousHtml);
 
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(
             _fixture);
@@ -83,7 +85,7 @@ public sealed class NotificationSnapshotEndpointTests
             TestContext.Current.CancellationToken);
         var authenticatedHtml = await authenticatedResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
-        Assert.Contains("notifications/realtime.js", authenticatedHtml);
+        Assert.Contains(realtimeModuleTag, authenticatedHtml);
     }
 
     private async Task<long> AddNotificationAsync(long userId, string title)
