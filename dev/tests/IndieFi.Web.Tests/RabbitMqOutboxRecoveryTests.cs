@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using IndieFi.Web.Data;
 using IndieFi.Web.Infrastructure.Realtime;
+using IndieFi.Web.Modules.Feedback.Application;
 using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Notifications.Contracts;
@@ -158,6 +159,206 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task RabbitMq_FeedbackProducers_ProjectFourDomainNotifications()
+    {
+        await ClearMessagingStateAsync();
+        long requesterId;
+        long reviewerId;
+        long firstRequestId;
+        await using (var arrangeDb = _postgres.NewDbContext())
+        {
+            await arrangeDb.ReviewRequests.ExecuteDeleteAsync(
+                TestContext.Current.CancellationToken);
+            requesterId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 2)).Id;
+            reviewerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, requesterId);
+            firstRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
+                arrangeDb,
+                requesterId,
+                game.Id)).Id;
+        }
+
+        var settings = BuildMessagingSettings();
+        var recorder = new ProbeDeliveryRecorder();
+        using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
+        using var producerHost = BuildHost(settings, recorder, addConsumer: false);
+        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
+        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            var firstOperationId = Guid.NewGuid();
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var claim = scope.ServiceProvider.GetRequiredService<ReviewClaimService>();
+                var result = await claim.ClaimNextAsync(reviewerId, firstOperationId);
+                Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
+                Assert.Equal(firstRequestId, result.RequestId);
+            }
+
+            long firstAssignmentId;
+            await using (var db = _postgres.NewDbContext())
+            {
+                firstAssignmentId = await db.ReviewAssignments
+                    .Where(item => item.ReviewerId == reviewerId
+                        && item.ClaimOperationId == firstOperationId)
+                    .Select(item => item.Id)
+                    .SingleAsync(TestContext.Current.CancellationToken);
+            }
+
+            var assignedEventId = NotificationEventId.Create(
+                NotificationKind.ReviewAssigned,
+                firstAssignmentId,
+                reviewerId);
+            await WaitForNotificationAsync(assignedEventId, reviewerId);
+
+            await using (var db = _postgres.NewDbContext())
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                    UPDATE review_assignments
+                       SET leased_until = {DateTimeOffset.UtcNow.AddMinutes(5)},
+                           deadline_notification_staged_at = NULL
+                     WHERE id = {firstAssignmentId}
+                    """,
+                    TestContext.Current.CancellationToken);
+            }
+
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var deadlines = scope.ServiceProvider
+                    .GetRequiredService<ReviewDeadlineNotificationService>();
+                Assert.Equal(
+                    1,
+                    (await deadlines.StageDueAsync(
+                        cancellationToken: TestContext.Current.CancellationToken))
+                    .StagedCount);
+            }
+
+            var deadlineEventId = NotificationEventId.Create(
+                NotificationKind.ReviewDeadlineSoon,
+                firstAssignmentId,
+                reviewerId);
+            await WaitForNotificationAsync(deadlineEventId, reviewerId);
+
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var submissions = scope.ServiceProvider
+                    .GetRequiredService<FeedbackSubmissionService>();
+                var result = await submissions.SubmitAsync(
+                    firstAssignmentId,
+                    reviewerId,
+                    "The real RabbitMQ path should notify the game owner safely.");
+                Assert.Equal(FeedbackSubmissionOutcome.Submitted, result.Outcome);
+            }
+
+            long feedbackId;
+            await using (var db = _postgres.NewDbContext())
+            {
+                feedbackId = await db.FeedbackSubmissions
+                    .Where(item => item.AssignmentId == firstAssignmentId)
+                    .Select(item => item.Id)
+                    .SingleAsync(TestContext.Current.CancellationToken);
+            }
+
+            var feedbackEventId = NotificationEventId.Create(
+                NotificationKind.FeedbackCompleted,
+                feedbackId,
+                requesterId);
+            await WaitForNotificationAsync(feedbackEventId, requesterId);
+
+            long secondRequestId;
+            await using (var arrangeDb = _postgres.NewDbContext())
+            {
+                var game = await ReviewTestData.CreateGameAsync(arrangeDb, requesterId);
+                secondRequestId = (await ReviewTestData.CreateQueuedRequestAsync(
+                    arrangeDb,
+                    requesterId,
+                    game.Id)).Id;
+            }
+
+            var secondOperationId = Guid.NewGuid();
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var claim = scope.ServiceProvider.GetRequiredService<ReviewClaimService>();
+                var result = await claim.ClaimNextAsync(reviewerId, secondOperationId);
+                Assert.Equal(ReviewClaimOutcome.Claimed, result.Outcome);
+                Assert.Equal(secondRequestId, result.RequestId);
+            }
+
+            long secondAssignmentId;
+            await using (var db = _postgres.NewDbContext())
+            {
+                secondAssignmentId = await db.ReviewAssignments
+                    .Where(item => item.ReviewerId == reviewerId
+                        && item.ClaimOperationId == secondOperationId)
+                    .Select(item => item.Id)
+                    .SingleAsync(TestContext.Current.CancellationToken);
+            }
+
+            await WaitForNotificationAsync(
+                NotificationEventId.Create(
+                    NotificationKind.ReviewAssigned,
+                    secondAssignmentId,
+                    reviewerId),
+                reviewerId);
+            await using (var db = _postgres.NewDbContext())
+            {
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                    UPDATE review_assignments
+                       SET leased_until = {DateTimeOffset.UtcNow.AddMinutes(-1)}
+                     WHERE id = {secondAssignmentId}
+                    """,
+                    TestContext.Current.CancellationToken);
+            }
+
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var sweep = scope.ServiceProvider
+                    .GetRequiredService<ReviewLeaseSweepService>();
+                Assert.Equal(1, (await sweep.SweepAsync()).ExpiredCount);
+            }
+
+            var expiredEventId = NotificationEventId.Create(
+                NotificationKind.ReviewExpired,
+                secondAssignmentId,
+                reviewerId);
+            await WaitForNotificationAsync(expiredEventId, reviewerId);
+
+            await using var verificationDb = _postgres.NewDbContext();
+            var notifications = await verificationDb.Notifications
+                .Where(item => item.EventId == assignedEventId
+                    || item.EventId == deadlineEventId
+                    || item.EventId == feedbackEventId
+                    || item.EventId == expiredEventId)
+                .OrderBy(item => item.Kind)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(4, notifications.Count);
+            Assert.Contains(notifications,
+                item => item.Kind == NotificationKind.ReviewAssigned
+                    && item.UserId == reviewerId);
+            Assert.Contains(notifications,
+                item => item.Kind == NotificationKind.ReviewDeadlineSoon
+                    && item.UserId == reviewerId);
+            Assert.Contains(notifications,
+                item => item.Kind == NotificationKind.FeedbackCompleted
+                    && item.UserId == requesterId);
+            Assert.Contains(notifications,
+                item => item.Kind == NotificationKind.ReviewExpired
+                    && item.UserId == reviewerId);
+        }
+        finally
+        {
+            await producerHost.StopAsync(CancellationToken.None);
+            await consumerHost.StopAsync(CancellationToken.None);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _rabbitMq.DisposeAsync();
@@ -185,6 +386,10 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                     registration.AddNotificationConsumers();
                 }
             });
+        builder.Services.AddScoped<ReviewClaimService>();
+        builder.Services.AddScoped<FeedbackSubmissionService>();
+        builder.Services.AddScoped<ReviewDeadlineNotificationService>();
+        builder.Services.AddScoped<ReviewLeaseSweepService>();
         return builder.Build();
     }
 
@@ -248,6 +453,15 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                 TestContext.Current.CancellationToken);
         }, timeout);
     }
+
+    private Task WaitForNotificationAsync(Guid eventId, long userId) =>
+        WaitUntilAsync(async () =>
+        {
+            await using var db = _postgres.NewDbContext();
+            return await db.Notifications.AnyAsync(
+                item => item.EventId == eventId && item.UserId == userId,
+                TestContext.Current.CancellationToken);
+        }, TimeSpan.FromSeconds(30));
 
     private static async Task WaitUntilAsync(
         Func<bool> condition,
