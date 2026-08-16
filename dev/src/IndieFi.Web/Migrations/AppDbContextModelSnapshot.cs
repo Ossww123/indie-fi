@@ -1669,6 +1669,278 @@ namespace IndieFi.Web.Migrations
                     b.ToTable("game_tag_assignments", (string)null);
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Media.Domain.MediaAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AttachmentKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("attachment_kind");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("DeclaredBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("declared_bytes");
+
+                    b.Property<string>("DeclaredContentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("declared_content_type");
+
+                    b.Property<DateTimeOffset?>("DeletionCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deletion_completed_at");
+
+                    b.Property<string>("DetectedContentType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("detected_content_type");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("failure_code");
+
+                    b.Property<int?>("FrameCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("frame_count");
+
+                    b.Property<long?>("GameId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("game_id");
+
+                    b.Property<bool>("IsCurrent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_current");
+
+                    b.Property<DateTimeOffset?>("NextProcessingAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_processing_attempt_at");
+
+                    b.Property<long>("OwnerUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<int?>("PixelHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("pixel_height");
+
+                    b.Property<int?>("PixelWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("pixel_width");
+
+                    b.Property<int>("ProcessingAttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("processing_attempt_count");
+
+                    b.Property<DateTimeOffset?>("ProcessingLeaseExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processing_lease_expires_at");
+
+                    b.Property<Guid?>("ProcessingLeaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("processing_lease_id");
+
+                    b.Property<long?>("ProfileUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("profile_user_id");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<int>("Revision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("revision");
+
+                    b.Property<int?>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<long?>("SourceBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("source_bytes");
+
+                    b.Property<string>("SourceContentType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("source_content_type");
+
+                    b.Property<DateTimeOffset?>("SourceDeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("source_deleted_at");
+
+                    b.Property<string>("SourceETag")
+                        .HasMaxLength(130)
+                        .HasColumnType("character varying(130)")
+                        .HasColumnName("source_etag");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("StatusChangedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("status_changed_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset?>("TombstoneExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("tombstone_expires_at");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset>("UploadExpiresAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("upload_expires_at")
+                        .HasDefaultValueSql("now() + interval '24 hours'");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId", "AttachmentKind")
+                        .IsUnique()
+                        .HasDatabaseName("IX_media_assets_active_game_cover_candidate")
+                        .HasFilter("attachment_kind = 'GameCover' AND status IN ('UploadPending', 'ProcessingPending', 'Processing')");
+
+                    b.HasIndex("GameId", "OwnerUserId");
+
+                    b.HasIndex("GameId", "SortOrder")
+                        .IsUnique()
+                        .HasDatabaseName("IX_media_assets_current_game_screenshot_order")
+                        .HasFilter("is_current = TRUE AND attachment_kind = 'GameScreenshot'");
+
+                    b.HasIndex("OwnerUserId", "Status");
+
+                    b.HasIndex("ProfileUserId", "AttachmentKind")
+                        .IsUnique()
+                        .HasDatabaseName("IX_media_assets_active_profile_image_candidate")
+                        .HasFilter("attachment_kind = 'ProfileImage' AND status IN ('UploadPending', 'ProcessingPending', 'Processing')");
+
+                    b.HasIndex("ProfileUserId", "IsCurrent")
+                        .IsUnique()
+                        .HasDatabaseName("IX_media_assets_current_profile_image")
+                        .HasFilter("is_current = TRUE AND attachment_kind = 'ProfileImage'");
+
+                    b.HasIndex("ProfileUserId", "Status");
+
+                    b.HasIndex("Status", "NextProcessingAttemptAt");
+
+                    b.HasIndex("Status", "TombstoneExpiresAt");
+
+                    b.HasIndex("Status", "UploadExpiresAt");
+
+                    b.HasIndex("GameId", "AttachmentKind", "IsCurrent")
+                        .IsUnique()
+                        .HasDatabaseName("IX_media_assets_current_game_cover")
+                        .HasFilter("is_current = TRUE AND attachment_kind = 'GameCover'");
+
+                    b.HasIndex("GameId", "AttachmentKind", "Status");
+
+                    b.ToTable("media_assets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_media_assets_declared_upload", "declared_content_type IN ('image/jpeg', 'image/png', 'image/webp') AND declared_bytes > 0 AND ((attachment_kind IN ('GameCover', 'GameScreenshot') AND declared_bytes <= 10485760) OR (attachment_kind = 'ProfileImage' AND declared_bytes <= 5242880))");
+
+                            t.HasCheckConstraint("CK_media_assets_detected_image", "(detected_content_type IS NULL AND pixel_width IS NULL AND pixel_height IS NULL AND frame_count IS NULL) OR (detected_content_type IS NOT NULL AND pixel_width IS NOT NULL AND pixel_height IS NOT NULL AND frame_count IS NOT NULL AND detected_content_type IN ('image/jpeg', 'image/png', 'image/webp') AND frame_count = 1 AND pixel_width > 0 AND pixel_height > 0 AND ((attachment_kind IN ('GameCover', 'GameScreenshot') AND pixel_width <= 12000 AND pixel_height <= 12000 AND pixel_width::bigint * pixel_height <= 40000000) OR (attachment_kind = 'ProfileImage' AND pixel_width <= 8192 AND pixel_height <= 8192 AND pixel_width::bigint * pixel_height <= 16000000)))");
+
+                            t.HasCheckConstraint("CK_media_assets_failure", "(status = 'Failed' AND failure_code IS NOT NULL AND failure_code ~ '^[a-z0-9][a-z0-9_.-]{0,63}$') OR (status <> 'Failed' AND failure_code IS NULL)");
+
+                            t.HasCheckConstraint("CK_media_assets_id", "id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_media_assets_processing", "processing_attempt_count BETWEEN 0 AND 6 AND ((processing_lease_id IS NULL AND processing_lease_expires_at IS NULL) OR (status = 'Processing' AND processing_lease_id <> '00000000-0000-0000-0000-000000000000'::uuid AND processing_lease_expires_at IS NOT NULL)) AND (status <> 'Processing' OR (processing_attempt_count > 0 AND processing_lease_id IS NOT NULL)) AND (next_processing_attempt_at IS NULL OR status = 'ProcessingPending') AND (status <> 'UploadPending' OR processing_attempt_count = 0)");
+
+                            t.HasCheckConstraint("CK_media_assets_publication", "is_current = (status = 'Ready') AND ((is_current = FALSE AND sort_order IS NULL AND published_at IS NULL) OR (is_current = TRUE AND published_at IS NOT NULL AND ((attachment_kind = 'GameScreenshot' AND sort_order BETWEEN 0 AND 7) OR (attachment_kind IN ('GameCover', 'ProfileImage') AND sort_order IS NULL)))) AND (status <> 'Ready' OR detected_content_type IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_media_assets_revision", "revision > 0");
+
+                            t.HasCheckConstraint("CK_media_assets_source_metadata", "(source_content_type IS NULL AND source_bytes IS NULL AND source_etag IS NULL) OR (source_content_type IS NOT NULL AND source_bytes IS NOT NULL AND source_etag IS NOT NULL AND source_content_type = declared_content_type AND source_bytes = declared_bytes AND char_length(source_etag) BETWEEN 3 AND 130 AND left(source_etag, 1) = chr(34) AND right(source_etag, 1) = chr(34))");
+
+                            t.HasCheckConstraint("CK_media_assets_source_state", "(status IN ('UploadPending', 'Expired') AND source_content_type IS NULL) OR (status IN ('ProcessingPending', 'Processing', 'Ready') AND source_content_type IS NOT NULL) OR status IN ('Failed', 'DeletePending', 'Deleted')");
+
+                            t.HasCheckConstraint("CK_media_assets_status", "status IN ('UploadPending', 'ProcessingPending', 'Processing', 'Ready', 'Failed', 'Expired', 'DeletePending', 'Deleted')");
+
+                            t.HasCheckConstraint("CK_media_assets_target_shape", "(attachment_kind IN ('GameCover', 'GameScreenshot') AND game_id IS NOT NULL AND profile_user_id IS NULL) OR (attachment_kind = 'ProfileImage' AND game_id IS NULL AND profile_user_id IS NOT NULL AND profile_user_id = owner_user_id)");
+
+                            t.HasCheckConstraint("CK_media_assets_timestamps", "updated_at >= created_at AND status_changed_at >= created_at AND status_changed_at <= updated_at AND upload_expires_at = created_at + interval '24 hours' AND (published_at IS NULL OR published_at >= created_at) AND (source_deleted_at IS NULL OR source_deleted_at >= created_at) AND (deletion_completed_at IS NULL OR deletion_completed_at >= created_at)");
+
+                            t.HasCheckConstraint("CK_media_assets_tombstone", "(deletion_completed_at IS NULL AND tombstone_expires_at IS NULL) OR (status IN ('Failed', 'Expired', 'Deleted') AND deletion_completed_at IS NOT NULL AND tombstone_expires_at >= deletion_completed_at + interval '30 days')");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Media.Domain.MediaUploadAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("MediaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("media_id");
+
+                    b.Property<DateTimeOffset?>("SupersededAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("superseded_at");
+
+                    b.Property<DateTimeOffset>("UrlExpiresAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("url_expires_at")
+                        .HasDefaultValueSql("now() + interval '15 minutes'");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MediaId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_media_upload_attempts_current")
+                        .HasFilter("superseded_at IS NULL");
+
+                    b.HasIndex("UrlExpiresAt")
+                        .HasDatabaseName("IX_media_upload_attempts_pending_expiry")
+                        .HasFilter("superseded_at IS NULL AND completed_at IS NULL");
+
+                    b.ToTable("media_upload_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_media_upload_attempts_id", "id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_media_upload_attempts_lifetime", "url_expires_at > issued_at AND url_expires_at <= issued_at + interval '15 minutes'");
+
+                            t.HasCheckConstraint("CK_media_upload_attempts_outcome", "(superseded_at IS NULL OR superseded_at >= issued_at) AND (completed_at IS NULL OR completed_at >= issued_at) AND NOT (superseded_at IS NOT NULL AND completed_at IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.KeyDropSubscription", b =>
                 {
                     b.Property<long>("UserId")
@@ -2504,6 +2776,37 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Media.Domain.MediaAsset", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Modules.Profiles.Domain.UserProfile", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IndieFi.Web.Entities.Game", null)
+                        .WithMany()
+                        .HasForeignKey("GameId", "OwnerUserId")
+                        .HasPrincipalKey("Id", "OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Media.Domain.MediaUploadAttempt", b =>
+                {
+                    b.HasOne("IndieFi.Web.Modules.Media.Domain.MediaAsset", "Media")
+                        .WithMany("UploadAttempts")
+                        .HasForeignKey("MediaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Media");
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.KeyDropSubscription", b =>
                 {
                     b.HasOne("IndieFi.Web.Entities.KeyDrop", null)
@@ -2597,6 +2900,11 @@ namespace IndieFi.Web.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Media.Domain.MediaAsset", b =>
+                {
+                    b.Navigation("UploadAttempts");
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Notifications.Domain.Notification", b =>
