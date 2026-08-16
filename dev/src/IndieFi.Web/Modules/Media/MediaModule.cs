@@ -21,8 +21,12 @@ public static class MediaModule
             .ValidateOnStart();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.TryAddSingleton<IMediaImageProcessor, SkiaMediaImageProcessor>();
-        if (configuration.GetValue<bool>(
-                $"{MediaWorkerOptions.SectionName}:Enabled"))
+        services.TryAddSingleton<
+            IMediaImageDerivativeEncoder,
+            SkiaMediaImageDerivativeEncoder>();
+        var workerEnabled = configuration.GetValue<bool>(
+            $"{MediaWorkerOptions.SectionName}:Enabled");
+        if (workerEnabled)
         {
             services.AddScoped<MediaMessageAuthorityService>();
             services.AddScoped<MediaProcessingLeaseService>();
@@ -77,6 +81,13 @@ public static class MediaModule
         services.AddScoped<MediaUploadUrlService>();
         services.AddScoped<MediaUploadCompletionService>();
         services.AddScoped<MediaPublicationService>();
+        if (workerEnabled)
+        {
+            services.AddScoped<
+                IMediaProcessingAttemptExecutor,
+                MediaProcessingAttemptExecutor>();
+        }
+
         services.AddScoped<MediaStatusQueryService>();
         services.AddHealthChecks()
             .AddCheck<MediaObjectStorageHealthCheck>("media-object-storage");

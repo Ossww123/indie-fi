@@ -17,6 +17,12 @@ public enum MediaPixelFormat
     Rgba8888UnpremultipliedSrgb,
 }
 
+public sealed record MediaImageValidation(
+    string DetectedContentType,
+    int PixelWidth,
+    int PixelHeight,
+    int FrameCount);
+
 /// <summary>
 /// Owns a decoded sRGB pixel buffer. Encoded EXIF, GPS, XMP, IPTC and thumbnail
 /// data are intentionally absent, so a derivative encoder cannot copy them.
@@ -46,6 +52,11 @@ public sealed class MediaNormalizedImage : IDisposable
     public int FrameCount => 1;
     public MediaPixelFormat PixelFormat =>
         MediaPixelFormat.Rgba8888UnpremultipliedSrgb;
+    public MediaImageValidation Validation => new(
+        DetectedContentType,
+        PixelWidth,
+        PixelHeight,
+        FrameCount);
 
     public ReadOnlyMemory<byte> RgbaPixels
     {

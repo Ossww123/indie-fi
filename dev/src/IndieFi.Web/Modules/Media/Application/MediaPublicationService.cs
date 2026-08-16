@@ -51,10 +51,35 @@ public sealed class MediaPublicationService
         _timeProvider = timeProvider;
     }
 
-    public async Task<MediaPublishReadyResult> PublishReadyAsync(
+    public Task<MediaPublishReadyResult> PublishReadyAsync(
         Guid mediaId,
         Guid processingLeaseId,
+        CancellationToken cancellationToken = default) =>
+        PublishReadyCoreAsync(
+            mediaId,
+            processingLeaseId,
+            validation: null,
+            cancellationToken);
+
+    public Task<MediaPublishReadyResult> PublishReadyAsync(
+        Guid mediaId,
+        Guid processingLeaseId,
+        MediaImageValidation validation,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(validation);
+        return PublishReadyCoreAsync(
+            mediaId,
+            processingLeaseId,
+            validation,
+            cancellationToken);
+    }
+
+    private async Task<MediaPublishReadyResult> PublishReadyCoreAsync(
+        Guid mediaId,
+        Guid processingLeaseId,
+        MediaImageValidation? validation,
+        CancellationToken cancellationToken)
     {
         RequireIdentifier(mediaId, nameof(mediaId));
         RequireIdentifier(processingLeaseId, nameof(processingLeaseId));
@@ -134,6 +159,23 @@ public sealed class MediaPublicationService
                 cancellationToken);
             return new MediaPublishReadyResult(
                 MediaPublishReadyOutcome.ProcessingLeaseLost);
+        }
+
+        if (validation is not null)
+        {
+            if (!IsValidValidation(media.AttachmentKind, validation))
+            {
+                await AccountMutationGuard.CommitIfOwnedAsync(
+                    transaction,
+                    cancellationToken);
+                return new MediaPublishReadyResult(
+                    MediaPublishReadyOutcome.ValidationIncomplete);
+            }
+
+            media.DetectedContentType = validation.DetectedContentType;
+            media.PixelWidth = validation.PixelWidth;
+            media.PixelHeight = validation.PixelHeight;
+            media.FrameCount = validation.FrameCount;
         }
 
         if (!HasCompleteValidation(media))
@@ -386,6 +428,22 @@ public sealed class MediaPublicationService
         && media.PixelWidth is not null
         && media.PixelHeight is not null
         && media.FrameCount == 1;
+
+    private static bool IsValidValidation(
+        MediaAttachmentKind attachmentKind,
+        MediaImageValidation validation)
+    {
+        var limits = MediaPolicy.GetImageLimits(attachmentKind);
+        return MediaObjectAccessPolicy.IsAllowedOriginalContentType(
+                validation.DetectedContentType)
+            && validation.FrameCount == 1
+            && validation.PixelWidth > 0
+            && validation.PixelHeight > 0
+            && validation.PixelWidth <= limits.MaximumWidth
+            && validation.PixelHeight <= limits.MaximumHeight
+            && (long)validation.PixelWidth * validation.PixelHeight
+                <= limits.MaximumDecodedPixels;
+    }
 
     private static void DisconnectForDeletion(
         MediaAsset media,

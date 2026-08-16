@@ -16,7 +16,7 @@ public enum MediaObjectStorageFailureCode
 
 public sealed class MediaObjectStorageException : Exception
 {
-    internal MediaObjectStorageException(
+    public MediaObjectStorageException(
         MediaObjectStorageFailureCode failureCode,
         string message,
         Exception? innerException = null)
