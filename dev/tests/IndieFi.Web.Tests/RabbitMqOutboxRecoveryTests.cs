@@ -4,6 +4,7 @@ using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Notifications.Contracts;
 using IndieFi.Web.Modules.Notifications.Domain;
+using IndieFi.Web.Modules.Notifications.Infrastructure;
 using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.EntityFrameworkCore;
@@ -65,10 +66,12 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
 
             await using (var db = _postgres.NewDbContext())
             {
-                var inbox = await db.Set<InboxState>().SingleAsync(
-                    item => item.MessageId == firstEventId,
-                    TestContext.Current.CancellationToken);
-                Assert.True(inbox.ReceiveCount >= 2);
+                var inboxStates = await db.Set<InboxState>()
+                    .Where(item => item.MessageId == firstEventId)
+                    .ToListAsync(TestContext.Current.CancellationToken);
+                Assert.Equal(2, inboxStates.Count);
+                Assert.All(inboxStates,
+                    inbox => Assert.True(inbox.ReceiveCount >= 2));
             }
 
             var stopResult = await _rabbitMq.ExecAsync(
@@ -103,6 +106,57 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task RabbitMq_WebOutboxToWorker_CreatesNotificationAndChannelDeliveries()
+    {
+        await ClearMessagingStateAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_postgres);
+        var settings = BuildMessagingSettings();
+        var recorder = new ProbeDeliveryRecorder();
+        using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
+        using var producerHost = BuildHost(settings, recorder, addConsumer: false);
+
+        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
+        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            var eventId = Guid.NewGuid();
+            await StageAsync(
+                producerHost.Services,
+                eventId,
+                assignment.AssignmentId,
+                assignment.ReviewerId);
+            await WaitUntilAsync(async () =>
+            {
+                await using var db = _postgres.NewDbContext();
+                return await db.Notifications.AnyAsync(
+                    item => item.EventId == eventId
+                        && item.UserId == assignment.ReviewerId,
+                    TestContext.Current.CancellationToken);
+            }, TimeSpan.FromSeconds(30));
+
+            await using var verificationDb = _postgres.NewDbContext();
+            var notification = await verificationDb.Notifications
+                .Include(item => item.Deliveries)
+                .SingleAsync(
+                    item => item.EventId == eventId,
+                    TestContext.Current.CancellationToken);
+            Assert.True(notification.IsWebVisible);
+            Assert.Equal(2, notification.Deliveries.Count);
+            Assert.Contains(notification.Deliveries,
+                item => item.Channel == NotificationChannel.Web
+                    && item.Status == NotificationDeliveryStatus.Delivered);
+            Assert.Contains(notification.Deliveries,
+                item => item.Channel == NotificationChannel.Email
+                    && item.Status == NotificationDeliveryStatus.Pending);
+        }
+        finally
+        {
+            await producerHost.StopAsync(CancellationToken.None);
+            await consumerHost.StopAsync(CancellationToken.None);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _rabbitMq.DisposeAsync();
@@ -126,6 +180,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                 if (addConsumer)
                 {
                     registration.AddConsumer<RabbitMqProbeConsumer>();
+                    registration.AddNotificationConsumers();
                 }
             });
         return builder.Build();
@@ -150,7 +205,8 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
     private static async Task StageAsync(
         IServiceProvider services,
         Guid eventId,
-        long sourceId)
+        long sourceId,
+        long recipientUserId = 1)
     {
         await using var scope = services.CreateAsyncScope();
         var publisher = scope.ServiceProvider
@@ -158,9 +214,9 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await publisher.StageAsync(
             eventId,
-            recipientUserId: 1,
+            recipientUserId,
             NotificationKind.ReviewAssigned,
-            "review_assignment",
+            NotificationSourceTypes.ReviewAssignment,
             sourceId,
             DateTimeOffset.UtcNow,
             TestContext.Current.CancellationToken);

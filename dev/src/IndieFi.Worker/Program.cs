@@ -26,6 +26,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(databaseConnectionString);
     options.EnableSensitiveDataLogging(false);
 });
-builder.Services.AddNotificationsModule(builder.Configuration);
+builder.Services.AddNotificationsModule(
+    builder.Configuration,
+    registration => registration.AddNotificationConsumers());
 
 await builder.Build().RunAsync();
