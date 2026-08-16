@@ -1139,6 +1139,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             reviewAssignment.Property(a => a.ExpiredAt)
                 .HasColumnName("expired_at");
 
+            reviewAssignment.Property(a => a.DeadlineNotificationStagedAt)
+                .HasColumnName("deadline_notification_staged_at");
+
             reviewAssignment.Property(a => a.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
@@ -1177,6 +1180,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             reviewAssignment.HasIndex(a => new { a.ReviewerId, a.ClaimOperationId })
                 .IsUnique();
+
+            reviewAssignment.HasIndex(a => new { a.Status, a.LeasedUntil })
+                .HasFilter("deadline_notification_staged_at IS NULL");
         });
 
         modelBuilder.Entity<FeedbackSubmission>(feedbackSubmission =>

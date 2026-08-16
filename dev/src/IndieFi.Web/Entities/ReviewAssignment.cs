@@ -20,5 +20,7 @@ public class ReviewAssignment
 
     public DateTimeOffset? ExpiredAt { get; set; }
 
+    public DateTimeOffset? DeadlineNotificationStagedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }
