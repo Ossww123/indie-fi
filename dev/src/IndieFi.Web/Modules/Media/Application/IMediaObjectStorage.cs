@@ -68,17 +68,31 @@ public sealed record ObjectStorageCopyRequest(
 
 public sealed class ObjectStorageReadResult : IAsyncDisposable
 {
+    private readonly IDisposable? _owner;
+
     public ObjectStorageReadResult(
         Stream content,
-        ObjectStorageMetadata metadata)
+        ObjectStorageMetadata metadata,
+        IDisposable? owner = null)
     {
         Content = content ?? throw new ArgumentNullException(nameof(content));
         Metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
+        _owner = owner;
     }
 
     public Stream Content { get; }
 
     public ObjectStorageMetadata Metadata { get; }
 
-    public ValueTask DisposeAsync() => Content.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await Content.DisposeAsync();
+        }
+        finally
+        {
+            _owner?.Dispose();
+        }
+    }
 }

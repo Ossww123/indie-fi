@@ -1,0 +1,415 @@
+using System.Net;
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Model;
+using IndieFi.Web.Modules.Media;
+using IndieFi.Web.Modules.Media.Application;
+using IndieFi.Web.Modules.Media.Infrastructure;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using Xunit;
+
+namespace IndieFi.Web.Tests;
+
+public sealed class S3MediaObjectStorageTests
+{
+    private static readonly DateTimeOffset Now =
+        new(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task SignedUrls_UseExactOperationObjectHeadersAndLifetime()
+    {
+        using var client = new RecordingS3Client();
+        var storage = CreateStorage(client, timeProvider: TimeProvider.System);
+
+        var upload = await storage.CreateUploadUrlAsync(
+            new ObjectStorageUploadUrlRequest(
+                "staging/media/attempt",
+                "image/png",
+                1234,
+                TimeSpan.FromMinutes(15)),
+            TestContext.Current.CancellationToken);
+        var download = await storage.CreateDownloadUrlAsync(
+            new ObjectStorageDownloadUrlRequest(
+                "derived/media/1/cover.webp",
+                TimeSpan.FromMinutes(5)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("storage.example.test", upload.Host);
+        Assert.Equal("storage.example.test", download.Host);
+        Assert.Equal(
+            "/media-private/staging/media/attempt",
+            upload.AbsolutePath);
+        Assert.Equal(
+            "/media-private/derived/media/1/cover.webp",
+            download.AbsolutePath);
+        AssertQueryLifetime(upload, TimeSpan.FromMinutes(15));
+        AssertQueryLifetime(download, TimeSpan.FromMinutes(5));
+        Assert.Contains(
+            "content-length%3Bcontent-type%3Bhost",
+            upload.Query,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "X-Amz-SignedHeaders=host",
+            download.Query,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task MetadataAndRead_MapObjectPropertiesAndDisposeResponseStream()
+    {
+        using var client = new RecordingS3Client
+        {
+            MetadataResponse = CreateMetadataResponse(),
+            ObjectResponse = CreateObjectResponse(),
+        };
+        var storage = CreateStorage(client);
+
+        var metadata = await storage.GetMetadataAsync(
+            "sources/media/1",
+            TestContext.Current.CancellationToken);
+        await using var read = await storage.OpenReadAsync(
+            "sources/media/1",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            new ObjectStorageMetadata(
+                321,
+                "\"source-etag\"",
+                "image/png",
+                new DateTimeOffset(2026, 8, 16, 10, 30, 0, TimeSpan.Zero)),
+            metadata);
+        Assert.Equal(metadata, read.Metadata);
+        Assert.Equal("sources/media/1", client.MetadataRequest!.Key);
+        Assert.Equal("sources/media/1", client.GetRequest!.Key);
+        Assert.Equal("media-private", client.GetRequest.BucketName);
+
+        var stream = Assert.IsType<TrackingMemoryStream>(read.Content);
+        Assert.False(stream.WasDisposed);
+        await read.DisposeAsync();
+        Assert.True(stream.WasDisposed);
+    }
+
+    [Fact]
+    public async Task Write_InR2Mode_UsesUnsignedPayloadCompatibilityWithoutClosingCallerStream()
+    {
+        using var client = new RecordingS3Client();
+        var storage = CreateStorage(client, region: "auto");
+        await using var content = new TrackingMemoryStream([1, 2, 3]);
+
+        await storage.WriteAsync(
+            new ObjectStorageWriteRequest(
+                "derived/media/1/cover.webp",
+                content,
+                "image/webp",
+                3),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(client.PutRequest);
+        var request = client.PutRequest;
+        Assert.Equal("media-private", request.BucketName);
+        Assert.Equal("derived/media/1/cover.webp", request.Key);
+        Assert.Equal("image/webp", request.ContentType);
+        Assert.Equal(3, request.Headers.ContentLength);
+        Assert.Same(content, request.InputStream);
+        Assert.False(request.AutoCloseStream);
+        Assert.True(request.DisablePayloadSigning);
+        Assert.True(request.DisableDefaultChecksumValidation);
+        Assert.False(content.WasDisposed);
+    }
+
+    [Fact]
+    public async Task Write_ForLocalS3CompatibleService_KeepsStandardPayloadSigning()
+    {
+        using var client = new RecordingS3Client();
+        var storage = CreateStorage(client, region: "us-east-1");
+        await using var content = new MemoryStream([1]);
+
+        await storage.WriteAsync(
+            new ObjectStorageWriteRequest("staging/media/attempt", content, "image/png", 1),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(client.PutRequest!.DisablePayloadSigning);
+        Assert.False(client.PutRequest.DisableDefaultChecksumValidation);
+    }
+
+    [Fact]
+    public async Task CopyAndDelete_UsePrivateBucketAndSourceEtagCondition()
+    {
+        using var client = new RecordingS3Client();
+        var storage = CreateStorage(client);
+
+        await storage.CopyAsync(
+            new ObjectStorageCopyRequest(
+                "staging/media/attempt",
+                "sources/media/1",
+                "\"confirmed-etag\"",
+                "image/png"),
+            TestContext.Current.CancellationToken);
+        await storage.DeleteIfExistsAsync(
+            "staging/media/attempt",
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(client.CopyRequest);
+        var copy = client.CopyRequest;
+        Assert.Equal("media-private", copy.SourceBucket);
+        Assert.Equal("media-private", copy.DestinationBucket);
+        Assert.Equal("staging/media/attempt", copy.SourceKey);
+        Assert.Equal("sources/media/1", copy.DestinationKey);
+        Assert.Equal("\"confirmed-etag\"", copy.ETagToMatch);
+        Assert.Equal("image/png", copy.ContentType);
+        Assert.Equal(S3MetadataDirective.REPLACE, copy.MetadataDirective);
+        Assert.Equal("media-private", client.DeleteRequest!.BucketName);
+        Assert.Equal("staging/media/attempt", client.DeleteRequest.Key);
+    }
+
+    [Fact]
+    public async Task MissingObject_MetadataReturnsNullAndDeleteRemainsIdempotent()
+    {
+        using var client = new RecordingS3Client
+        {
+            MetadataException = NotFoundException(),
+            DeleteException = NotFoundException(),
+        };
+        var storage = CreateStorage(client);
+
+        var metadata = await storage.GetMetadataAsync(
+            "missing",
+            TestContext.Current.CancellationToken);
+        await storage.DeleteIfExistsAsync(
+            "missing",
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(metadata);
+    }
+
+    [Fact]
+    public void AddMediaModule_WhenEnabled_RegistersConfiguredS3Storage()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IHostEnvironment>(
+            new TestHostEnvironment(Environments.Production));
+        services.AddMediaModule(Configuration(enabled: true));
+        using var provider = services.BuildServiceProvider();
+
+        var client = provider.GetRequiredService<IAmazonS3>();
+        var config = Assert.IsType<AmazonS3Config>(client.Config);
+        Assert.Equal(
+            new Uri("https://account-id.r2.cloudflarestorage.com"),
+            new Uri(config.ServiceURL));
+        Assert.Equal("auto", config.AuthenticationRegion);
+        Assert.False(config.ForcePathStyle);
+        Assert.Equal(SigningAlgorithm.HmacSHA256, config.SignatureMethod);
+        Assert.IsType<S3MediaObjectStorage>(
+            provider.GetRequiredService<IMediaObjectStorage>());
+    }
+
+    [Fact]
+    public void AddMediaModule_WhenDisabled_DoesNotConstructStorageClient()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IHostEnvironment>(
+            new TestHostEnvironment(Environments.Production));
+        services.AddMediaModule(Configuration(enabled: false));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Null(provider.GetService<IAmazonS3>());
+        Assert.Null(provider.GetService<IMediaObjectStorage>());
+    }
+
+    private static S3MediaObjectStorage CreateStorage(
+        IAmazonS3 client,
+        string region = "auto",
+        TimeProvider? timeProvider = null)
+    {
+        return new S3MediaObjectStorage(
+            client,
+            Options.Create(new MediaObjectStorageOptions
+            {
+                Enabled = true,
+                BucketName = "media-private",
+                Region = region,
+            }),
+            timeProvider ?? new FixedTimeProvider(Now));
+    }
+
+    private static void AssertQueryLifetime(Uri uri, TimeSpan expected)
+    {
+        var values = uri.Query
+            .TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Split('=', 2))
+            .ToDictionary(
+                part => Uri.UnescapeDataString(part[0]),
+                part => part.Length == 2 ? Uri.UnescapeDataString(part[1]) : string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+        var lifetime = int.Parse(
+            values["X-Amz-Expires"],
+            System.Globalization.CultureInfo.InvariantCulture);
+        Assert.InRange(
+            lifetime,
+            (int)expected.TotalSeconds - 2,
+            (int)expected.TotalSeconds);
+    }
+
+    private static GetObjectMetadataResponse CreateMetadataResponse()
+    {
+        var response = new GetObjectMetadataResponse
+        {
+            ETag = "\"source-etag\"",
+            LastModified = new DateTime(2026, 8, 16, 10, 30, 0, DateTimeKind.Utc),
+        };
+        response.Headers.ContentLength = 321;
+        response.Headers.ContentType = "image/png";
+        return response;
+    }
+
+    private static GetObjectResponse CreateObjectResponse()
+    {
+        var response = new GetObjectResponse
+        {
+            ETag = "\"source-etag\"",
+            LastModified = new DateTime(2026, 8, 16, 10, 30, 0, DateTimeKind.Utc),
+            ResponseStream = new TrackingMemoryStream([1, 2, 3]),
+        };
+        response.Headers.ContentLength = 321;
+        response.Headers.ContentType = "image/png";
+        return response;
+    }
+
+    private static AmazonS3Exception NotFoundException() => new("missing")
+    {
+        StatusCode = HttpStatusCode.NotFound,
+    };
+
+    private static IConfiguration Configuration(bool enabled)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Media:ObjectStorage:Enabled"] = enabled.ToString(),
+                ["Media:ObjectStorage:ServiceUrl"] =
+                    enabled ? "https://account-id.r2.cloudflarestorage.com" : string.Empty,
+                ["Media:ObjectStorage:Region"] = "auto",
+                ["Media:ObjectStorage:BucketName"] = enabled ? "media-private" : string.Empty,
+                ["Media:ObjectStorage:AccessKeyId"] = enabled ? "access-key" : string.Empty,
+                ["Media:ObjectStorage:SecretAccessKey"] = enabled ? "secret-key" : string.Empty,
+                ["Media:ObjectStorage:ForcePathStyle"] = "false",
+            })
+            .Build();
+    }
+
+    private sealed class RecordingS3Client : AmazonS3Client
+    {
+        public RecordingS3Client()
+            : base(
+                new BasicAWSCredentials("test-access", "test-secret"),
+                new AmazonS3Config
+                {
+                    ServiceURL = "https://storage.example.test",
+                    AuthenticationRegion = "auto",
+                    ForcePathStyle = true,
+                })
+        {
+        }
+
+        public GetObjectMetadataRequest? MetadataRequest { get; private set; }
+        public GetObjectRequest? GetRequest { get; private set; }
+        public PutObjectRequest? PutRequest { get; private set; }
+        public CopyObjectRequest? CopyRequest { get; private set; }
+        public DeleteObjectRequest? DeleteRequest { get; private set; }
+        public GetObjectMetadataResponse MetadataResponse { get; set; } =
+            CreateMetadataResponse();
+        public GetObjectResponse ObjectResponse { get; set; } = CreateObjectResponse();
+        public AmazonS3Exception? MetadataException { get; set; }
+        public AmazonS3Exception? DeleteException { get; set; }
+
+        public override Task<GetObjectMetadataResponse> GetObjectMetadataAsync(
+            GetObjectMetadataRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            MetadataRequest = request;
+            return MetadataException is null
+                ? Task.FromResult(MetadataResponse)
+                : Task.FromException<GetObjectMetadataResponse>(MetadataException);
+        }
+
+        public override Task<GetObjectResponse> GetObjectAsync(
+            GetObjectRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            GetRequest = request;
+            return Task.FromResult(ObjectResponse);
+        }
+
+        public override Task<PutObjectResponse> PutObjectAsync(
+            PutObjectRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            PutRequest = request;
+            return Task.FromResult(new PutObjectResponse());
+        }
+
+        public override Task<CopyObjectResponse> CopyObjectAsync(
+            CopyObjectRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CopyRequest = request;
+            return Task.FromResult(new CopyObjectResponse());
+        }
+
+        public override Task<DeleteObjectResponse> DeleteObjectAsync(
+            DeleteObjectRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            DeleteRequest = request;
+            return DeleteException is null
+                ? Task.FromResult(new DeleteObjectResponse())
+                : Task.FromException<DeleteObjectResponse>(DeleteException);
+        }
+    }
+
+    private sealed class TrackingMemoryStream : MemoryStream
+    {
+        public TrackingMemoryStream(byte[] buffer)
+            : base(buffer)
+        {
+        }
+
+        public bool WasDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            WasDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class FixedTimeProvider : TimeProvider
+    {
+        private readonly DateTimeOffset _value;
+
+        public FixedTimeProvider(DateTimeOffset value)
+        {
+            _value = value;
+        }
+
+        public override DateTimeOffset GetUtcNow() => _value;
+    }
+
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public TestHostEnvironment(string environmentName)
+        {
+            EnvironmentName = environmentName;
+        }
+
+        public string EnvironmentName { get; set; }
+        public string ApplicationName { get; set; } = "IndieFi.Web.Tests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+}
