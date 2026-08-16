@@ -110,7 +110,7 @@ builder.Services.AddGamesModule();
 builder.Services.AddCreditsModule();
 builder.Services.AddFeedbackModule();
 builder.Services.AddKeyDistributionsModule(builder.Configuration);
-builder.Services.AddNotificationsModule();
+builder.Services.AddNotificationsModule(builder.Configuration);
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);

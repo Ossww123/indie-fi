@@ -70,6 +70,27 @@ services:
       timeout: 3s
       retries: 10
 
+  # Durable local broker for Transactional Outbox delivery and notification workers.
+  # The management UI is available only on this machine at http://localhost:15672.
+  rabbitmq:
+    image: rabbitmq:4.3.4-management-alpine
+    container_name: indiefi-rabbitmq
+    hostname: indiefi-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: indiefi
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set it in dev/.env - copy dev/.env.example}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
 volumes:
   db-data:
   redis-data:
+  rabbitmq-data:
