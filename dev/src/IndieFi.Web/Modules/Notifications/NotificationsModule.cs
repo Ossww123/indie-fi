@@ -78,6 +78,9 @@ public static class NotificationsModule
         services.AddScoped<
             IKeyDropNotificationFanoutPublisher,
             MassTransitKeyDropNotificationFanoutPublisher>();
+        services.AddScoped<
+            ISocialNotificationFanoutPublisher,
+            MassTransitSocialNotificationFanoutPublisher>();
         services.AddSingleton<NotificationFactory>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<NotificationProjectionService>();

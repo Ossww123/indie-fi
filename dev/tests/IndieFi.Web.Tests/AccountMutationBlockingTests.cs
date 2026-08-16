@@ -232,7 +232,9 @@ public sealed class AccountMutationBlockingTests
 
         await using (var gameDb = _fixture.NewDbContext())
         {
-            var games = new GameManagementService(gameDb);
+            var games = new GameManagementService(
+                gameDb,
+                new TestSocialNotificationFanoutPublisher());
             var create = await games.CreateAsync(userId, "Blocked game", null);
             var update = await games.UpdateAsync(
                 gameId,
