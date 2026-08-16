@@ -79,6 +79,7 @@ public static class NotificationsModule
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<NotificationProjectionService>();
         services.AddScoped<NotificationInboxService>();
+        services.AddScoped<NotificationPreferenceService>();
         services.AddSignalR();
         services.AddSingleton<
             INotificationRealtimeNotifier,
