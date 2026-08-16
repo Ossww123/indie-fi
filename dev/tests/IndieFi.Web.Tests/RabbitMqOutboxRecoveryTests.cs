@@ -3,6 +3,7 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Infrastructure.Realtime;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Games.Application;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Notifications.Application;
@@ -17,31 +18,22 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Testcontainers.RabbitMq;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
 
 [Collection(PostgreSqlCollection.Name)]
-public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
+public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
 {
-    private const string RabbitUsername = "indiefi_test";
-    private const string RabbitPassword = "rabbit-test-password";
     private readonly PostgreSqlFixture _postgres;
-    private readonly RabbitMqContainer _rabbitMq =
-        new RabbitMqBuilder("rabbitmq:4.3.4-management-alpine")
-            .WithUsername(RabbitUsername)
-            .WithPassword(RabbitPassword)
-            .Build();
+    private readonly RabbitMqFixture _rabbitMq;
 
-    public RabbitMqOutboxRecoveryTests(PostgreSqlFixture postgres)
+    public RabbitMqOutboxRecoveryTests(
+        PostgreSqlFixture postgres,
+        RabbitMqFixture rabbitMq)
     {
         _postgres = postgres;
-    }
-
-    public async ValueTask InitializeAsync()
-    {
-        await _rabbitMq.StartAsync(TestContext.Current.CancellationToken);
+        _rabbitMq = rabbitMq;
     }
 
     [Fact]
@@ -53,18 +45,17 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
         using var producerHost = BuildHost(settings, recorder, addConsumer: false);
 
-        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
-        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        await StartHostsAsync(consumerHost, producerHost, settings);
         try
         {
             var firstEventId = Guid.NewGuid();
             await StageAsync(producerHost.Services, firstEventId, sourceId: 101);
             await WaitUntilAsync(
                 () => recorder.Count(firstEventId) == 1,
-                TimeSpan.FromSeconds(30));
+                TimeSpan.FromSeconds(60));
 
             await StageAsync(producerHost.Services, firstEventId, sourceId: 101);
-            await WaitUntilOutboxIsEmptyAsync(firstEventId, TimeSpan.FromSeconds(30));
+            await WaitUntilOutboxIsEmptyAsync(firstEventId, TimeSpan.FromSeconds(60));
             await Task.Delay(TimeSpan.FromMilliseconds(500),
                 TestContext.Current.CancellationToken);
             Assert.Equal(1, recorder.Count(firstEventId));
@@ -79,7 +70,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                     inbox => Assert.True(inbox.ReceiveCount >= 2));
             }
 
-            var stopResult = await _rabbitMq.ExecAsync(
+            var stopResult = await _rabbitMq.Container.ExecAsync(
                 ["rabbitmqctl", "stop_app"],
                 TestContext.Current.CancellationToken);
             Assert.Equal(0, stopResult.ExitCode);
@@ -93,7 +84,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                     TestContext.Current.CancellationToken));
             }
 
-            var startResult = await _rabbitMq.ExecAsync(
+            var startResult = await _rabbitMq.Container.ExecAsync(
                 ["rabbitmqctl", "start_app"],
                 TestContext.Current.CancellationToken);
             Assert.Equal(0, startResult.ExitCode);
@@ -102,10 +93,13 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                 TimeSpan.FromSeconds(60));
             await WaitUntilOutboxIsEmptyAsync(
                 outageEventId,
-                TimeSpan.FromSeconds(30));
+                TimeSpan.FromSeconds(60));
         }
         finally
         {
+            await _rabbitMq.Container.ExecAsync(
+                ["rabbitmqctl", "start_app"],
+                CancellationToken.None);
             await producerHost.StopAsync(CancellationToken.None);
             await consumerHost.StopAsync(CancellationToken.None);
         }
@@ -121,8 +115,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
         using var producerHost = BuildHost(settings, recorder, addConsumer: false);
 
-        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
-        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        await StartHostsAsync(consumerHost, producerHost, settings);
         try
         {
             var eventId = Guid.NewGuid();
@@ -131,6 +124,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                 eventId,
                 assignment.AssignmentId,
                 assignment.ReviewerId);
+            await WaitForProbeAsync(recorder, eventId);
             await WaitUntilAsync(async () =>
             {
                 await using var db = _postgres.NewDbContext();
@@ -138,7 +132,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                     item => item.EventId == eventId
                         && item.UserId == assignment.ReviewerId,
                     TestContext.Current.CancellationToken);
-            }, TimeSpan.FromSeconds(30));
+            }, TimeSpan.FromSeconds(60));
 
             await using var verificationDb = _postgres.NewDbContext();
             var notification = await verificationDb.Notifications
@@ -190,8 +184,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         var recorder = new ProbeDeliveryRecorder();
         using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
         using var producerHost = BuildHost(settings, recorder, addConsumer: false);
-        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
-        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        await StartHostsAsync(consumerHost, producerHost, settings);
         try
         {
             var firstOperationId = Guid.NewGuid();
@@ -217,6 +210,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
                 NotificationKind.ReviewAssigned,
                 firstAssignmentId,
                 reviewerId);
+            await WaitForProbeAsync(recorder, assignedEventId);
             await WaitForNotificationAsync(assignedEventId, reviewerId);
 
             await using (var db = _postgres.NewDbContext())
@@ -415,8 +409,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         var recorder = new ProbeDeliveryRecorder();
         using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
         using var producerHost = BuildHost(settings, recorder, addConsumer: false);
-        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
-        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        await StartHostsAsync(consumerHost, producerHost, settings);
         try
         {
             ScheduleKeyDropResult schedule;
@@ -456,7 +449,7 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
             }
             await WaitUntilOutboxIsEmptyAsync(
                 favoriteFanoutId,
-                TimeSpan.FromSeconds(30));
+                TimeSpan.FromSeconds(60));
 
             DateTimeOffset opensAt;
             await using (var arrangeDb = _postgres.NewDbContext())
@@ -541,9 +534,109 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         }
     }
 
-    public async ValueTask DisposeAsync()
+    [Fact]
+    public async Task RabbitMq_GamePublishedFanout_RespectsCurrentFollowersAndPreferences()
     {
-        await _rabbitMq.DisposeAsync();
+        await ClearMessagingStateAsync();
+        long ownerId;
+        long followerId;
+        long removedFollowerId;
+        await using (var arrangeDb = _postgres.NewDbContext())
+        {
+            ownerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            followerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            removedFollowerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            arrangeDb.UserFollows.AddRange(
+                Follow(followerId, ownerId),
+                Follow(removedFollowerId, ownerId));
+            arrangeDb.NotificationPreferences.Add(new NotificationPreference
+            {
+                UserId = followerId,
+                Kind = NotificationKind.FollowedUserGamePublished,
+                WebEnabled = false,
+                EmailEnabled = false,
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await arrangeDb.UserFollows
+                .Where(item => item.FollowerId == removedFollowerId
+                    && item.FollowedUserId == ownerId)
+                .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+        }
+
+        var settings = BuildMessagingSettings();
+        var recorder = new ProbeDeliveryRecorder();
+        using var consumerHost = BuildHost(settings, recorder, addConsumer: true);
+        using var producerHost = BuildHost(settings, recorder, addConsumer: false);
+        await StartHostsAsync(consumerHost, producerHost, settings);
+        try
+        {
+            CreateGameResult result;
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                result = await scope.ServiceProvider
+                    .GetRequiredService<GameManagementService>()
+                    .CreateAsync(
+                        ownerId,
+                        $"Rabbit fan-out {Guid.NewGuid():N}",
+                        "Actual social notification path.");
+            }
+
+            Assert.Equal(CreateGameOutcome.Created, result.Outcome);
+            var gameId = result.GameId!.Value;
+            var recipientEventId = NotificationEventId.Create(
+                NotificationKind.FollowedUserGamePublished,
+                gameId,
+                followerId);
+            await WaitForNotificationAsync(recipientEventId, followerId);
+
+            var fanoutId = NotificationEventId.Create(
+                NotificationKind.FollowedUserGamePublished,
+                gameId,
+                ownerId);
+            await using (var scope = producerHost.Services.CreateAsyncScope())
+            {
+                var publisher = scope.ServiceProvider
+                    .GetRequiredService<ISocialNotificationFanoutPublisher>();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                await publisher.StageGamePublishedAsync(
+                    fanoutId,
+                    gameId,
+                    DateTimeOffset.UtcNow,
+                    TestContext.Current.CancellationToken);
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+            await WaitUntilOutboxIsEmptyAsync(fanoutId, TimeSpan.FromSeconds(60));
+
+            await using var verificationDb = _postgres.NewDbContext();
+            var notifications = await verificationDb.Notifications
+                .Include(item => item.Deliveries)
+                .Where(item => item.SourceType == NotificationSourceTypes.Game
+                    && item.SourceId == gameId
+                    && item.Kind == NotificationKind.FollowedUserGamePublished)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            var notification = Assert.Single(notifications);
+            Assert.Equal(followerId, notification.UserId);
+            Assert.NotEqual(ownerId, notification.UserId);
+            Assert.NotEqual(removedFollowerId, notification.UserId);
+            Assert.False(notification.IsWebVisible);
+            Assert.All(
+                notification.Deliveries,
+                delivery => Assert.Equal(
+                    NotificationDeliveryStatus.Suppressed,
+                    delivery.Status));
+        }
+        finally
+        {
+            await producerHost.StopAsync(CancellationToken.None);
+            await consumerHost.StopAsync(CancellationToken.None);
+        }
     }
 
     private IHost BuildHost(
@@ -577,23 +670,59 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
         builder.Services.AddScoped<GameKeyRegistrationWriter>();
         builder.Services.AddScoped<KeyDropSchedulingService>();
         builder.Services.AddScoped<KeyDropOpenNotificationService>();
+        builder.Services.AddScoped<GameManagementService>();
         return builder.Build();
     }
 
     private IReadOnlyDictionary<string, string?> BuildMessagingSettings()
     {
-        var connection = new Uri(_rabbitMq.GetConnectionString());
+        var connection = new Uri(_rabbitMq.Container.GetConnectionString());
         return new Dictionary<string, string?>
         {
             ["Messaging:RabbitMq:Enabled"] = "true",
             ["Messaging:RabbitMq:Host"] = connection.Host,
             ["Messaging:RabbitMq:Port"] = connection.Port.ToString(),
             ["Messaging:RabbitMq:VirtualHost"] = "/",
-            ["Messaging:RabbitMq:Username"] = RabbitUsername,
-            ["Messaging:RabbitMq:Password"] = RabbitPassword,
+            ["Messaging:RabbitMq:Username"] = RabbitMqFixture.Username,
+            ["Messaging:RabbitMq:Password"] = RabbitMqFixture.Password,
             ["Messaging:RabbitMq:EndpointPrefix"] =
                 $"indiefi-test-{Guid.NewGuid():N}"[..45],
         };
+    }
+
+    private async Task StartHostsAsync(
+        IHost consumerHost,
+        IHost producerHost,
+        IReadOnlyDictionary<string, string?> settings)
+    {
+        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
+        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+
+        var prefix = settings["Messaging:RabbitMq:EndpointPrefix"]!;
+        var expectedQueues = new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{prefix}-rabbit-mq-probe",
+            $"{prefix}-user-notification-requested",
+        };
+        await WaitUntilAsync(async () =>
+        {
+            var bindings = await _rabbitMq.Container.ExecAsync(
+                ["rabbitmqctl", "list_bindings", "source_name", "destination_name"],
+                TestContext.Current.CancellationToken);
+            if (bindings.ExitCode != 0)
+            {
+                return false;
+            }
+
+            var boundQueues = bindings.Stdout
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.TrimEnd('\r').Split('\t'))
+                .Where(columns => columns.Length >= 2
+                    && !string.IsNullOrWhiteSpace(columns[0]))
+                .Select(columns => columns[1])
+                .ToHashSet(StringComparer.Ordinal);
+            return expectedQueues.IsSubsetOf(boundQueues);
+        }, TimeSpan.FromSeconds(30));
     }
 
     private static async Task StageAsync(
@@ -648,7 +777,48 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
             return await db.Notifications.AnyAsync(
                 item => item.EventId == eventId && item.UserId == userId,
                 TestContext.Current.CancellationToken);
-        }, TimeSpan.FromSeconds(30));
+        }, TimeSpan.FromSeconds(60));
+
+    private async Task WaitForProbeAsync(
+        ProbeDeliveryRecorder recorder,
+        Guid eventId)
+    {
+        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(60);
+        while (DateTimeOffset.UtcNow < expiresAt)
+        {
+            if (recorder.Count(eventId) == 1)
+            {
+                return;
+            }
+
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(100),
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var db = _postgres.NewDbContext();
+        var matchingOutbox = await db.Set<OutboxMessage>().CountAsync(
+            item => item.MessageId == eventId,
+            TestContext.Current.CancellationToken);
+        var allOutbox = await db.Set<OutboxMessage>().CountAsync(
+            TestContext.Current.CancellationToken);
+        var matchingInbox = await db.Set<InboxState>().CountAsync(
+            item => item.MessageId == eventId,
+            TestContext.Current.CancellationToken);
+        var brokerQueues = await _rabbitMq.Container.ExecAsync(
+            [
+                "rabbitmqctl",
+                "list_queues",
+                "name",
+                "messages_ready",
+                "messages_unacknowledged",
+            ],
+            TestContext.Current.CancellationToken);
+        Assert.Fail(
+            $"Probe message was not consumed. MatchingOutbox={matchingOutbox}, "
+            + $"AllOutbox={allOutbox}, MatchingInbox={matchingInbox}, "
+            + $"RabbitQueues={brokerQueues.Stdout}");
+    }
 
     private static FavoriteGame Favorite(long userId, long gameId) => new()
     {
@@ -660,6 +830,12 @@ public sealed class RabbitMqOutboxRecoveryTests : IAsyncLifetime
     {
         UserId = userId,
         DropId = dropId,
+    };
+
+    private static UserFollow Follow(long followerId, long followedUserId) => new()
+    {
+        FollowerId = followerId,
+        FollowedUserId = followedUserId,
     };
 
     private static async Task WaitUntilAsync(
