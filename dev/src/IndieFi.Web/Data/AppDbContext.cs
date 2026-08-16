@@ -3,6 +3,8 @@ using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Games.Domain;
 using IndieFi.Web.Modules.Notifications.Domain;
+using MassTransit;
+using MassTransit.EntityFrameworkCoreIntegration;
 using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
@@ -1232,5 +1234,53 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             // A ledger movement can pay for only one feedback submission.
             feedbackSubmission.HasIndex(s => s.EarnEntryId).IsUnique();
         });
+
+        modelBuilder.AddInboxStateEntity(entity =>
+            entity.ToTable("message_inbox_states"));
+        modelBuilder.AddOutboxMessageEntity(entity =>
+            entity.ToTable("message_outbox_messages"));
+        modelBuilder.AddOutboxStateEntity(entity =>
+            entity.ToTable("message_outbox_states"));
+
+        MapMassTransitColumnsToSnakeCase(modelBuilder);
+    }
+
+    private static void MapMassTransitColumnsToSnakeCase(ModelBuilder modelBuilder)
+    {
+        Type[] outboxEntityTypes =
+        [
+            typeof(InboxState),
+            typeof(OutboxMessage),
+            typeof(OutboxState),
+        ];
+
+        foreach (var entityType in outboxEntityTypes)
+        {
+            var metadata = modelBuilder.Model.FindEntityType(entityType)
+                ?? throw new InvalidOperationException(
+                    $"MassTransit outbox entity '{entityType.Name}' is not configured.");
+
+            foreach (var property in metadata.GetProperties())
+            {
+                property.SetColumnName(ToSnakeCase(property.Name));
+            }
+        }
+    }
+
+    private static string ToSnakeCase(string value)
+    {
+        var buffer = new System.Text.StringBuilder(value.Length + 8);
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (char.IsUpper(character) && index > 0)
+            {
+                buffer.Append('_');
+            }
+
+            buffer.Append(char.ToLowerInvariant(character));
+        }
+
+        return buffer.ToString();
     }
 }

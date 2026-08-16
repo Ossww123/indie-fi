@@ -1,4 +1,8 @@
+using IndieFi.Web.Data;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Domain;
 using IndieFi.Web.Modules.Notifications.Infrastructure;
+using MassTransit;
 
 namespace IndieFi.Web.Modules.Notifications;
 
@@ -12,6 +16,55 @@ public static class NotificationsModule
             .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
             .Validate(RabbitMqOptions.IsValid, "RabbitMQ settings are invalid.")
             .ValidateOnStart();
+
+        var rabbitMq = configuration
+            .GetSection(RabbitMqOptions.SectionName)
+            .Get<RabbitMqOptions>() ?? new RabbitMqOptions();
+
+        services.AddMassTransit(registration =>
+        {
+            registration.SetEndpointNameFormatter(
+                new KebabCaseEndpointNameFormatter(
+                    rabbitMq.EndpointPrefix,
+                    includeNamespace: false));
+            registration.AddEntityFrameworkOutbox<AppDbContext>(outbox =>
+            {
+                outbox.DuplicateDetectionWindow =
+                    NotificationPolicy.ConsumerDeduplicationRetention;
+                outbox.QueryDelay = TimeSpan.FromSeconds(1);
+                outbox.UsePostgres();
+                outbox.UseBusOutbox(busOutbox =>
+                {
+                    busOutbox.MessageDeliveryLimit = 100;
+                    busOutbox.MessageDeliveryTimeout = TimeSpan.FromSeconds(10);
+                });
+            });
+
+            if (rabbitMq.Enabled)
+            {
+                registration.UsingRabbitMq((context, bus) =>
+                {
+                    bus.Host(
+                        rabbitMq.Host,
+                        rabbitMq.Port,
+                        rabbitMq.VirtualHost,
+                        host =>
+                        {
+                            host.Username(rabbitMq.Username);
+                            host.Password(rabbitMq.Password);
+                        });
+                    bus.ConfigureEndpoints(context);
+                });
+            }
+            else
+            {
+                registration.UsingInMemory((context, bus) =>
+                    bus.ConfigureEndpoints(context));
+            }
+        });
+        services.AddScoped<
+            INotificationEventPublisher,
+            MassTransitNotificationEventPublisher>();
         return services;
     }
 }
