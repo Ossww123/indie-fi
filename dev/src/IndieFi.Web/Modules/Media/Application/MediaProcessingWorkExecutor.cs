@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using IndieFi.Web.Modules.Media.Infrastructure;
+
 namespace IndieFi.Web.Modules.Media.Application;
 
 public sealed class MediaProcessingWorkExecutor : IMediaProcessingWorkExecutor
@@ -38,6 +41,7 @@ public sealed class MediaProcessingWorkExecutor : IMediaProcessingWorkExecutor
             return;
         }
 
+        var startedAt = Stopwatch.GetTimestamp();
         MediaProcessingAttemptResult result;
         try
         {
@@ -63,6 +67,9 @@ public sealed class MediaProcessingWorkExecutor : IMediaProcessingWorkExecutor
             lease,
             result,
             cancellationToken);
+        MediaTelemetry.RecordProcessingAttempt(
+            result.Outcome,
+            Stopwatch.GetElapsedTime(startedAt));
         _logger.LogInformation(
             "Media processing attempt mediaId={MediaId} revision={Revision} attempt={Attempt} outcome={Outcome} failureCode={FailureCode} failureOutcome={FailureOutcome}",
             mediaId,

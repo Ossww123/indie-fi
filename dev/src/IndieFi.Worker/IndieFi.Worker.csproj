@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\IndieFi.Web\IndieFi.Web.csproj"
-                      AdditionalProperties="ClientBuildEnabled=false" />
+                      AdditionalProperties="ClientBuildEnabled=false;ReferencedByWorker=true" />
   </ItemGroup>
 
 </Project>

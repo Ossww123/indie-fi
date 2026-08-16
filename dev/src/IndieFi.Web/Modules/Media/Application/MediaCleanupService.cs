@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Media.Domain;
+using IndieFi.Web.Modules.Media.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.Media.Application;
@@ -124,13 +125,15 @@ public sealed class MediaCleanupService
             }
         }
 
-        return new MediaCleanupBatchResult(
+        var result = new MediaCleanupBatchResult(
             candidates.Length,
             expired,
             readySourceDeleted,
             deletionCompleted,
             tombstoneRemoved,
             failed);
+        MediaTelemetry.RecordCleanupBatch(result);
+        return result;
     }
 
     private async Task<int> ExpireUploadAsync(

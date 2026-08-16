@@ -13,11 +13,16 @@ public static class MediaModule
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var objectStorageEnabled = configuration.GetValue<bool>(
+            $"{MediaObjectStorageOptions.SectionName}:Enabled");
         services.AddOptions<MediaWorkerOptions>()
             .Bind(configuration.GetSection(MediaWorkerOptions.SectionName))
             .Validate(
                 MediaWorkerOptions.IsValid,
                 "Media worker settings are invalid.")
+            .Validate(
+                options => !options.Enabled || objectStorageEnabled,
+                "Media object storage must be enabled for the media Worker.")
             .ValidateOnStart();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.TryAddSingleton<IMediaImageProcessor, SkiaMediaImageProcessor>();
@@ -58,8 +63,6 @@ public static class MediaModule
             IValidateOptions<MediaObjectStorageOptions>,
             MediaObjectStorageOptionsValidator>();
 
-        var objectStorageEnabled = configuration.GetValue<bool>(
-            $"{MediaObjectStorageOptions.SectionName}:Enabled");
         if (!objectStorageEnabled)
         {
             return services;
@@ -91,7 +94,9 @@ public static class MediaModule
             services.AddScoped<IMediaDeletionWorkExecutor>(provider =>
                 provider.GetRequiredService<MediaDeletionWorkExecutor>());
             services.AddScoped<MediaCleanupService>();
+            services.AddScoped<MediaOperationalSnapshotService>();
             services.AddHostedService<MediaCleanupWorker>();
+            services.AddHostedService<MediaOperationsWorker>();
         }
 
         services.AddScoped<MediaStatusQueryService>();

@@ -14,6 +14,15 @@
     <Content Remove="wwwroot/css/dist/**/*" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(ReferencedByWorker)' == 'true'">
+    <Content Update="appsettings.json"
+             CopyToOutputDirectory="Never"
+             CopyToPublishDirectory="Never" />
+    <Content Update="appsettings.Development.json"
+             CopyToOutputDirectory="Never"
+             CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="4.0.102.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.10" />

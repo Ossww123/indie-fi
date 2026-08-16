@@ -71,6 +71,14 @@ public sealed class MinioFixture : IAsyncLifetime
         return services.BuildServiceProvider(validateScopes: true);
     }
 
+    public Task SuspendAppAccessAsync(
+        CancellationToken cancellationToken = default) =>
+        ChangeAppPolicyAsync("detach", cancellationToken);
+
+    public Task RestoreAppAccessAsync(
+        CancellationToken cancellationToken = default) =>
+        ChangeAppPolicyAsync("attach", cancellationToken);
+
     public async ValueTask DisposeAsync()
     {
         await _container.DisposeAsync();
@@ -108,6 +116,29 @@ public sealed class MinioFixture : IAsyncLifetime
         mc admin policy create local indiefi-media-test-rw /tmp/indiefi-media-test-policy.json
         mc admin policy attach local indiefi-media-test-rw --user {{AppAccessKey}}
         """;
+
+    private async Task ChangeAppPolicyAsync(
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        var result = await _container.ExecAsync(
+            [
+                "mc",
+                "admin",
+                "policy",
+                operation,
+                "local",
+                "indiefi-media-test-rw",
+                "--user",
+                AppAccessKey,
+            ],
+            cancellationToken);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"MinIO app policy {operation} failed: {result.Stderr}");
+        }
+    }
 
     private sealed class TestHostEnvironment : IHostEnvironment
     {

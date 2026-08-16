@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Media.Domain;
+using IndieFi.Web.Modules.Media.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.Media.Application;
@@ -71,6 +72,7 @@ public sealed class MediaProcessingRecoveryService
             }
         }
 
+        MediaTelemetry.RecordRecoveryBatch(candidates.Count);
         return candidates.Count;
     }
 
