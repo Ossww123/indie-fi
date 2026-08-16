@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Infrastructure.Realtime;
+using IndieFi.Web.Modules.Accounts;
 using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Notifications.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -28,8 +29,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.EnableSensitiveDataLogging(false);
 });
 builder.Services.AddIndieFiRealtime(builder.Configuration);
+builder.Services.AddAccountProtectionServices();
 builder.Services.AddNotificationsModule(
     builder.Configuration,
     registration => registration.AddNotificationConsumers());
+builder.Services.AddNotificationEmailDelivery(builder.Configuration);
 
 await builder.Build().RunAsync();

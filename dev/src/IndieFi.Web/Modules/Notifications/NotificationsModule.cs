@@ -4,6 +4,7 @@ using IndieFi.Web.Modules.Notifications.Domain;
 using IndieFi.Web.Modules.Notifications.Infrastructure;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Modules.Notifications;
 
@@ -94,6 +95,36 @@ public static class NotificationsModule
         services.AddSingleton<
             INotificationRealtimeNotifier,
             SignalRNotificationRealtimeNotifier>();
+        return services;
+    }
+
+    public static IServiceCollection AddNotificationEmailDelivery(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<NotificationEmailDeliveryOptions>()
+            .Bind(configuration.GetSection(NotificationEmailDeliveryOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<
+            IValidateOptions<NotificationEmailDeliveryOptions>,
+            NotificationEmailDeliveryOptionsValidator>();
+        services.AddSingleton<NotificationEmailTemplateRenderer>();
+        services.AddSingleton<NotificationEmailMessageFactory>();
+        services.AddSingleton<INotificationEmailSender, SmtpNotificationEmailSender>();
+        services.AddScoped<NotificationEmailDeliveryAuthorityService>();
+        services.AddScoped<NotificationEmailDeliveryProcessor>();
+        services.AddHostedService(provider =>
+        {
+            var options = provider
+                .GetRequiredService<IOptions<NotificationEmailDeliveryOptions>>()
+                .Value;
+            return new NotificationEmailDeliveryWorker(
+                provider.GetRequiredService<IServiceScopeFactory>(),
+                provider.GetRequiredService<ILogger<NotificationEmailDeliveryWorker>>(),
+                options.Enabled,
+                options.WorkerInterval,
+                options.BatchSize);
+        });
         return services;
     }
 }
