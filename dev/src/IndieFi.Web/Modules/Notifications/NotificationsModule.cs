@@ -80,6 +80,7 @@ public static class NotificationsModule
         services.AddScoped<NotificationProjectionService>();
         services.AddScoped<NotificationInboxService>();
         services.AddScoped<NotificationPreferenceService>();
+        services.AddScoped<KeyDropSubscriptionService>();
         services.AddSignalR();
         services.AddSingleton<
             INotificationRealtimeNotifier,
