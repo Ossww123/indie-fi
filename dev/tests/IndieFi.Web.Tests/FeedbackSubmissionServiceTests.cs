@@ -2,6 +2,9 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Contracts;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
@@ -269,6 +272,112 @@ public sealed class FeedbackSubmissionServiceTests
     }
 
     [Fact]
+    public async Task SubmitAsync_StagesStableFeedbackEventForGameOwner()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        var publisher = new TestNotificationEventPublisher();
+        await using var serviceDb = _fixture.NewDbContext();
+        var service = new FeedbackSubmissionService(
+            serviceDb,
+            NullLogger<FeedbackSubmissionService>.Instance,
+            publisher);
+
+        var first = await service.SubmitAsync(
+            assignment.AssignmentId,
+            assignment.ReviewerId,
+            "This feedback creates one stable owner event.");
+        var replay = await service.SubmitAsync(
+            assignment.AssignmentId,
+            assignment.ReviewerId,
+            "This replay must use the same event identity.");
+
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, first.Outcome);
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, replay.Outcome);
+        var source = await (
+                from submission in serviceDb.FeedbackSubmissions
+                join reviewAssignment in serviceDb.ReviewAssignments
+                    on submission.AssignmentId equals reviewAssignment.Id
+                join request in serviceDb.ReviewRequests
+                    on reviewAssignment.RequestId equals request.Id
+                join game in serviceDb.Games on request.GameId equals game.Id
+                where submission.AssignmentId == assignment.AssignmentId
+                select new
+                {
+                    submission.Id,
+                    OwnerId = game.OwnerId,
+                    submission.CreatedAt,
+                })
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, publisher.Events.Count);
+        Assert.All(publisher.Events, staged =>
+        {
+            Assert.Equal(
+                NotificationEventId.Create(
+                    NotificationKind.FeedbackCompleted,
+                    source.Id,
+                    source.OwnerId),
+                staged.EventId);
+            Assert.Equal(source.OwnerId, staged.RecipientUserId);
+            Assert.Equal(NotificationKind.FeedbackCompleted, staged.Kind);
+            Assert.Equal(NotificationSourceTypes.FeedbackSubmission, staged.SourceType);
+            Assert.Equal(source.Id, staged.SourceId);
+            Assert.Equal(source.CreatedAt, staged.OccurredAt);
+        });
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenEventStagingFails_RollsBackSubmissionAndCredit()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        int creditBefore;
+        await using (var beforeDb = _fixture.NewDbContext())
+        {
+            creditBefore = await beforeDb.Users
+                .Where(item => item.Id == assignment.ReviewerId)
+                .Select(item => item.CreditBalance)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var service = new FeedbackSubmissionService(
+                serviceDb,
+                NullLogger<FeedbackSubmissionService>.Instance,
+                new TestNotificationEventPublisher
+                {
+                    Failure = new InvalidOperationException("staging failed"),
+                });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                "This feedback must roll back with its failed event."));
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.FeedbackSubmissions.AnyAsync(
+            item => item.AssignmentId == assignment.AssignmentId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(
+            ReviewAssignmentStatus.Active,
+            await verificationDb.ReviewAssignments
+                .Where(item => item.Id == assignment.AssignmentId)
+                .Select(item => item.Status)
+                .SingleAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            ReviewRequestStatus.Assigned,
+            await verificationDb.ReviewRequests
+                .Where(item => item.Id == assignment.RequestId)
+                .Select(item => item.Status)
+                .SingleAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            creditBefore,
+            await verificationDb.Users
+                .Where(item => item.Id == assignment.ReviewerId)
+                .Select(item => item.CreditBalance)
+                .SingleAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task SubmittingTwiceForOneAssignment_IsRefusedByTheDatabase()
     {
         var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
@@ -348,7 +457,10 @@ public sealed class FeedbackSubmissionServiceTests
     }
 
     private static FeedbackSubmissionService NewSubmissionService(AppDbContext db) =>
-        new(db, NullLogger<FeedbackSubmissionService>.Instance);
+        new(
+            db,
+            NullLogger<FeedbackSubmissionService>.Instance,
+            new TestNotificationEventPublisher());
 
     private async Task<long> CreateEarnEntryAsync(long reviewerId)
     {

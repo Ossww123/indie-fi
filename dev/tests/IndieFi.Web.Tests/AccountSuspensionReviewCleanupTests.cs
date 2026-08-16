@@ -90,8 +90,9 @@ public sealed class AccountSuspensionReviewCleanupTests
         await using (var submissionDb = _fixture.NewDbContext())
         {
             var submitted = await new FeedbackSubmissionService(
-                    submissionDb,
-                    NullLogger<FeedbackSubmissionService>.Instance)
+                submissionDb,
+                NullLogger<FeedbackSubmissionService>.Instance,
+                new TestNotificationEventPublisher())
                 .SubmitAsync(
                     assignment.AssignmentId,
                     assignment.ReviewerId,

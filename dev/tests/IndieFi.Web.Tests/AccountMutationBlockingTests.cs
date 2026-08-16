@@ -337,7 +337,8 @@ public sealed class AccountMutationBlockingTests
         {
             submission = await new FeedbackSubmissionService(
                     reviewerDb,
-                    NullLogger<FeedbackSubmissionService>.Instance)
+                    NullLogger<FeedbackSubmissionService>.Instance,
+                    new TestNotificationEventPublisher())
                 .SubmitAsync(
                     assignment.AssignmentId,
                     assignment.ReviewerId,

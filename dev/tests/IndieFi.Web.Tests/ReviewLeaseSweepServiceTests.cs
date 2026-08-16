@@ -413,5 +413,8 @@ public sealed class ReviewLeaseSweepServiceTests
         new(db, NullLogger<ReviewLeaseSweepService>.Instance);
 
     private static FeedbackSubmissionService NewSubmissionService(AppDbContext db) =>
-        new(db, NullLogger<FeedbackSubmissionService>.Instance);
+        new(
+            db,
+            NullLogger<FeedbackSubmissionService>.Instance,
+            new TestNotificationEventPublisher());
 }

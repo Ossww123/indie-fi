@@ -261,7 +261,8 @@ public sealed class ReviewQueuePageTests
         {
             var result = await new FeedbackSubmissionService(
                 submissionDb,
-                NullLogger<FeedbackSubmissionService>.Instance)
+                NullLogger<FeedbackSubmissionService>.Instance,
+                new TestNotificationEventPublisher())
                 .SubmitAsync(
                     completedAssignmentId,
                     reviewerId,
