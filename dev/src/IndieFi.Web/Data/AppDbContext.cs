@@ -521,6 +521,14 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 table.HasCheckConstraint(
                     "CK_key_drops_state_version_nonnegative",
                     "state_version >= 0");
+                table.HasCheckConstraint(
+                    "CK_key_drops_minimum_account_age_days_range",
+                    "minimum_account_age_days IS NULL OR "
+                    + "minimum_account_age_days BETWEEN 1 AND 365");
+                table.HasCheckConstraint(
+                    "CK_key_drops_minimum_completed_review_count_range",
+                    "minimum_completed_review_count IS NULL OR "
+                    + "minimum_completed_review_count BETWEEN 1 AND 100");
             });
 
             keyDrop.HasKey(d => d.Id);
@@ -541,6 +549,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             keyDrop.Property(d => d.TotalKeys)
                 .HasColumnName("total_keys")
                 .IsRequired();
+
+            keyDrop.Property(d => d.MinimumAccountAgeDays)
+                .HasColumnName("minimum_account_age_days");
+
+            keyDrop.Property(d => d.MinimumCompletedReviewCount)
+                .HasColumnName("minimum_completed_review_count");
 
             keyDrop.Property(d => d.ClosedAt)
                 .HasColumnName("closed_at");

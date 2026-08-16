@@ -75,6 +75,64 @@ public sealed class KeyDropSchedulingServiceTests
     }
 
     [Fact]
+    public async Task ScheduleAsync_WithEligibilityRequirements_StoresBothRequirements()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+
+        ScheduleKeyDropResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb).ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddHours(1),
+                "KEY-WITH-ELIGIBILITY",
+                minimumAccountAgeDays: 30,
+                minimumCompletedReviewCount: 5);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var stored = await verificationDb.KeyDrops
+            .Where(drop => drop.Id == result.KeyDropId)
+            .Select(drop => new
+            {
+                drop.MinimumAccountAgeDays,
+                drop.MinimumCompletedReviewCount,
+            })
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(ScheduleKeyDropOutcome.Scheduled, result.Outcome);
+        Assert.Equal(30, stored.MinimumAccountAgeDays);
+        Assert.Equal(5, stored.MinimumCompletedReviewCount);
+    }
+
+    [Fact]
+    public async Task ScheduleAsync_WithOutOfRangeEligibility_ReportsBothFields()
+    {
+        var (ownerId, gameId) = await CreateOwnerAndGameAsync();
+
+        ScheduleKeyDropResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb).ScheduleAsync(
+                gameId,
+                ownerId,
+                DateTimeOffset.UtcNow.AddHours(1),
+                "KEY-WITH-INVALID-ELIGIBILITY",
+                minimumAccountAgeDays: 366,
+                minimumCompletedReviewCount: 0);
+        }
+
+        Assert.Equal(ScheduleKeyDropOutcome.Invalid, result.Outcome);
+        Assert.Equal(
+            [
+                KeyDropSchedulingService.MinimumAccountAgeDaysField,
+                KeyDropSchedulingService.MinimumCompletedReviewCountField,
+            ],
+            result.Violations.Select(violation => violation.Field));
+    }
+
+    [Fact]
     public async Task ScheduleAsync_WithNoUsableKeys_WritesNothing()
     {
         var (ownerId, gameId) = await CreateOwnerAndGameAsync();

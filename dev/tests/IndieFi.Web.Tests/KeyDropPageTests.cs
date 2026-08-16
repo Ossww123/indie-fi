@@ -240,6 +240,8 @@ public sealed class KeyDropPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("data-key-drop-form", html);
+        Assert.Contains("name=\"MinimumAccountAgeDays\"", html);
+        Assert.Contains("name=\"MinimumCompletedReviewCount\"", html);
         Assert.Contains("type=\"module\"", html);
         Assert.Contains("/js/dist/key-distributions/new", html);
         Assert.DoesNotContain("/js/site.js", html);

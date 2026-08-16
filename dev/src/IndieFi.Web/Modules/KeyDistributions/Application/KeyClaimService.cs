@@ -18,6 +18,10 @@ public enum ClaimOutcome
     Conflict,
     DropNotFound,
     AccountUnavailable,
+    NotEligible,
+    AdmissionRequired,
+    WaitingRoomTerminal,
+    WaitingRoomUnavailable,
 }
 
 public record ClaimResult(ClaimOutcome Outcome);
@@ -29,15 +33,25 @@ public class KeyClaimService
 
     private readonly AppDbContext _db;
     private readonly KeyDropMutationLock _keyDropMutationLock;
+    private readonly KeyDropEligibilityService _keyDropEligibilityService;
+    private readonly IKeyClaimAdmissionGate _admissionGate;
+    private readonly IWaitingRoomLifecycle _waitingRoomLifecycle;
     private readonly ILogger<KeyClaimService> _logger;
 
     public KeyClaimService(
         AppDbContext db,
         KeyDropMutationLock keyDropMutationLock,
-        ILogger<KeyClaimService> logger)
+        ILogger<KeyClaimService> logger,
+        IKeyClaimAdmissionGate admissionGate,
+        IWaitingRoomLifecycle waitingRoomLifecycle,
+        KeyDropEligibilityService? keyDropEligibilityService = null)
     {
         _db = db;
         _keyDropMutationLock = keyDropMutationLock;
+        _keyDropEligibilityService = keyDropEligibilityService
+            ?? new KeyDropEligibilityService(db);
+        _admissionGate = admissionGate;
+        _waitingRoomLifecycle = waitingRoomLifecycle;
         _logger = logger;
     }
 
@@ -77,6 +91,14 @@ public class KeyClaimService
 
         if (state.AlreadyClaimed)
         {
+            var existingStatus = state.GetRequiredStatus();
+            if (existingStatus is KeyDropStatus.SoldOut or KeyDropStatus.ClosedEarly)
+            {
+                await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                    dropId,
+                    cancellationToken);
+            }
+
             return await CompleteAsync(
                 transaction,
                 ClaimOutcome.AlreadyClaimed,
@@ -95,6 +117,40 @@ public class KeyClaimService
                 KeyDropStatus.ClosedEarly => ClaimOutcome.ClosedEarly,
                 _ => throw new InvalidOperationException(
                     $"Unsupported key drop status: {status}"),
+            };
+            return await CompleteAsync(
+                transaction,
+                outcome,
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
+        if (_keyDropEligibilityService.Evaluate(
+                state.GetRequiredEligibilitySnapshot())
+            != KeyDropEligibilityOutcome.Eligible)
+        {
+            return await CompleteAsync(
+                transaction,
+                ClaimOutcome.NotEligible,
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
+        var admission = await _admissionGate.ValidateAsync(
+            dropId,
+            userId,
+            cancellationToken);
+        if (admission != KeyClaimAdmissionOutcome.Allowed)
+        {
+            var outcome = admission switch
+            {
+                KeyClaimAdmissionOutcome.Required => ClaimOutcome.AdmissionRequired,
+                KeyClaimAdmissionOutcome.Terminal => ClaimOutcome.WaitingRoomTerminal,
+                KeyClaimAdmissionOutcome.Unavailable => ClaimOutcome.WaitingRoomUnavailable,
+                _ => throw new InvalidOperationException(
+                    $"Unsupported key-claim admission outcome: {admission}"),
             };
             return await CompleteAsync(
                 transaction,
@@ -170,7 +226,8 @@ public class KeyClaimService
                 ClaimOutcome.Granted,
                 dropId,
                 userId,
-                cancellationToken);
+                cancellationToken,
+                synchronizeTerminal: state.RemainingKeys == 1);
         }
         catch (PostgresException exception)
             when (exception.SqlState == UniqueViolation)
@@ -183,12 +240,18 @@ public class KeyClaimService
             await AccountMutationGuard.RollbackIfOwnedAsync(
                 transaction,
                 cancellationToken);
-            return Result(
-                exception.ConstraintName == OneKeyPerUserIndex
-                    ? ClaimOutcome.AlreadyClaimed
-                    : ClaimOutcome.Conflict,
-                dropId,
-                userId);
+            var outcome = exception.ConstraintName == OneKeyPerUserIndex
+                ? ClaimOutcome.AlreadyClaimed
+                : ClaimOutcome.Conflict;
+            if (outcome == ClaimOutcome.AlreadyClaimed)
+            {
+                await ReflectCompletionBestEffortAsync(
+                    dropId,
+                    userId,
+                    cancellationToken);
+            }
+
+            return Result(outcome, dropId, userId);
         }
     }
 
@@ -197,12 +260,50 @@ public class KeyClaimService
         ClaimOutcome outcome,
         long dropId,
         long userId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool synchronizeTerminal = false)
     {
         await AccountMutationGuard.CommitIfOwnedAsync(
             transaction,
             cancellationToken);
+        if (synchronizeTerminal)
+        {
+            await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                dropId,
+                cancellationToken);
+        }
+
+        if (outcome is ClaimOutcome.Granted or ClaimOutcome.AlreadyClaimed)
+        {
+            await ReflectCompletionBestEffortAsync(
+                dropId,
+                userId,
+                cancellationToken);
+        }
+
         return Result(outcome, dropId, userId);
+    }
+
+    private async Task ReflectCompletionBestEffortAsync(
+        long dropId,
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _admissionGate.CompleteAsync(
+                dropId,
+                userId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(
+                exception,
+                "Waiting-room completion sync failed after PostgreSQL claim drop={DropId} user={UserId}",
+                dropId,
+                userId);
+        }
     }
 
     private async Task<ClaimResult> RollbackConflictAsync(

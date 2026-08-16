@@ -1,6 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -87,6 +88,147 @@ public sealed class KeyClaimServiceTests
 
         Assert.Equal(ClaimOutcome.ClosedEarly, result.Outcome);
         Assert.Equal(0, grantCount);
+    }
+
+    [Fact]
+    public async Task ClaimAsync_WhenCurrentEligibilityIsNotMet_DoesNotCreateGrant()
+    {
+        long userId;
+        long dropId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            var drop = await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1);
+            drop.MinimumAccountAgeDays = 1;
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            dropId = drop.Id;
+        }
+
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ClaimOutcome.NotEligible, result.Outcome);
+        Assert.False(await verificationDb.KeyGrants.AnyAsync(
+            grant => grant.DropId == dropId && grant.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ClaimAsync_WithoutValidAdmission_DoesNotCreateGrant()
+    {
+        long userId;
+        long dropId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1)).Id;
+        }
+
+        var gate = new StubKeyClaimAdmissionGate(KeyClaimAdmissionOutcome.Required);
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(serviceDb, gate).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ClaimOutcome.AdmissionRequired, result.Outcome);
+        Assert.Equal(1, gate.ValidationCalls);
+        Assert.False(await verificationDb.KeyGrants.AnyAsync(
+            grant => grant.DropId == dropId && grant.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ClaimAsync_WhenCompletionSyncFails_KeepsGrantAndRetriesOnExistingClaim()
+    {
+        long userId;
+        long dropId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1)).Id;
+        }
+
+        var gate = new StubKeyClaimAdmissionGate(
+            KeyClaimAdmissionOutcome.Allowed,
+            completionFailures: 1);
+        ClaimResult first;
+        await using (var firstDb = _fixture.NewDbContext())
+        {
+            first = await NewService(firstDb, gate).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        ClaimResult repeated;
+        await using (var repeatedDb = _fixture.NewDbContext())
+        {
+            repeated = await NewService(repeatedDb, gate).ClaimAsync(
+                dropId,
+                userId,
+                TestContext.Current.CancellationToken);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(ClaimOutcome.Granted, first.Outcome);
+        Assert.Equal(ClaimOutcome.AlreadyClaimed, repeated.Outcome);
+        Assert.Equal(1, gate.ValidationCalls);
+        Assert.Equal(2, gate.CompletionCalls);
+        Assert.Equal(1, await verificationDb.KeyGrants.CountAsync(
+            grant => grant.DropId == dropId && grant.UserId == userId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ClaimAsync_WhenLastKeyIsGranted_SynchronizesTerminalWaitingRoom()
+    {
+        long userId;
+        long dropId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            userId = (await CreateUserAsync(arrangeDb)).Id;
+            dropId = (await CreateDropAsync(
+                arrangeDb,
+                DateTimeOffset.UtcNow.AddHours(-1),
+                keyCount: 1)).Id;
+        }
+
+        var lifecycle = new RecordingWaitingRoomLifecycle();
+        ClaimResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewService(
+                serviceDb,
+                waitingRoomLifecycle: lifecycle).ClaimAsync(
+                    dropId,
+                    userId,
+                    TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(ClaimOutcome.Granted, result.Outcome);
+        Assert.Equal([dropId], lifecycle.TerminalDropIds);
     }
 
     // A user can receive only one key from the same drop.
@@ -443,11 +585,59 @@ public sealed class KeyClaimServiceTests
 
     // The service takes a logger it uses for one line per claim; tests do not assert on
     // logs, so a no-op logger keeps the call sites readable.
-    private static KeyClaimService NewService(AppDbContext db) =>
+    private static KeyClaimService NewService(
+        AppDbContext db,
+        IKeyClaimAdmissionGate? admissionGate = null,
+        IWaitingRoomLifecycle? waitingRoomLifecycle = null) =>
         new(
             db,
             new KeyDropMutationLock(db),
-            NullLogger<KeyClaimService>.Instance);
+            NullLogger<KeyClaimService>.Instance,
+            admissionGate ?? AllowKeyClaimAdmissionGate.Instance,
+            waitingRoomLifecycle ?? NullWaitingRoomLifecycle.Instance);
+
+    private sealed class StubKeyClaimAdmissionGate : IKeyClaimAdmissionGate
+    {
+        private readonly KeyClaimAdmissionOutcome _outcome;
+
+        private int _completionFailures;
+
+        public StubKeyClaimAdmissionGate(
+            KeyClaimAdmissionOutcome outcome,
+            int completionFailures = 0)
+        {
+            _outcome = outcome;
+            _completionFailures = completionFailures;
+        }
+
+        public int ValidationCalls { get; private set; }
+
+        public int CompletionCalls { get; private set; }
+
+        public Task<KeyClaimAdmissionOutcome> ValidateAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default)
+        {
+            ValidationCalls++;
+            return Task.FromResult(_outcome);
+        }
+
+        public Task CompleteAsync(
+            long dropId,
+            long userId,
+            CancellationToken cancellationToken = default)
+        {
+            CompletionCalls++;
+            if (_completionFailures > 0)
+            {
+                _completionFailures--;
+                throw new WaitingRoomUnavailableException("test unavailable");
+            }
+
+            return Task.CompletedTask;
+        }
+    }
 
     private static async Task<User> CreateUserAsync(AppDbContext db)
     {

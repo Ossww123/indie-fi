@@ -256,7 +256,8 @@ public sealed class GameKeyMigrationServiceTests
                         new GameKeyRegistrationWriter(
                             inventoryDb,
                             new GameKeyProtectionService(retirementProvider)),
-                        new KeyDropMutationLock(inventoryDb))
+                        new KeyDropMutationLock(inventoryDb),
+                        NullWaitingRoomLifecycle.Instance)
                     .AddAsync(
                         targetDropId,
                         targetOwnerId,

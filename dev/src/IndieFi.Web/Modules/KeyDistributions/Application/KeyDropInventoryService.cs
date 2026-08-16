@@ -32,15 +32,18 @@ public sealed class KeyDropInventoryService
     private readonly AppDbContext _db;
     private readonly GameKeyRegistrationWriter _gameKeyRegistrationWriter;
     private readonly KeyDropMutationLock _keyDropMutationLock;
+    private readonly IWaitingRoomLifecycle _waitingRoomLifecycle;
 
     public KeyDropInventoryService(
         AppDbContext db,
         GameKeyRegistrationWriter gameKeyRegistrationWriter,
-        KeyDropMutationLock keyDropMutationLock)
+        KeyDropMutationLock keyDropMutationLock,
+        IWaitingRoomLifecycle waitingRoomLifecycle)
     {
         _db = db;
         _gameKeyRegistrationWriter = gameKeyRegistrationWriter;
         _keyDropMutationLock = keyDropMutationLock;
+        _waitingRoomLifecycle = waitingRoomLifecycle;
     }
 
     public async Task<AddKeyInventoryResult> AddAsync(
@@ -93,6 +96,13 @@ public sealed class KeyDropInventoryService
             await AccountMutationGuard.CommitIfOwnedAsync(
                 transaction,
                 cancellationToken);
+            if (status is KeyDropStatus.SoldOut or KeyDropStatus.ClosedEarly)
+            {
+                await _waitingRoomLifecycle.SynchronizeTerminalAsync(
+                    dropId,
+                    cancellationToken);
+            }
+
             return new AddKeyInventoryResult(
                 AddKeyInventoryOutcome.InvalidStatus,
                 NoViolations,
@@ -168,6 +178,9 @@ public sealed class KeyDropInventoryService
 
         await AccountMutationGuard.CommitIfOwnedAsync(
             transaction,
+            cancellationToken);
+        await _waitingRoomLifecycle.NotifyInventoryChangedAsync(
+            dropId,
             cancellationToken);
 
         return new AddKeyInventoryResult(

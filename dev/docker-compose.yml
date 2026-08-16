@@ -49,5 +49,27 @@ services:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"
 
+  # Shared temporary state for the virtual waiting room and SignalR backplane.
+  # AOF everysec keeps the initial recovery-point target near one second.
+  redis:
+    image: redis:8.8.1-alpine
+    container_name: indiefi-redis
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--appendfsync"
+      - "everysec"
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
 volumes:
   db-data:
+  redis-data:
