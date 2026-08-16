@@ -249,6 +249,10 @@ namespace IndieFi.Web.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("minimum_completed_review_count");
 
+                    b.Property<DateTimeOffset?>("OpenNotificationStagedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("open_notification_staged_at");
+
                     b.Property<DateTimeOffset>("OpensAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("opens_at");
@@ -271,6 +275,9 @@ namespace IndieFi.Web.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("GameId");
+
+                    b.HasIndex("OpensAt")
+                        .HasFilter("open_notification_staged_at IS NULL AND closed_at IS NULL");
 
                     b.HasIndex("OwnerId");
 

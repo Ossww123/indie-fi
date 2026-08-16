@@ -1,5 +1,6 @@
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
+using IndieFi.Web.Modules.Notifications.Application;
 
 namespace IndieFi.Web.Modules.KeyDistributions;
 
@@ -33,6 +34,11 @@ public static class KeyDistributionsModule
         services.AddScoped<GameKeyRegistrationWriter>();
         services.AddScoped<GrantedGameKeyReader>();
         services.AddScoped<PublicKeyDropReader>();
+        services.AddScoped<KeyDropOpenNotificationService>();
+        services.AddHostedService(provider => new KeyDropOpenNotificationWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<ILogger<KeyDropOpenNotificationWorker>>(),
+            TimeSpan.FromMinutes(1)));
         services.AddSingleton<GameKeyProtectionService>();
         return services;
     }

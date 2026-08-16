@@ -570,6 +570,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             keyDrop.Property(d => d.ClosedAt)
                 .HasColumnName("closed_at");
 
+            keyDrop.Property(d => d.OpenNotificationStagedAt)
+                .HasColumnName("open_notification_staged_at");
+
             keyDrop.Property(d => d.StateVersion)
                 .HasColumnName("state_version")
                 .HasDefaultValue(0L)
@@ -580,6 +583,9 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("now()")
                 .ValueGeneratedOnAdd();
+
+            keyDrop.HasIndex(d => d.OpensAt)
+                .HasFilter("open_notification_staged_at IS NULL AND closed_at IS NULL");
 
             keyDrop.HasOne<Game>()
                 .WithMany()

@@ -21,6 +21,8 @@ public class KeyDrop
 
     public DateTimeOffset? ClosedAt { get; set; }
 
+    public DateTimeOffset? OpenNotificationStagedAt { get; set; }
+
     public long StateVersion { get; set; }
 
     /// <summary>

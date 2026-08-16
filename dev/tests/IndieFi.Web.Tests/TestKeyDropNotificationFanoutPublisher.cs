@@ -11,6 +11,7 @@ internal sealed class TestKeyDropNotificationFanoutPublisher :
     IKeyDropNotificationFanoutPublisher
 {
     public List<StagedKeyDropFanout> Events { get; } = [];
+    public List<StagedKeyDropFanout> OpenEvents { get; } = [];
     public Exception? Failure { get; init; }
 
     public Task StageFavoriteGameCreatedAsync(
@@ -25,6 +26,21 @@ internal sealed class TestKeyDropNotificationFanoutPublisher :
         }
 
         Events.Add(new StagedKeyDropFanout(fanoutId, dropId, occurredAt));
+        return Task.CompletedTask;
+    }
+
+    public Task StageSubscribedDropOpenedAsync(
+        Guid fanoutId,
+        long dropId,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (Failure is not null)
+        {
+            return Task.FromException(Failure);
+        }
+
+        OpenEvents.Add(new StagedKeyDropFanout(fanoutId, dropId, occurredAt));
         return Task.CompletedTask;
     }
 }

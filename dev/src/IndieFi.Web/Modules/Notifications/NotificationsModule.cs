@@ -85,6 +85,7 @@ public static class NotificationsModule
         services.AddScoped<NotificationPreferenceService>();
         services.AddScoped<KeyDropSubscriptionService>();
         services.AddScoped<FavoriteGameKeyDropFanoutService>();
+        services.AddScoped<SubscribedKeyDropOpenedFanoutService>();
         services.AddSignalR();
         services.AddSingleton<
             INotificationRealtimeNotifier,

@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
 using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Notifications.Contracts;
 using MassTransit;
@@ -34,22 +32,9 @@ public sealed class FavoriteGameKeyDropCreatedFanoutConsumer :
         };
         await context.Publish(
             continuation,
-            publish => publish.MessageId = CreateContinuationMessageId(
+            publish => publish.MessageId = NotificationFanoutMessageId.CreateContinuation(
                 context.Message.FanoutId,
                 nextAfterUserId),
             context.CancellationToken);
-    }
-
-    private static Guid CreateContinuationMessageId(
-        Guid fanoutId,
-        long afterUserId)
-    {
-        Span<byte> input = stackalloc byte[28];
-        fanoutId.TryWriteBytes(input);
-        BinaryPrimitives.WriteInt64BigEndian(input[16..], afterUserId);
-        BinaryPrimitives.WriteInt32BigEndian(input[24..], 1);
-        Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
-        SHA256.HashData(input, digest);
-        return new Guid(digest[..16]);
     }
 }

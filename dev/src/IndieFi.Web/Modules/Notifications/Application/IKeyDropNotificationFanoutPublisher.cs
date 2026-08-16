@@ -7,4 +7,10 @@ public interface IKeyDropNotificationFanoutPublisher
         long dropId,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken = default);
+
+    Task StageSubscribedDropOpenedAsync(
+        Guid fanoutId,
+        long dropId,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken = default);
 }

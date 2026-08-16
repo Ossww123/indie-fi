@@ -32,4 +32,22 @@ public sealed class MassTransitKeyDropNotificationFanoutPublisher :
             context => context.MessageId = fanoutId,
             cancellationToken);
     }
+
+    public Task StageSubscribedDropOpenedAsync(
+        Guid fanoutId,
+        long dropId,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(fanoutId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dropId);
+        return _publishEndpoint.Publish(
+            new SubscribedKeyDropOpenedFanoutV1(
+                fanoutId,
+                dropId,
+                AfterUserId: 0,
+                occurredAt.ToUniversalTime()),
+            context => context.MessageId = fanoutId,
+            cancellationToken);
+    }
 }
