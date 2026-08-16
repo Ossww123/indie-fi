@@ -91,7 +91,7 @@ public sealed class NotificationTelemetryTests
             && item.Value == 25);
         Assert.Contains(measurements, item =>
             item.InstrumentName == "indiefi.notifications.rabbitmq.ready"
-            && item.Value == 1);
+            && item.Value == -1);
         Assert.Contains(measurements, item =>
             item.InstrumentName
                 == "indiefi.notifications.operations.observation_failures"
