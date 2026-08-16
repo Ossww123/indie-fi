@@ -74,6 +74,7 @@ public static class NotificationsModule
         services.AddScoped<
             INotificationEventPublisher,
             MassTransitNotificationEventPublisher>();
+        services.AddSingleton<NotificationFactory>();
         return services;
     }
 }
