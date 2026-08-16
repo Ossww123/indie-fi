@@ -10,7 +10,8 @@ public static class NotificationsModule
 {
     public static IServiceCollection AddNotificationsModule(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        Action<IBusRegistrationConfigurator>? configureConsumers = null)
     {
         services.AddOptions<RabbitMqOptions>()
             .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
@@ -23,6 +24,7 @@ public static class NotificationsModule
 
         services.AddMassTransit(registration =>
         {
+            configureConsumers?.Invoke(registration);
             registration.SetEndpointNameFormatter(
                 new KebabCaseEndpointNameFormatter(
                     rabbitMq.EndpointPrefix,
