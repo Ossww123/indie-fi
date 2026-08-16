@@ -1,5 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Notifications.Domain;
+using IndieFi.Web.Modules.Notifications.Infrastructure;
+using System.Diagnostics;
 
 namespace IndieFi.Web.Modules.Notifications.Application;
 
@@ -37,6 +39,27 @@ public sealed class NotificationEmailDeliveryProcessor
             throw new ArgumentOutOfRangeException(nameof(batchSize));
         }
 
+        var startedAt = Stopwatch.GetTimestamp();
+        try
+        {
+            var result = await ProcessBatchCoreAsync(batchSize, cancellationToken);
+            NotificationTelemetry.RecordEmailBatch(
+                result,
+                Stopwatch.GetElapsedTime(startedAt));
+            return result;
+        }
+        catch
+        {
+            NotificationTelemetry.RecordEmailBatchFault(
+                Stopwatch.GetElapsedTime(startedAt));
+            throw;
+        }
+    }
+
+    private async Task<NotificationEmailProcessResult> ProcessBatchCoreAsync(
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
         var sent = 0;
         var expired = 0;
         var rescheduled = 0;

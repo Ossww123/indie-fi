@@ -24,6 +24,8 @@ public static class NotificationsModule
             .GetSection(RabbitMqOptions.SectionName)
             .Get<RabbitMqOptions>() ?? new RabbitMqOptions();
 
+        services.AddConsumeObserver<NotificationConsumeObserver>();
+
         services.AddMassTransit(registration =>
         {
             configureConsumers?.Invoke(registration);
@@ -46,8 +48,12 @@ public static class NotificationsModule
             registration.AddConfigureEndpointsCallback(
                 (context, _, endpoint) =>
                 {
-                    endpoint.UseMessageRetry(retry => retry.Intervals(
-                        NotificationPolicy.ConsumerRetryDelays.ToArray()));
+                    endpoint.UseMessageRetry(retry =>
+                    {
+                        retry.Intervals(
+                            NotificationPolicy.ConsumerRetryDelays.ToArray());
+                        retry.ConnectRetryObserver(new NotificationRetryObserver());
+                    });
                     endpoint.UseEntityFrameworkOutbox<AppDbContext>(context);
                 });
 
