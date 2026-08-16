@@ -36,6 +36,7 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
             TestDataProtection.PrivateKeyPath);
         builder.UseSetting("DataProtectionKeyManagement:KeyLifetimeDays", "90");
         builder.UseSetting("WaitingRoom:Redis:Enabled", "false");
+        builder.UseSetting("Media:ObjectStorage:Enabled", "false");
         if (_configureGoogle)
         {
             builder.UseSetting(
