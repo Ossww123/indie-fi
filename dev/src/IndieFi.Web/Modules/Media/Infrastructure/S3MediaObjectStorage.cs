@@ -2,6 +2,7 @@ using System.Net;
 using Amazon.S3;
 using Amazon.S3.Model;
 using IndieFi.Web.Modules.Media.Application;
+using IndieFi.Web.Modules.Media.Domain;
 using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Modules.Media.Infrastructure;
@@ -35,14 +36,14 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         ObjectStorageUploadUrlRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        MediaObjectAccessPolicy.ValidateUploadUrlRequest(request);
         var signingRequest = new GetPreSignedUrlRequest
         {
             BucketName = _bucketName,
-            Key = request.ObjectKey,
+            Key = request.ObjectKey.Value,
             Verb = HttpVerb.PUT,
             ContentType = request.ContentType,
-            Expires = ExpiresAt(request.Lifetime),
+            Expires = ExpiresAt(MediaObjectAccessPolicy.UploadUrlLifetime),
         };
         signingRequest.Headers.ContentLength = request.ContentLength;
         return CreateSignedUriAsync(signingRequest, cancellationToken);
@@ -52,29 +53,30 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         ObjectStorageDownloadUrlRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        MediaObjectAccessPolicy.ValidateDownloadUrlRequest(request);
         return CreateSignedUriAsync(
             new GetPreSignedUrlRequest
             {
                 BucketName = _bucketName,
-                Key = request.ObjectKey,
+                Key = request.ObjectKey.Value,
                 Verb = HttpVerb.GET,
-                Expires = ExpiresAt(request.Lifetime),
+                Expires = ExpiresAt(MediaObjectAccessPolicy.DownloadUrlLifetime),
             },
             cancellationToken);
     }
 
     public async Task<ObjectStorageMetadata?> GetMetadataAsync(
-        string objectKey,
+        MediaObjectKey objectKey,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(objectKey);
         try
         {
             var response = await _client.GetObjectMetadataAsync(
                 new GetObjectMetadataRequest
                 {
                     BucketName = _bucketName,
-                    Key = objectKey,
+                    Key = objectKey.Value,
                 },
                 cancellationToken);
             return ToMetadata(response);
@@ -86,14 +88,15 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
     }
 
     public async Task<ObjectStorageReadResult> OpenReadAsync(
-        string objectKey,
+        MediaObjectKey objectKey,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(objectKey);
         var response = await _client.GetObjectAsync(
             new GetObjectRequest
             {
                 BucketName = _bucketName,
-                Key = objectKey,
+                Key = objectKey.Value,
             },
             cancellationToken);
         try
@@ -114,11 +117,11 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         ObjectStorageWriteRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        MediaObjectAccessPolicy.ValidateDerivedWriteRequest(request);
         var putRequest = new PutObjectRequest
         {
             BucketName = _bucketName,
-            Key = request.ObjectKey,
+            Key = request.ObjectKey.Value,
             InputStream = request.Content,
             ContentType = request.ContentType,
             AutoCloseStream = false,
@@ -133,14 +136,14 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         ObjectStorageCopyRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        MediaObjectAccessPolicy.ValidateSourceCopyRequest(request);
         await _client.CopyObjectAsync(
             new CopyObjectRequest
             {
                 SourceBucket = _bucketName,
-                SourceKey = request.SourceObjectKey,
+                SourceKey = request.SourceObjectKey.Value,
                 DestinationBucket = _bucketName,
-                DestinationKey = request.DestinationObjectKey,
+                DestinationKey = request.DestinationObjectKey.Value,
                 ETagToMatch = request.SourceETag,
                 ContentType = request.ContentType,
                 MetadataDirective = S3MetadataDirective.REPLACE,
@@ -149,16 +152,17 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
     }
 
     public async Task DeleteIfExistsAsync(
-        string objectKey,
+        MediaObjectKey objectKey,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(objectKey);
         try
         {
             await _client.DeleteObjectAsync(
                 new DeleteObjectRequest
                 {
                     BucketName = _bucketName,
-                    Key = objectKey,
+                    Key = objectKey.Value,
                 },
                 cancellationToken);
         }

@@ -1,3 +1,5 @@
+using IndieFi.Web.Modules.Media.Domain;
+
 namespace IndieFi.Web.Modules.Media.Application;
 
 /// <summary>
@@ -15,11 +17,11 @@ public interface IMediaObjectStorage
         CancellationToken cancellationToken = default);
 
     Task<ObjectStorageMetadata?> GetMetadataAsync(
-        string objectKey,
+        MediaObjectKey objectKey,
         CancellationToken cancellationToken = default);
 
     Task<ObjectStorageReadResult> OpenReadAsync(
-        string objectKey,
+        MediaObjectKey objectKey,
         CancellationToken cancellationToken = default);
 
     Task WriteAsync(
@@ -34,19 +36,39 @@ public interface IMediaObjectStorage
     /// Deletes an object when present. A missing object is treated as an already completed delete.
     /// </summary>
     Task DeleteIfExistsAsync(
-        string objectKey,
+        MediaObjectKey objectKey,
         CancellationToken cancellationToken = default);
 }
 
-public sealed record ObjectStorageUploadUrlRequest(
-    string ObjectKey,
-    string ContentType,
-    long ContentLength,
-    TimeSpan Lifetime);
+public sealed record ObjectStorageUploadUrlRequest
+{
+    internal ObjectStorageUploadUrlRequest(
+        MediaObjectKey objectKey,
+        MediaUploadKind uploadKind,
+        string contentType,
+        long contentLength)
+    {
+        ObjectKey = objectKey;
+        UploadKind = uploadKind;
+        ContentType = contentType;
+        ContentLength = contentLength;
+    }
 
-public sealed record ObjectStorageDownloadUrlRequest(
-    string ObjectKey,
-    TimeSpan Lifetime);
+    public MediaObjectKey ObjectKey { get; }
+    public MediaUploadKind UploadKind { get; }
+    public string ContentType { get; }
+    public long ContentLength { get; }
+}
+
+public sealed record ObjectStorageDownloadUrlRequest
+{
+    internal ObjectStorageDownloadUrlRequest(MediaObjectKey objectKey)
+    {
+        ObjectKey = objectKey;
+    }
+
+    public MediaObjectKey ObjectKey { get; }
+}
 
 public sealed record ObjectStorageMetadata(
     long ContentLength,
@@ -54,17 +76,45 @@ public sealed record ObjectStorageMetadata(
     string? ContentType,
     DateTimeOffset LastModified);
 
-public sealed record ObjectStorageWriteRequest(
-    string ObjectKey,
-    Stream Content,
-    string ContentType,
-    long ContentLength);
+public sealed record ObjectStorageWriteRequest
+{
+    internal ObjectStorageWriteRequest(
+        MediaObjectKey objectKey,
+        Stream content,
+        string contentType,
+        long contentLength)
+    {
+        ObjectKey = objectKey;
+        Content = content;
+        ContentType = contentType;
+        ContentLength = contentLength;
+    }
 
-public sealed record ObjectStorageCopyRequest(
-    string SourceObjectKey,
-    string DestinationObjectKey,
-    string SourceETag,
-    string ContentType);
+    public MediaObjectKey ObjectKey { get; }
+    public Stream Content { get; }
+    public string ContentType { get; }
+    public long ContentLength { get; }
+}
+
+public sealed record ObjectStorageCopyRequest
+{
+    internal ObjectStorageCopyRequest(
+        MediaObjectKey sourceObjectKey,
+        MediaObjectKey destinationObjectKey,
+        string sourceETag,
+        string contentType)
+    {
+        SourceObjectKey = sourceObjectKey;
+        DestinationObjectKey = destinationObjectKey;
+        SourceETag = sourceETag;
+        ContentType = contentType;
+    }
+
+    public MediaObjectKey SourceObjectKey { get; }
+    public MediaObjectKey DestinationObjectKey { get; }
+    public string SourceETag { get; }
+    public string ContentType { get; }
+}
 
 public sealed class ObjectStorageReadResult : IAsyncDisposable
 {

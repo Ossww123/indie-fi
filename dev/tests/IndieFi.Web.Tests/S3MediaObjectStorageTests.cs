@@ -4,6 +4,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using IndieFi.Web.Modules.Media;
 using IndieFi.Web.Modules.Media.Application;
+using IndieFi.Web.Modules.Media.Domain;
 using IndieFi.Web.Modules.Media.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,16 @@ public sealed class S3MediaObjectStorageTests
 {
     private static readonly DateTimeOffset Now =
         new(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+    private static readonly Guid MediaId =
+        Guid.Parse("11111111-1111-4111-8111-111111111111");
+    private static readonly Guid UploadAttemptId =
+        Guid.Parse("22222222-2222-4222-8222-222222222222");
+    private static readonly MediaObjectKey StagingKey =
+        MediaObjectKey.Staging(MediaId, UploadAttemptId);
+    private static readonly MediaObjectKey SourceKey =
+        MediaObjectKey.Source(MediaId, revision: 1);
+    private static readonly MediaObjectKey DerivedKey =
+        MediaObjectKey.Derived(MediaId, revision: 1, MediaDerivedVariant.GameDisplay);
 
     [Fact]
     public async Task SignedUrls_UseExactOperationObjectHeadersAndLifetime()
@@ -26,25 +37,24 @@ public sealed class S3MediaObjectStorageTests
         var storage = CreateStorage(client, timeProvider: TimeProvider.System);
 
         var upload = await storage.CreateUploadUrlAsync(
-            new ObjectStorageUploadUrlRequest(
-                "staging/media/attempt",
+            MediaObjectAccessPolicy.CreateUploadUrlRequest(
+                StagingKey,
+                MediaUploadKind.GameImage,
                 "image/png",
-                1234,
-                TimeSpan.FromMinutes(15)),
+                1234),
             TestContext.Current.CancellationToken);
         var download = await storage.CreateDownloadUrlAsync(
-            new ObjectStorageDownloadUrlRequest(
-                "derived/media/1/cover.webp",
-                TimeSpan.FromMinutes(5)),
+            MediaObjectAccessPolicy.CreateDownloadUrlRequest(DerivedKey),
             TestContext.Current.CancellationToken);
 
         Assert.Equal("storage.example.test", upload.Host);
         Assert.Equal("storage.example.test", download.Host);
         Assert.Equal(
-            "/media-private/staging/media/attempt",
+            "/media-private/staging/11111111111141118111111111111111/" +
+            "22222222222242228222222222222222",
             upload.AbsolutePath);
         Assert.Equal(
-            "/media-private/derived/media/1/cover.webp",
+            "/media-private/derived/11111111111141118111111111111111/1/game-display.webp",
             download.AbsolutePath);
         AssertQueryLifetime(upload, TimeSpan.FromMinutes(15));
         AssertQueryLifetime(download, TimeSpan.FromMinutes(5));
@@ -69,10 +79,10 @@ public sealed class S3MediaObjectStorageTests
         var storage = CreateStorage(client);
 
         var metadata = await storage.GetMetadataAsync(
-            "sources/media/1",
+            SourceKey,
             TestContext.Current.CancellationToken);
         await using var read = await storage.OpenReadAsync(
-            "sources/media/1",
+            SourceKey,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(
@@ -83,8 +93,8 @@ public sealed class S3MediaObjectStorageTests
                 new DateTimeOffset(2026, 8, 16, 10, 30, 0, TimeSpan.Zero)),
             metadata);
         Assert.Equal(metadata, read.Metadata);
-        Assert.Equal("sources/media/1", client.MetadataRequest!.Key);
-        Assert.Equal("sources/media/1", client.GetRequest!.Key);
+        Assert.Equal(SourceKey.Value, client.MetadataRequest!.Key);
+        Assert.Equal(SourceKey.Value, client.GetRequest!.Key);
         Assert.Equal("media-private", client.GetRequest.BucketName);
 
         var stream = Assert.IsType<TrackingMemoryStream>(read.Content);
@@ -101,17 +111,16 @@ public sealed class S3MediaObjectStorageTests
         await using var content = new TrackingMemoryStream([1, 2, 3]);
 
         await storage.WriteAsync(
-            new ObjectStorageWriteRequest(
-                "derived/media/1/cover.webp",
+            MediaObjectAccessPolicy.CreateDerivedWriteRequest(
+                DerivedKey,
                 content,
-                "image/webp",
                 3),
             TestContext.Current.CancellationToken);
 
         Assert.NotNull(client.PutRequest);
         var request = client.PutRequest;
         Assert.Equal("media-private", request.BucketName);
-        Assert.Equal("derived/media/1/cover.webp", request.Key);
+        Assert.Equal(DerivedKey.Value, request.Key);
         Assert.Equal("image/webp", request.ContentType);
         Assert.Equal(3, request.Headers.ContentLength);
         Assert.Same(content, request.InputStream);
@@ -129,7 +138,7 @@ public sealed class S3MediaObjectStorageTests
         await using var content = new MemoryStream([1]);
 
         await storage.WriteAsync(
-            new ObjectStorageWriteRequest("staging/media/attempt", content, "image/png", 1),
+            MediaObjectAccessPolicy.CreateDerivedWriteRequest(DerivedKey, content, 1),
             TestContext.Current.CancellationToken);
 
         Assert.False(client.PutRequest!.DisablePayloadSigning);
@@ -143,27 +152,27 @@ public sealed class S3MediaObjectStorageTests
         var storage = CreateStorage(client);
 
         await storage.CopyAsync(
-            new ObjectStorageCopyRequest(
-                "staging/media/attempt",
-                "sources/media/1",
+            MediaObjectAccessPolicy.CreateSourceCopyRequest(
+                StagingKey,
+                SourceKey,
                 "\"confirmed-etag\"",
                 "image/png"),
             TestContext.Current.CancellationToken);
         await storage.DeleteIfExistsAsync(
-            "staging/media/attempt",
+            StagingKey,
             TestContext.Current.CancellationToken);
 
         Assert.NotNull(client.CopyRequest);
         var copy = client.CopyRequest;
         Assert.Equal("media-private", copy.SourceBucket);
         Assert.Equal("media-private", copy.DestinationBucket);
-        Assert.Equal("staging/media/attempt", copy.SourceKey);
-        Assert.Equal("sources/media/1", copy.DestinationKey);
+        Assert.Equal(StagingKey.Value, copy.SourceKey);
+        Assert.Equal(SourceKey.Value, copy.DestinationKey);
         Assert.Equal("\"confirmed-etag\"", copy.ETagToMatch);
         Assert.Equal("image/png", copy.ContentType);
         Assert.Equal(S3MetadataDirective.REPLACE, copy.MetadataDirective);
         Assert.Equal("media-private", client.DeleteRequest!.BucketName);
-        Assert.Equal("staging/media/attempt", client.DeleteRequest.Key);
+        Assert.Equal(StagingKey.Value, client.DeleteRequest.Key);
     }
 
     [Fact]
@@ -177,10 +186,10 @@ public sealed class S3MediaObjectStorageTests
         var storage = CreateStorage(client);
 
         var metadata = await storage.GetMetadataAsync(
-            "missing",
+            StagingKey,
             TestContext.Current.CancellationToken);
         await storage.DeleteIfExistsAsync(
-            "missing",
+            StagingKey,
             TestContext.Current.CancellationToken);
 
         Assert.Null(metadata);
