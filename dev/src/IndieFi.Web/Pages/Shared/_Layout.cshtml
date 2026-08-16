@@ -1,4 +1,15 @@
 @inject IndieFi.Web.Application.Abstractions.ICurrentUser CurrentUser
+@inject IndieFi.Web.Modules.Notifications.Application.NotificationInboxService NotificationInbox
+@{
+    var navigationUnreadCount = CurrentUser.UserId is long navigationUserId
+        ? await NotificationInbox.GetUnreadCountAsync(
+            navigationUserId,
+            Context.RequestAborted)
+        : 0;
+    var navigationUnreadText = navigationUnreadCount > 99
+        ? "99+"
+        : navigationUnreadCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -33,6 +44,15 @@
                         <a class="site-nav-link" asp-area="" asp-page="/Games/New">게임 등록</a>
                         <a class="site-nav-link" asp-area="" asp-page="/Credits/Index">내 크레딧</a>
                         <a class="site-nav-link" asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>
+                        <a class="site-nav-link inline-flex items-center gap-1.5"
+                           asp-area=""
+                           asp-page="/Notifications/Index"
+                           data-notification-link>
+                            알림
+                            <span class="badge-success px-2 py-0.5 @(navigationUnreadCount == 0 ? "hidden" : null)"
+                                  data-notification-badge
+                                  aria-label="읽지 않은 알림 @(navigationUnreadCount)개">@navigationUnreadText</span>
+                        </a>
                         <a class="site-nav-link" asp-area="" asp-page="/Account/Profile">내 프로필</a>
                         <a class="site-nav-link" asp-area="" asp-page="/Account/Password">비밀번호 변경</a>
                         @if (CurrentUser.UserId is long currentUserId)
