@@ -10,8 +10,8 @@ public enum MediaUploadKind
 
 public static class MediaObjectAccessPolicy
 {
-    public const long GameImageMaximumBytes = 10L * 1024 * 1024;
-    public const long ProfileImageMaximumBytes = 5L * 1024 * 1024;
+    public const long GameImageMaximumBytes = MediaPolicy.GameImageMaximumBytes;
+    public const long ProfileImageMaximumBytes = MediaPolicy.ProfileImageMaximumBytes;
     public const long DerivedImageMaximumBytes = GameImageMaximumBytes;
 
     public static readonly TimeSpan UploadUrlLifetime = TimeSpan.FromMinutes(15);
