@@ -10,6 +10,7 @@ using IndieFi.Web.Modules.Feedback;
 using IndieFi.Web.Modules.Games;
 using IndieFi.Web.Modules.KeyDistributions;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Profiles;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -109,6 +110,7 @@ builder.Services.AddGamesModule();
 builder.Services.AddCreditsModule();
 builder.Services.AddFeedbackModule();
 builder.Services.AddKeyDistributionsModule(builder.Configuration);
+builder.Services.AddNotificationsModule();
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);
