@@ -14,13 +14,24 @@ public static class MediaModule
         IConfiguration configuration)
     {
         services.AddOptions<MediaWorkerOptions>()
-            .Bind(configuration.GetSection(MediaWorkerOptions.SectionName));
+            .Bind(configuration.GetSection(MediaWorkerOptions.SectionName))
+            .Validate(
+                MediaWorkerOptions.IsValid,
+                "Media worker settings are invalid.")
+            .ValidateOnStart();
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         if (configuration.GetValue<bool>(
                 $"{MediaWorkerOptions.SectionName}:Enabled"))
         {
             services.AddScoped<MediaMessageAuthorityService>();
+            services.AddScoped<MediaProcessingLeaseService>();
             services.AddScoped<MediaProcessingMessageDispatcher>();
             services.AddScoped<MediaDeletionMessageDispatcher>();
+            services.AddScoped<
+                IMediaProcessingWorkExecutor,
+                MediaProcessingWorkExecutor>();
+            services.AddScoped<MediaProcessingRecoveryService>();
+            services.AddHostedService<MediaProcessingRecoveryWorker>();
         }
 
         services.AddScoped<MediaUploadReservationService>();
@@ -49,7 +60,6 @@ public static class MediaModule
             return services;
         }
 
-        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<IAmazonS3>(provider =>
             S3ClientFactory.Create(provider
                 .GetRequiredService<IOptions<MediaObjectStorageOptions>>()
