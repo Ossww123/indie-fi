@@ -17,6 +17,11 @@ public sealed class MediaObjectStorageOptions
     public string SecretAccessKey { get; set; } = string.Empty;
 
     /// <summary>
+    /// Maximum time one server-side object-storage request may occupy a Web or Worker process.
+    /// </summary>
+    public TimeSpan OperationTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// Local S3-compatible services commonly require path-style bucket addressing.
     /// Cloudflare R2 uses virtual-host style in production.
     /// </summary>

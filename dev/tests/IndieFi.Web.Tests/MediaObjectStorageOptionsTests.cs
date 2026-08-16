@@ -110,6 +110,22 @@ public sealed class MediaObjectStorageOptionsTests
         Assert.Contains(result.Failures!, failure => failure.Contains("SecretAccessKey"));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(31)]
+    public void Validate_WithUnsafeOperationTimeout_RejectsSettings(int seconds)
+    {
+        var options = ValidOptions();
+        options.OperationTimeout = TimeSpan.FromSeconds(seconds);
+
+        var result = Validate(options, Environments.Production);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(
+            result.Failures!,
+            failure => failure.Contains("OperationTimeout"));
+    }
+
     private static ValidateOptionsResult Validate(
         MediaObjectStorageOptions options,
         string environmentName)

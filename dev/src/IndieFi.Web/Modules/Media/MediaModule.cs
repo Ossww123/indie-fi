@@ -31,7 +31,11 @@ public static class MediaModule
             S3ClientFactory.Create(provider
                 .GetRequiredService<IOptions<MediaObjectStorageOptions>>()
                 .Value));
-        services.AddSingleton<IMediaObjectStorage, S3MediaObjectStorage>();
+        services.AddSingleton<S3MediaObjectStorage>();
+        services.AddSingleton<IMediaObjectStorage>(provider =>
+            provider.GetRequiredService<S3MediaObjectStorage>());
+        services.AddHealthChecks()
+            .AddCheck<MediaObjectStorageHealthCheck>("media-object-storage");
         return services;
     }
 }

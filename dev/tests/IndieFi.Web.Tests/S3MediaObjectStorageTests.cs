@@ -8,6 +8,7 @@ using IndieFi.Web.Modules.Media.Domain;
 using IndieFi.Web.Modules.Media.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -97,7 +98,9 @@ public sealed class S3MediaObjectStorageTests
         Assert.Equal(SourceKey.Value, client.GetRequest!.Key);
         Assert.Equal("media-private", client.GetRequest.BucketName);
 
-        var stream = Assert.IsType<TrackingMemoryStream>(read.Content);
+        var stream = Assert.IsType<TrackingMemoryStream>(
+            client.ObjectResponse.ResponseStream);
+        Assert.NotSame(stream, read.Content);
         Assert.False(stream.WasDisposed);
         await read.DisposeAsync();
         Assert.True(stream.WasDisposed);
@@ -196,6 +199,171 @@ public sealed class S3MediaObjectStorageTests
     }
 
     [Fact]
+    public async Task MissingReadAndChangedCopy_UseStableProviderIndependentFailures()
+    {
+        using var client = new RecordingS3Client
+        {
+            GetException = NotFoundException(),
+            CopyException = S3Exception(
+                HttpStatusCode.PreconditionFailed,
+                "PreconditionFailed"),
+        };
+        var storage = CreateStorage(client);
+
+        var missing = await Assert.ThrowsAsync<MediaObjectStorageException>(() =>
+            storage.OpenReadAsync(
+                SourceKey,
+                TestContext.Current.CancellationToken));
+        var changed = await Assert.ThrowsAsync<MediaObjectStorageException>(() =>
+            storage.CopyAsync(
+                MediaObjectAccessPolicy.CreateSourceCopyRequest(
+                    StagingKey,
+                    SourceKey,
+                    "\"stale-etag\"",
+                    "image/png"),
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            MediaObjectStorageFailureCode.ObjectNotFound,
+            missing.FailureCode);
+        Assert.False(missing.IsTransient);
+        Assert.Equal(
+            MediaObjectStorageFailureCode.PreconditionFailed,
+            changed.FailureCode);
+        Assert.False(changed.IsTransient);
+        Assert.DoesNotContain(SourceKey.Value, missing.Message);
+        Assert.DoesNotContain(StagingKey.Value, changed.Message);
+    }
+
+    [Fact]
+    public async Task MissingBucket_IsUnavailableInsteadOfMissingObject()
+    {
+        using var client = new RecordingS3Client
+        {
+            MetadataException = S3Exception(
+                HttpStatusCode.NotFound,
+                "NoSuchBucket"),
+        };
+        var storage = CreateStorage(client);
+
+        var exception = await Assert.ThrowsAsync<MediaObjectStorageException>(() =>
+            storage.GetMetadataAsync(
+                SourceKey,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            MediaObjectStorageFailureCode.Unavailable,
+            exception.FailureCode);
+        Assert.True(exception.IsTransient);
+    }
+
+    [Fact]
+    public async Task OperationTimeout_IsBoundedAndCallerCancellationRemainsCancellation()
+    {
+        using var client = new RecordingS3Client
+        {
+            WaitForMetadataCancellation = true,
+        };
+        var storage = CreateStorage(
+            client,
+            operationTimeout: TimeSpan.FromMilliseconds(25));
+
+        var timeout = await Assert.ThrowsAsync<MediaObjectStorageException>(() =>
+            storage.GetMetadataAsync(SourceKey, CancellationToken.None));
+
+        Assert.Equal(MediaObjectStorageFailureCode.TimedOut, timeout.FailureCode);
+        Assert.True(timeout.IsTransient);
+
+        using var callerCancellation = new CancellationTokenSource();
+        callerCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            storage.GetMetadataAsync(SourceKey, callerCancellation.Token));
+    }
+
+    [Fact]
+    public async Task OpenRead_StreamCannotOutliveOperationDeadline()
+    {
+        using var client = new RecordingS3Client
+        {
+            ObjectResponse = CreateObjectResponse(
+                new CancellationBlockingStream()),
+        };
+        var storage = CreateStorage(
+            client,
+            operationTimeout: TimeSpan.FromMilliseconds(25));
+        await using var result = await storage.OpenReadAsync(
+            SourceKey,
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<MediaObjectStorageException>(
+            async () =>
+            {
+                var buffer = new byte[1];
+                _ = await result.Content.ReadAsync(
+                    buffer,
+                    CancellationToken.None);
+            });
+
+        Assert.Equal(
+            MediaObjectStorageFailureCode.TimedOut,
+            exception.FailureCode);
+        Assert.True(exception.IsTransient);
+    }
+
+    [Fact]
+    public async Task HealthCheck_UsesBucketHeadAndReportsStableFailureCode()
+    {
+        using var healthyClient = new RecordingS3Client();
+        var healthyCheck = new MediaObjectStorageHealthCheck(
+            CreateStorage(healthyClient));
+
+        var healthy = await healthyCheck.CheckHealthAsync(
+            new HealthCheckContext(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HealthStatus.Healthy, healthy.Status);
+        Assert.Equal("media-private", healthyClient.HeadBucketRequest!.BucketName);
+
+        using var deniedClient = new RecordingS3Client
+        {
+            HeadBucketException = S3Exception(
+                HttpStatusCode.Forbidden,
+                "AccessDenied"),
+        };
+        var deniedCheck = new MediaObjectStorageHealthCheck(
+            CreateStorage(deniedClient));
+
+        var denied = await deniedCheck.CheckHealthAsync(
+            new HealthCheckContext(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HealthStatus.Unhealthy, denied.Status);
+        var exception = Assert.IsType<MediaObjectStorageException>(
+            denied.Exception);
+        Assert.Equal(
+            MediaObjectStorageFailureCode.AccessDenied,
+            exception.FailureCode);
+        Assert.Equal("AccessDenied", denied.Data["failure_code"]);
+        Assert.DoesNotContain("media-private", denied.Description);
+
+        using var timedOutClient = new RecordingS3Client
+        {
+            WaitForHeadBucketCancellation = true,
+        };
+        var timedOutCheck = new MediaObjectStorageHealthCheck(
+            CreateStorage(
+                timedOutClient,
+                operationTimeout: TimeSpan.FromMilliseconds(25)));
+
+        var timedOut = await timedOutCheck.CheckHealthAsync(
+            new HealthCheckContext(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HealthStatus.Unhealthy, timedOut.Status);
+        Assert.Equal("TimedOut", timedOut.Data["failure_code"]);
+    }
+
+    [Fact]
     public void AddMediaModule_WhenEnabled_RegistersConfiguredS3Storage()
     {
         var services = new ServiceCollection();
@@ -212,8 +380,16 @@ public sealed class S3MediaObjectStorageTests
         Assert.Equal("auto", config.AuthenticationRegion);
         Assert.False(config.ForcePathStyle);
         Assert.Equal(SigningAlgorithm.HmacSHA256, config.SignatureMethod);
-        Assert.IsType<S3MediaObjectStorage>(
+        Assert.Equal(TimeSpan.FromSeconds(10), config.Timeout);
+        Assert.Same(
+            provider.GetRequiredService<S3MediaObjectStorage>(),
             provider.GetRequiredService<IMediaObjectStorage>());
+        var healthChecks = provider
+            .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
+            .Value.Registrations;
+        Assert.Contains(
+            healthChecks,
+            registration => registration.Name == "media-object-storage");
     }
 
     [Fact]
@@ -227,12 +403,19 @@ public sealed class S3MediaObjectStorageTests
 
         Assert.Null(provider.GetService<IAmazonS3>());
         Assert.Null(provider.GetService<IMediaObjectStorage>());
+        var healthChecks = provider
+            .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
+            .Value.Registrations;
+        Assert.DoesNotContain(
+            healthChecks,
+            registration => registration.Name == "media-object-storage");
     }
 
     private static S3MediaObjectStorage CreateStorage(
         IAmazonS3 client,
         string region = "auto",
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        TimeSpan? operationTimeout = null)
     {
         return new S3MediaObjectStorage(
             client,
@@ -241,6 +424,7 @@ public sealed class S3MediaObjectStorageTests
                 Enabled = true,
                 BucketName = "media-private",
                 Region = region,
+                OperationTimeout = operationTimeout ?? TimeSpan.FromSeconds(10),
             }),
             timeProvider ?? new FixedTimeProvider(Now));
     }
@@ -276,23 +460,29 @@ public sealed class S3MediaObjectStorageTests
         return response;
     }
 
-    private static GetObjectResponse CreateObjectResponse()
+    private static GetObjectResponse CreateObjectResponse(Stream? content = null)
     {
         var response = new GetObjectResponse
         {
             ETag = "\"source-etag\"",
             LastModified = new DateTime(2026, 8, 16, 10, 30, 0, DateTimeKind.Utc),
-            ResponseStream = new TrackingMemoryStream([1, 2, 3]),
+            ResponseStream = content ?? new TrackingMemoryStream([1, 2, 3]),
         };
         response.Headers.ContentLength = 321;
         response.Headers.ContentType = "image/png";
         return response;
     }
 
-    private static AmazonS3Exception NotFoundException() => new("missing")
-    {
-        StatusCode = HttpStatusCode.NotFound,
-    };
+    private static AmazonS3Exception NotFoundException() =>
+        S3Exception(HttpStatusCode.NotFound, "NoSuchKey");
+
+    private static AmazonS3Exception S3Exception(
+        HttpStatusCode statusCode,
+        string errorCode) => new("Object storage request failed.")
+        {
+            StatusCode = statusCode,
+            ErrorCode = errorCode,
+        };
 
     private static IConfiguration Configuration(bool enabled)
     {
@@ -306,6 +496,7 @@ public sealed class S3MediaObjectStorageTests
                 ["Media:ObjectStorage:BucketName"] = enabled ? "media-private" : string.Empty,
                 ["Media:ObjectStorage:AccessKeyId"] = enabled ? "access-key" : string.Empty,
                 ["Media:ObjectStorage:SecretAccessKey"] = enabled ? "secret-key" : string.Empty,
+                ["Media:ObjectStorage:OperationTimeout"] = "00:00:10",
                 ["Media:ObjectStorage:ForcePathStyle"] = "false",
             })
             .Build();
@@ -330,17 +521,29 @@ public sealed class S3MediaObjectStorageTests
         public PutObjectRequest? PutRequest { get; private set; }
         public CopyObjectRequest? CopyRequest { get; private set; }
         public DeleteObjectRequest? DeleteRequest { get; private set; }
+        public HeadBucketRequest? HeadBucketRequest { get; private set; }
         public GetObjectMetadataResponse MetadataResponse { get; set; } =
             CreateMetadataResponse();
         public GetObjectResponse ObjectResponse { get; set; } = CreateObjectResponse();
         public AmazonS3Exception? MetadataException { get; set; }
+        public AmazonS3Exception? GetException { get; set; }
+        public AmazonS3Exception? CopyException { get; set; }
         public AmazonS3Exception? DeleteException { get; set; }
+        public AmazonS3Exception? HeadBucketException { get; set; }
+        public bool WaitForMetadataCancellation { get; set; }
+        public bool WaitForHeadBucketCancellation { get; set; }
 
         public override Task<GetObjectMetadataResponse> GetObjectMetadataAsync(
             GetObjectMetadataRequest request,
             CancellationToken cancellationToken = default)
         {
             MetadataRequest = request;
+            if (WaitForMetadataCancellation)
+            {
+                return WaitUntilCanceledAsync<GetObjectMetadataResponse>(
+                    cancellationToken);
+            }
+
             return MetadataException is null
                 ? Task.FromResult(MetadataResponse)
                 : Task.FromException<GetObjectMetadataResponse>(MetadataException);
@@ -351,7 +554,9 @@ public sealed class S3MediaObjectStorageTests
             CancellationToken cancellationToken = default)
         {
             GetRequest = request;
-            return Task.FromResult(ObjectResponse);
+            return GetException is null
+                ? Task.FromResult(ObjectResponse)
+                : Task.FromException<GetObjectResponse>(GetException);
         }
 
         public override Task<PutObjectResponse> PutObjectAsync(
@@ -367,7 +572,9 @@ public sealed class S3MediaObjectStorageTests
             CancellationToken cancellationToken = default)
         {
             CopyRequest = request;
-            return Task.FromResult(new CopyObjectResponse());
+            return CopyException is null
+                ? Task.FromResult(new CopyObjectResponse())
+                : Task.FromException<CopyObjectResponse>(CopyException);
         }
 
         public override Task<DeleteObjectResponse> DeleteObjectAsync(
@@ -378,6 +585,29 @@ public sealed class S3MediaObjectStorageTests
             return DeleteException is null
                 ? Task.FromResult(new DeleteObjectResponse())
                 : Task.FromException<DeleteObjectResponse>(DeleteException);
+        }
+
+        public override Task<HeadBucketResponse> HeadBucketAsync(
+            HeadBucketRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            HeadBucketRequest = request;
+            if (WaitForHeadBucketCancellation)
+            {
+                return WaitUntilCanceledAsync<HeadBucketResponse>(
+                    cancellationToken);
+            }
+
+            return HeadBucketException is null
+                ? Task.FromResult(new HeadBucketResponse())
+                : Task.FromException<HeadBucketResponse>(HeadBucketException);
+        }
+
+        private static async Task<T> WaitUntilCanceledAsync<T>(
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("The cancellation delay unexpectedly ended.");
         }
     }
 
@@ -395,6 +625,44 @@ public sealed class S3MediaObjectStorageTests
             WasDisposed = true;
             base.Dispose(disposing);
         }
+    }
+
+    private sealed class CancellationBlockingStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FixedTimeProvider : TimeProvider

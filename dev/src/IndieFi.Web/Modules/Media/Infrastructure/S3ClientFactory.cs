@@ -16,6 +16,7 @@ internal static class S3ClientFactory
             ForcePathStyle = options.ForcePathStyle,
             SignatureMethod = SigningAlgorithm.HmacSHA256,
             UseHttp = serviceUri.Scheme == Uri.UriSchemeHttp,
+            Timeout = options.OperationTimeout,
         };
         var credentials = new BasicAWSCredentials(
             options.AccessKeyId,

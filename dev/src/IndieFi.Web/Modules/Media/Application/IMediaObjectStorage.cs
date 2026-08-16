@@ -5,6 +5,8 @@ namespace IndieFi.Web.Modules.Media.Application;
 /// <summary>
 /// Provider-independent access to private media objects shared by Web and Worker processes.
 /// Authorization remains the caller's responsibility and must be decided from PostgreSQL state.
+/// Missing metadata is returned as null and missing deletes succeed. Other provider failures use
+/// <see cref="MediaObjectStorageException"/> so callers never depend on an S3 SDK exception type.
 /// </summary>
 public interface IMediaObjectStorage
 {

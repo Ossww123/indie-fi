@@ -63,6 +63,13 @@ public sealed class MediaObjectStorageOptionsValidator
             failures.Add($"{Section} access and secret keys must be different.");
         }
 
+        if (options.OperationTimeout < TimeSpan.FromSeconds(1)
+            || options.OperationTimeout > TimeSpan.FromSeconds(30))
+        {
+            failures.Add(
+                $"{Section}:OperationTimeout must be between 1 and 30 seconds.");
+        }
+
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures);
