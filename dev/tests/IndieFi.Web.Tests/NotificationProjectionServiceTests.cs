@@ -95,6 +95,92 @@ public sealed class NotificationProjectionServiceTests
     }
 
     [Fact]
+    public async Task Project_PreferenceChange_AffectsOnlyLaterNotificationSnapshot()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        await using (var setupDb = _fixture.NewDbContext())
+        {
+            setupDb.NotificationPreferences.Add(new NotificationPreference
+            {
+                UserId = assignment.ReviewerId,
+                Kind = NotificationKind.ReviewAssigned,
+                WebEnabled = false,
+                EmailEnabled = false,
+            });
+            await setupDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var beforeChange = Message(
+            assignment.AssignmentId,
+            assignment.ReviewerId,
+            NotificationKind.ReviewAssigned);
+        await using (var firstDb = _fixture.NewDbContext())
+        {
+            Assert.Equal(
+                NotificationProjectionOutcome.Created,
+                (await Service(firstDb).ProjectAsync(
+                    beforeChange,
+                    TestContext.Current.CancellationToken)).Outcome);
+        }
+
+        await using (var preferenceDb = _fixture.NewDbContext())
+        {
+            var preferenceService = new NotificationPreferenceService(
+                preferenceDb,
+                TimeProvider.System);
+            var selections = Enum.GetValues<NotificationKind>()
+                .Select(kind => new NotificationPreferenceSelection(
+                    kind,
+                    WebEnabled: true,
+                    EmailEnabled: true))
+                .ToArray();
+            Assert.Equal(
+                NotificationPreferenceSaveOutcome.Saved,
+                await preferenceService.SaveAsync(
+                    assignment.ReviewerId,
+                    selections,
+                    TestContext.Current.CancellationToken));
+        }
+
+        var afterChange = Message(
+            assignment.AssignmentId,
+            assignment.ReviewerId,
+            NotificationKind.ReviewAssigned);
+        await using (var secondDb = _fixture.NewDbContext())
+        {
+            Assert.Equal(
+                NotificationProjectionOutcome.Created,
+                (await Service(secondDb).ProjectAsync(
+                    afterChange,
+                    TestContext.Current.CancellationToken)).Outcome);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var snapshots = await verificationDb.Notifications
+            .Include(item => item.Deliveries)
+            .Where(item => item.EventId == beforeChange.EventId
+                || item.EventId == afterChange.EventId)
+            .ToDictionaryAsync(
+                item => item.EventId,
+                TestContext.Current.CancellationToken);
+        Assert.False(snapshots[beforeChange.EventId].IsWebVisible);
+        Assert.All(
+            snapshots[beforeChange.EventId].Deliveries,
+            delivery => Assert.Equal(
+                NotificationDeliveryStatus.Suppressed,
+                delivery.Status));
+        Assert.True(snapshots[afterChange.EventId].IsWebVisible);
+        Assert.Contains(
+            snapshots[afterChange.EventId].Deliveries,
+            delivery => delivery.Channel == NotificationChannel.Web
+                && delivery.Status == NotificationDeliveryStatus.Delivered);
+        Assert.Contains(
+            snapshots[afterChange.EventId].Deliveries,
+            delivery => delivery.Channel == NotificationChannel.Email
+                && delivery.Status == NotificationDeliveryStatus.Pending);
+    }
+
+    [Fact]
     public async Task Project_SameRecipientEventTwice_ReturnsExistingNotification()
     {
         var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
