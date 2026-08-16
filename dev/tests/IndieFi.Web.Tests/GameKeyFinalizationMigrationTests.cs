@@ -1,5 +1,4 @@
 using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -49,17 +48,20 @@ public sealed class GameKeyFinalizationMigrationTests
                 db,
                 $"{suffix}@example.test");
             await db.SaveChangesAsync(cancellationToken);
-            var game = new Game
-            {
-                OwnerId = owner.Id,
-                Title = $"Migration game {suffix}",
-            };
-            db.Games.Add(game);
-            await db.SaveChangesAsync(cancellationToken);
-            // This database intentionally stops before later key-drop columns exist,
-            // so seed it through the schema at that migration rather than today's model.
-            var opensAt = DateTimeOffset.UtcNow.AddHours(1);
+            // This database intentionally stops before later game and key-drop columns
+            // exist, so seed them through that migration's schema rather than today's model.
             await db.Database.OpenConnectionAsync(cancellationToken);
+            await using var insertGame = new NpgsqlCommand(
+                """
+                INSERT INTO games (owner_id, title)
+                VALUES ($1, $2)
+                RETURNING id
+                """,
+                (NpgsqlConnection)db.Database.GetDbConnection());
+            insertGame.Parameters.AddWithValue(owner.Id);
+            insertGame.Parameters.AddWithValue($"Migration game {suffix}");
+            var gameId = (long)(await insertGame.ExecuteScalarAsync(cancellationToken))!;
+            var opensAt = DateTimeOffset.UtcNow.AddHours(1);
             await using var insertDrop = new NpgsqlCommand(
                 """
                 INSERT INTO key_drops (game_id, owner_id, opens_at, total_keys)
@@ -67,7 +69,7 @@ public sealed class GameKeyFinalizationMigrationTests
                 RETURNING id
                 """,
                 (NpgsqlConnection)db.Database.GetDbConnection());
-            insertDrop.Parameters.AddWithValue(game.Id);
+            insertDrop.Parameters.AddWithValue(gameId);
             insertDrop.Parameters.AddWithValue(owner.Id);
             insertDrop.Parameters.AddWithValue(opensAt);
             var dropId = (long)(await insertDrop.ExecuteScalarAsync(cancellationToken))!;

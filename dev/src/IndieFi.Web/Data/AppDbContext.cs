@@ -48,6 +48,12 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GamePlayLink> GamePlayLinks => Set<GamePlayLink>();
+    public DbSet<GameGenre> GameGenres => Set<GameGenre>();
+    public DbSet<GameTag> GameTags => Set<GameTag>();
+    public DbSet<GamePlatform> GamePlatforms => Set<GamePlatform>();
+    public DbSet<GameTagAssignment> GameTagAssignments => Set<GameTagAssignment>();
+    public DbSet<GamePlatformAssignment> GamePlatformAssignments =>
+        Set<GamePlatformAssignment>();
 
     public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
 
@@ -449,6 +455,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("owner_id")
                 .IsRequired();
 
+            game.Property(g => g.GenreId)
+                .HasColumnName("genre_id")
+                .HasDefaultValue(GameClassificationCatalog.UnspecifiedGenreId)
+                .IsRequired();
+
             game.Property(g => g.Title)
                 .HasColumnName("title")
                 .HasMaxLength(200)
@@ -467,6 +478,136 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             game.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(g => g.OwnerId);
+
+            game.HasOne<GameGenre>()
+                .WithMany()
+                .HasForeignKey(g => g.GenreId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GameGenre>(genre =>
+        {
+            genre.ToTable("game_genres");
+            genre.HasKey(item => item.Id);
+            genre.Property(item => item.Id)
+                .HasColumnName("id")
+                .ValueGeneratedNever();
+            genre.Property(item => item.Code)
+                .HasColumnName("code")
+                .HasMaxLength(GameClassificationPolicy.CodeMaxLength)
+                .IsRequired();
+            genre.Property(item => item.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(GameClassificationPolicy.DisplayNameMaxLength)
+                .IsRequired();
+            genre.Property(item => item.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired();
+            genre.Property(item => item.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired();
+            genre.HasData(GameClassificationCatalog.Genres.Select(item => new GameGenre
+            {
+                Id = item.Id,
+                Code = item.Code,
+                DisplayName = item.DisplayName,
+                SortOrder = item.SortOrder,
+                IsActive = item.IsActive,
+            }));
+        });
+
+        modelBuilder.Entity<GameTag>(tag =>
+        {
+            tag.ToTable("game_tags");
+            tag.HasKey(item => item.Id);
+            tag.Property(item => item.Id)
+                .HasColumnName("id")
+                .ValueGeneratedNever();
+            tag.Property(item => item.Code)
+                .HasColumnName("code")
+                .HasMaxLength(GameClassificationPolicy.CodeMaxLength)
+                .IsRequired();
+            tag.Property(item => item.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(GameClassificationPolicy.DisplayNameMaxLength)
+                .IsRequired();
+            tag.Property(item => item.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired();
+            tag.Property(item => item.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired();
+            tag.HasData(GameClassificationCatalog.Tags.Select(item => new GameTag
+            {
+                Id = item.Id,
+                Code = item.Code,
+                DisplayName = item.DisplayName,
+                SortOrder = item.SortOrder,
+                IsActive = item.IsActive,
+            }));
+        });
+
+        modelBuilder.Entity<GamePlatform>(platform =>
+        {
+            platform.ToTable("game_platforms");
+            platform.HasKey(item => item.Id);
+            platform.Property(item => item.Id)
+                .HasColumnName("id")
+                .ValueGeneratedNever();
+            platform.Property(item => item.Code)
+                .HasColumnName("code")
+                .HasMaxLength(GameClassificationPolicy.CodeMaxLength)
+                .IsRequired();
+            platform.Property(item => item.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(GameClassificationPolicy.DisplayNameMaxLength)
+                .IsRequired();
+            platform.Property(item => item.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired();
+            platform.Property(item => item.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired();
+            platform.HasData(GameClassificationCatalog.Platforms.Select(item => new GamePlatform
+            {
+                Id = item.Id,
+                Code = item.Code,
+                DisplayName = item.DisplayName,
+                SortOrder = item.SortOrder,
+                IsActive = item.IsActive,
+            }));
+        });
+
+        modelBuilder.Entity<GameTagAssignment>(assignment =>
+        {
+            assignment.ToTable("game_tag_assignments");
+            assignment.HasKey(item => new { item.GameId, item.TagId });
+            assignment.Property(item => item.GameId).HasColumnName("game_id");
+            assignment.Property(item => item.TagId).HasColumnName("tag_id");
+            assignment.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => item.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+            assignment.HasOne<GameTag>()
+                .WithMany()
+                .HasForeignKey(item => item.TagId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GamePlatformAssignment>(assignment =>
+        {
+            assignment.ToTable("game_platform_assignments");
+            assignment.HasKey(item => new { item.GameId, item.PlatformId });
+            assignment.Property(item => item.GameId).HasColumnName("game_id");
+            assignment.Property(item => item.PlatformId).HasColumnName("platform_id");
+            assignment.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => item.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+            assignment.HasOne<GamePlatform>()
+                .WithMany()
+                .HasForeignKey(item => item.PlatformId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<GamePlayLink>(link =>
