@@ -106,6 +106,100 @@ public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
     }
 
     [Fact]
+    public async Task RabbitMq_TwoWorkerHosts_CompeteForOneUserResult()
+    {
+        await ClearMessagingStateAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_postgres);
+        var settings = BuildMessagingSettings();
+        var recorder = new ProbeDeliveryRecorder();
+        using var firstConsumer = BuildHost(settings, recorder, addConsumer: true);
+        using var secondConsumer = BuildHost(settings, recorder, addConsumer: true);
+        using var producerHost = BuildHost(settings, recorder, addConsumer: false);
+
+        await firstConsumer.StartAsync(TestContext.Current.CancellationToken);
+        await secondConsumer.StartAsync(TestContext.Current.CancellationToken);
+        await producerHost.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await WaitForQueueBindingsAsync(settings);
+            await WaitForQueueConsumerCountAsync(settings, expectedCount: 2);
+            var eventId = Guid.NewGuid();
+            await StageAsync(
+                producerHost.Services,
+                eventId,
+                assignment.AssignmentId,
+                assignment.ReviewerId);
+            await WaitForProbeAsync(recorder, eventId);
+            await WaitForNotificationAsync(eventId, assignment.ReviewerId);
+            await WaitUntilOutboxIsEmptyAsync(eventId, TimeSpan.FromSeconds(60));
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(500),
+                TestContext.Current.CancellationToken);
+
+            await using var verificationDb = _postgres.NewDbContext();
+            Assert.Equal(1, recorder.Count(eventId));
+            Assert.Equal(1, await verificationDb.Notifications.CountAsync(
+                item => item.EventId == eventId
+                    && item.UserId == assignment.ReviewerId,
+                TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            await producerHost.StopAsync(CancellationToken.None);
+            await secondConsumer.StopAsync(CancellationToken.None);
+            await firstConsumer.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task RabbitMq_QueuedMessage_IsConsumedAfterWorkerRestart()
+    {
+        await ClearMessagingStateAsync();
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_postgres);
+        var settings = BuildMessagingSettings();
+        var recorder = new ProbeDeliveryRecorder();
+        using var firstConsumer = BuildHost(settings, recorder, addConsumer: true);
+        using var producerHost = BuildHost(settings, recorder, addConsumer: false);
+
+        await StartHostsAsync(firstConsumer, producerHost, settings);
+        await firstConsumer.StopAsync(CancellationToken.None);
+        await WaitForQueueConsumerCountAsync(settings, expectedCount: 0);
+        var eventId = Guid.NewGuid();
+        await StageAsync(
+            producerHost.Services,
+            eventId,
+            assignment.AssignmentId,
+            assignment.ReviewerId);
+        await WaitUntilOutboxIsEmptyAsync(eventId, TimeSpan.FromSeconds(60));
+        Assert.Equal(0, recorder.Count(eventId));
+
+        using var restartedConsumer = BuildHost(settings, recorder, addConsumer: true);
+        await restartedConsumer.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await WaitForQueueBindingsAsync(settings);
+            await WaitForQueueConsumerCountAsync(settings, expectedCount: 1);
+            await WaitForProbeAsync(recorder, eventId);
+            await WaitForNotificationAsync(eventId, assignment.ReviewerId);
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(500),
+                TestContext.Current.CancellationToken);
+
+            await using var verificationDb = _postgres.NewDbContext();
+            Assert.Equal(1, recorder.Count(eventId));
+            Assert.Equal(1, await verificationDb.Notifications.CountAsync(
+                item => item.EventId == eventId
+                    && item.UserId == assignment.ReviewerId,
+                TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            await restartedConsumer.StopAsync(CancellationToken.None);
+            await producerHost.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
     public async Task RabbitMq_WebOutboxToWorker_CreatesNotificationAndChannelDeliveries()
     {
         await ClearMessagingStateAsync();
@@ -698,6 +792,13 @@ public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
         await consumerHost.StartAsync(TestContext.Current.CancellationToken);
         await producerHost.StartAsync(TestContext.Current.CancellationToken);
 
+        await WaitForQueueBindingsAsync(settings);
+    }
+
+    private async Task WaitForQueueBindingsAsync(
+        IReadOnlyDictionary<string, string?> settings)
+    {
+
         var prefix = settings["Messaging:RabbitMq:EndpointPrefix"]!;
         var expectedQueues = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -722,6 +823,41 @@ public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
                 .Select(columns => columns[1])
                 .ToHashSet(StringComparer.Ordinal);
             return expectedQueues.IsSubsetOf(boundQueues);
+        }, TimeSpan.FromSeconds(30));
+    }
+
+    private async Task WaitForQueueConsumerCountAsync(
+        IReadOnlyDictionary<string, string?> settings,
+        int expectedCount)
+    {
+        var prefix = settings["Messaging:RabbitMq:EndpointPrefix"]!;
+        var expectedQueues = new HashSet<string>(StringComparer.Ordinal)
+        {
+            $"{prefix}-rabbit-mq-probe",
+            $"{prefix}-user-notification-requested",
+        };
+        await WaitUntilAsync(async () =>
+        {
+            var queues = await _rabbitMq.Container.ExecAsync(
+                ["rabbitmqctl", "list_queues", "name", "consumers"],
+                TestContext.Current.CancellationToken);
+            if (queues.ExitCode != 0)
+            {
+                return false;
+            }
+
+            var matching = queues.Stdout
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.TrimEnd('\r').Split('\t'))
+                .Where(columns => columns.Length >= 2
+                    && expectedQueues.Contains(columns[0])
+                    && int.TryParse(columns[1], out _))
+                .ToDictionary(
+                    columns => columns[0],
+                    columns => int.Parse(columns[1]),
+                    StringComparer.Ordinal);
+            return expectedQueues.All(queue =>
+                matching.GetValueOrDefault(queue, -1) == expectedCount);
         }, TimeSpan.FromSeconds(30));
     }
 
