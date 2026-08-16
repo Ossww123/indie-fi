@@ -21,7 +21,7 @@ public sealed class SubscribedKeyDropOpenedFanoutService
         _notificationPublisher = notificationPublisher;
     }
 
-    public async Task<FavoriteGameKeyDropFanoutResult> StageBatchAsync(
+    public async Task<NotificationFanoutBatchResult> StageBatchAsync(
         SubscribedKeyDropOpenedFanoutV1 message,
         CancellationToken cancellationToken = default)
     {
@@ -36,7 +36,7 @@ public sealed class SubscribedKeyDropOpenedFanoutService
             .SingleOrDefaultAsync(cancellationToken);
         if (source is null)
         {
-            return new FavoriteGameKeyDropFanoutResult(0);
+            return new NotificationFanoutBatchResult(0);
         }
 
         var recipientIds = await (
@@ -68,7 +68,7 @@ public sealed class SubscribedKeyDropOpenedFanoutService
                 cancellationToken);
         }
 
-        return new FavoriteGameKeyDropFanoutResult(
+        return new NotificationFanoutBatchResult(
             recipientIds.Count,
             recipientIds.Count == BatchSize ? recipientIds[^1] : null);
     }

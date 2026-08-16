@@ -6,10 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.Notifications.Application;
 
-public sealed record FavoriteGameKeyDropFanoutResult(
-    int StagedCount,
-    long? NextAfterUserId = null);
-
 public sealed class FavoriteGameKeyDropFanoutService
 {
     public const int BatchSize = 250;
@@ -25,7 +21,7 @@ public sealed class FavoriteGameKeyDropFanoutService
         _notificationPublisher = notificationPublisher;
     }
 
-    public async Task<FavoriteGameKeyDropFanoutResult> StageBatchAsync(
+    public async Task<NotificationFanoutBatchResult> StageBatchAsync(
         FavoriteGameKeyDropCreatedFanoutV1 message,
         CancellationToken cancellationToken = default)
     {
@@ -40,7 +36,7 @@ public sealed class FavoriteGameKeyDropFanoutService
             .SingleOrDefaultAsync(cancellationToken);
         if (source is null)
         {
-            return new FavoriteGameKeyDropFanoutResult(0);
+            return new NotificationFanoutBatchResult(0);
         }
 
         var recipientIds = await (
@@ -72,7 +68,7 @@ public sealed class FavoriteGameKeyDropFanoutService
                 cancellationToken);
         }
 
-        return new FavoriteGameKeyDropFanoutResult(
+        return new NotificationFanoutBatchResult(
             recipientIds.Count,
             recipientIds.Count == BatchSize ? recipientIds[^1] : null);
     }

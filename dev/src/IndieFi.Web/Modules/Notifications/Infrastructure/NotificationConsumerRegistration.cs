@@ -11,5 +11,6 @@ public static class NotificationConsumerRegistration
         registration.AddConsumer<UserNotificationsChangedConsumer>();
         registration.AddConsumer<FavoriteGameKeyDropCreatedFanoutConsumer>();
         registration.AddConsumer<SubscribedKeyDropOpenedFanoutConsumer>();
+        registration.AddConsumer<FollowedUserGamePublishedFanoutConsumer>();
     }
 }
