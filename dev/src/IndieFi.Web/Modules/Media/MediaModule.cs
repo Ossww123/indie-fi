@@ -13,6 +13,16 @@ public static class MediaModule
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddOptions<MediaWorkerOptions>()
+            .Bind(configuration.GetSection(MediaWorkerOptions.SectionName));
+        if (configuration.GetValue<bool>(
+                $"{MediaWorkerOptions.SectionName}:Enabled"))
+        {
+            services.AddScoped<MediaMessageAuthorityService>();
+            services.AddScoped<MediaProcessingMessageDispatcher>();
+            services.AddScoped<MediaDeletionMessageDispatcher>();
+        }
+
         services.AddScoped<MediaUploadReservationService>();
         services.AddOptions<MediaUploadRateLimitOptions>()
             .Bind(configuration.GetSection(MediaUploadRateLimitOptions.SectionName))
