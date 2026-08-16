@@ -1,4 +1,5 @@
 using System.Net.Mail;
+using System.Security.Cryptography;
 
 namespace IndieFi.Web.Modules.Notifications.Application;
 
@@ -21,6 +22,20 @@ public static class NotificationEmailFailureClassifier
         if (exception is FormatException)
         {
             return new(NotificationEmailFailureKind.Permanent, "invalid_recipient");
+        }
+
+        if (exception is CryptographicException)
+        {
+            return new(
+                NotificationEmailFailureKind.Permanent,
+                "recipient_decryption_failed");
+        }
+
+        if (exception is ArgumentException)
+        {
+            return new(
+                NotificationEmailFailureKind.Permanent,
+                "invalid_notification_content");
         }
 
         if (exception is SmtpException smtpException

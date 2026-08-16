@@ -21,6 +21,8 @@ public static class NotificationPolicy
     public static readonly TimeSpan ConsumerDeduplicationRetention = TimeSpan.FromDays(30);
     public static readonly TimeSpan ResolvedFailureRetention = TimeSpan.FromDays(30);
 
+    public const int EmailMaxAttempts = 6;
+
     public static IReadOnlyList<TimeSpan> EmailRetryDelays { get; } =
     [
         TimeSpan.FromMinutes(1),
