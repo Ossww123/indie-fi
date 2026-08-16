@@ -9,6 +9,7 @@ public static class GamesModule
         services.AddScoped<GameManagementService>();
         services.AddScoped<GamePlayLinkManagementService>();
         services.AddScoped<GameClassificationCatalogQueryService>();
+        services.AddScoped<GameClassificationSelectionService>();
         return services;
     }
 }
