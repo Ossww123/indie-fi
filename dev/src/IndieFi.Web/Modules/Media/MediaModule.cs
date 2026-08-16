@@ -12,6 +12,7 @@ public static class MediaModule
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddScoped<MediaUploadReservationService>();
         services.AddOptions<MediaObjectStorageOptions>()
             .Bind(configuration.GetSection(MediaObjectStorageOptions.SectionName))
             .ValidateOnStart();
