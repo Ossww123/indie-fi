@@ -50,8 +50,12 @@ public static class MediaModule
         services.AddScoped<
             IMediaProcessingPublisher,
             MassTransitMediaProcessingPublisher>();
+        services.AddScoped<
+            IMediaDeletionPublisher,
+            MassTransitMediaDeletionPublisher>();
         services.AddScoped<MediaUploadUrlService>();
         services.AddScoped<MediaUploadCompletionService>();
+        services.AddScoped<MediaPublicationService>();
         services.AddHealthChecks()
             .AddCheck<MediaObjectStorageHealthCheck>("media-object-storage");
         return services;
