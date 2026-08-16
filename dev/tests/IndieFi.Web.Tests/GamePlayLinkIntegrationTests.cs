@@ -163,7 +163,14 @@ public sealed class GamePlayLinkIntegrationTests
             link => link.GameId == game.GameId,
             TestContext.Current.CancellationToken);
         Assert.Equal(game.Title, verifiedGame.Title);
+        Assert.Equal(1, verifiedGame.GenreId);
         Assert.Equal("Owner link", verifiedLink.DisplayName);
+        Assert.Empty(await verificationDb.GameTagAssignments
+            .Where(item => item.GameId == game.GameId)
+            .ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await verificationDb.GamePlatformAssignments
+            .Where(item => item.GameId == game.GameId)
+            .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
