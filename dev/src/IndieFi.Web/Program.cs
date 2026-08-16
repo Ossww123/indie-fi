@@ -212,6 +212,7 @@ app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+app.MapMediaEndpoints(builder.Configuration);
 app.MapHub<WaitingRoomHub>("/hubs/waiting-room")
    .RequireAuthorization();
 app.MapHub<NotificationHub>("/hubs/notifications")

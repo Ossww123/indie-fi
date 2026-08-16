@@ -47,6 +47,51 @@ public sealed class SessionCookieAuthenticationEvents : CookieAuthenticationEven
         RefreshDisplayName(context, validation.DisplayName);
     }
 
+    public override Task RedirectToLogin(
+        RedirectContext<CookieAuthenticationOptions> context)
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            SetPrivateApiHeaders(context.Response);
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return context.Response.WriteAsJsonAsync(
+                new
+                {
+                    code = "authentication_required",
+                    message = "Authentication is required.",
+                },
+                context.HttpContext.RequestAborted);
+        }
+
+        return base.RedirectToLogin(context);
+    }
+
+    public override Task RedirectToAccessDenied(
+        RedirectContext<CookieAuthenticationOptions> context)
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            SetPrivateApiHeaders(context.Response);
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return context.Response.WriteAsJsonAsync(
+                new
+                {
+                    code = "access_denied",
+                    message = "Access is denied.",
+                },
+                context.HttpContext.RequestAborted);
+        }
+
+        return base.RedirectToAccessDenied(context);
+    }
+
+    private static void SetPrivateApiHeaders(HttpResponse response)
+    {
+        response.Headers.CacheControl = "no-store";
+        response.Headers.Pragma = "no-cache";
+        response.Headers["Referrer-Policy"] = "no-referrer";
+    }
+
     private static async Task RejectAsync(CookieValidatePrincipalContext context)
     {
         context.RejectPrincipal();

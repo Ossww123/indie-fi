@@ -56,6 +56,7 @@ public static class MediaModule
         services.AddScoped<MediaUploadUrlService>();
         services.AddScoped<MediaUploadCompletionService>();
         services.AddScoped<MediaPublicationService>();
+        services.AddScoped<MediaStatusQueryService>();
         services.AddHealthChecks()
             .AddCheck<MediaObjectStorageHealthCheck>("media-object-storage");
         return services;
