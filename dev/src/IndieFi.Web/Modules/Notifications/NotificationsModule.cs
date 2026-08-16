@@ -39,6 +39,13 @@ public static class NotificationsModule
                     busOutbox.MessageDeliveryTimeout = TimeSpan.FromSeconds(10);
                 });
             });
+            registration.AddConfigureEndpointsCallback(
+                (context, _, endpoint) =>
+                {
+                    endpoint.UseMessageRetry(retry => retry.Intervals(
+                        NotificationPolicy.ConsumerRetryDelays.ToArray()));
+                    endpoint.UseEntityFrameworkOutbox<AppDbContext>(context);
+                });
 
             if (rabbitMq.Enabled)
             {

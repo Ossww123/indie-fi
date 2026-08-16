@@ -6,6 +6,18 @@ namespace IndieFi.Web.Tests;
 public sealed class NotificationPolicyTests
 {
     [Fact]
+    public void ConsumerRetryDelays_AreShortAndIncreasingBeforeErrorQueue()
+    {
+        Assert.Equal(
+            [
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(30),
+            ],
+            NotificationPolicy.ConsumerRetryDelays);
+    }
+
+    [Fact]
     public void GetDefaults_CoversEverySupportedKind()
     {
         foreach (var kind in Enum.GetValues<NotificationKind>())

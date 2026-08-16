@@ -30,6 +30,13 @@ public static class NotificationPolicy
         TimeSpan.FromHours(6),
     ];
 
+    public static IReadOnlyList<TimeSpan> ConsumerRetryDelays { get; } =
+    [
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(30),
+    ];
+
     public static NotificationChannelDefaults GetDefaults(NotificationKind kind)
     {
         return kind switch
