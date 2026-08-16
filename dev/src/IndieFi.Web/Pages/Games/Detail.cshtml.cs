@@ -2,6 +2,7 @@ using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Games.Application;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Mvc;
@@ -50,6 +51,7 @@ public class DetailModel : PageModel
     private readonly UserDisplayNameResolver _displayNames;
     private readonly FavoriteGameService _favoriteGameService;
     private readonly PublicKeyDropReader _publicKeyDropReader;
+    private readonly GameClassificationCatalogQueryService _classificationCatalog;
 
     public DetailModel(
         AppDbContext db,
@@ -57,7 +59,8 @@ public class DetailModel : PageModel
         ReviewRequestService reviewRequestService,
         UserDisplayNameResolver displayNames,
         FavoriteGameService favoriteGameService,
-        PublicKeyDropReader publicKeyDropReader)
+        PublicKeyDropReader publicKeyDropReader,
+        GameClassificationCatalogQueryService classificationCatalog)
     {
         _db = db;
         _currentUser = currentUser;
@@ -65,6 +68,7 @@ public class DetailModel : PageModel
         _displayNames = displayNames;
         _favoriteGameService = favoriteGameService;
         _publicKeyDropReader = publicKeyDropReader;
+        _classificationCatalog = classificationCatalog;
     }
 
     public Game Game { get; private set; } = null!;
@@ -74,6 +78,7 @@ public class DetailModel : PageModel
     public bool IsFavorite { get; private set; }
     public string? FavoriteMessage { get; private set; }
     public List<PlayLinkListItem> PlayLinks { get; private set; } = [];
+    public GameClassificationDetailCatalog Classifications { get; private set; } = null!;
     public IReadOnlyList<PublicKeyDropDetail> Drops { get; private set; } = [];
     public int PendingRequestCount { get; private set; }
     public List<RequestListItem> Requests { get; private set; } = [];
@@ -107,6 +112,15 @@ public class DetailModel : PageModel
         // because feedback added later is left by other people. Ownership is only
         // enforced when editing a game.
         Game = game;
+        var classifications = await _classificationCatalog.GetDetailAsync(
+            game.Id,
+            HttpContext.RequestAborted);
+        if (classifications is null)
+        {
+            return NotFound();
+        }
+
+        Classifications = classifications;
         OwnerDisplayName = await _displayNames.ResolveAsync(
             game.OwnerId,
             HttpContext.RequestAborted);

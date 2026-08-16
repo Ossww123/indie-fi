@@ -83,6 +83,48 @@ else
     <p class="mt-6 text-slate-500">(소개 없음)</p>
 }
 
+<h2 class="subsection-title mt-8">게임 정보</h2>
+<dl class="surface-list">
+    <div class="surface-item">
+        <dt class="field-label">장르</dt>
+        <dd class="mt-2">
+            <span class="badge-neutral">@Model.Classifications.Genre.DisplayName</span>
+        </dd>
+    </div>
+    <div class="surface-item">
+        <dt class="field-label">태그</dt>
+        <dd class="mt-2 flex flex-wrap gap-2">
+            @if (Model.Classifications.Tags.Count == 0)
+            {
+                <span class="text-meta">등록된 태그 없음</span>
+            }
+            else
+            {
+                @foreach (var tag in Model.Classifications.Tags)
+                {
+                    <span class="badge-neutral">@tag.DisplayName</span>
+                }
+            }
+        </dd>
+    </div>
+    <div class="surface-item">
+        <dt class="field-label">지원 플랫폼</dt>
+        <dd class="mt-2 flex flex-wrap gap-2">
+            @if (Model.Classifications.Platforms.Count == 0)
+            {
+                <span class="text-meta">등록된 지원 플랫폼 없음</span>
+            }
+            else
+            {
+                @foreach (var platform in Model.Classifications.Platforms)
+                {
+                    <span class="badge-neutral">@platform.DisplayName</span>
+                }
+            }
+        </dd>
+    </div>
+</dl>
+
 <h2 class="subsection-title mt-8">플레이하기</h2>
 @if (Model.PlayLinks.Count == 0)
 {

@@ -20,6 +20,11 @@ public sealed record GameClassificationEditorCatalog(
     IReadOnlyList<long> SelectedTagIds,
     IReadOnlyList<long> SelectedPlatformIds);
 
+public sealed record GameClassificationDetailCatalog(
+    GameClassificationOption Genre,
+    IReadOnlyList<GameClassificationOption> Tags,
+    IReadOnlyList<GameClassificationOption> Platforms);
+
 public sealed class GameClassificationCatalogQueryService
 {
     private readonly AppDbContext _db;
@@ -84,6 +89,59 @@ public sealed class GameClassificationCatalogQueryService
             genreId.Value,
             tagIds,
             platformIds);
+    }
+
+    public async Task<GameClassificationDetailCatalog?> GetDetailAsync(
+        long gameId,
+        CancellationToken cancellationToken = default)
+    {
+        if (gameId <= 0)
+        {
+            return null;
+        }
+
+        var genre = await (
+                from game in _db.Games.AsNoTracking()
+                join item in _db.GameGenres.AsNoTracking()
+                    on game.GenreId equals item.Id
+                where game.Id == gameId
+                select new GameClassificationOption(
+                    item.Id,
+                    item.Code,
+                    item.DisplayName,
+                    item.IsActive))
+            .SingleOrDefaultAsync(cancellationToken);
+        if (genre is null)
+        {
+            return null;
+        }
+
+        var tags = await (
+                from assignment in _db.GameTagAssignments.AsNoTracking()
+                join item in _db.GameTags.AsNoTracking()
+                    on assignment.TagId equals item.Id
+                where assignment.GameId == gameId
+                orderby item.SortOrder, item.Code
+                select new GameClassificationOption(
+                    item.Id,
+                    item.Code,
+                    item.DisplayName,
+                    item.IsActive))
+            .ToListAsync(cancellationToken);
+        var platforms = await (
+                from assignment in _db.GamePlatformAssignments.AsNoTracking()
+                join item in _db.GamePlatforms.AsNoTracking()
+                    on assignment.PlatformId equals item.Id
+                where assignment.GameId == gameId
+                orderby item.SortOrder, item.Code
+                select new GameClassificationOption(
+                    item.Id,
+                    item.Code,
+                    item.DisplayName,
+                    item.IsActive))
+            .ToListAsync(cancellationToken);
+
+        return new GameClassificationDetailCatalog(genre, tags, platforms);
     }
 
     private Task<List<GameClassificationOption>> QueryGenresAsync(

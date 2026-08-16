@@ -84,6 +84,44 @@ public sealed class GameClassificationCatalogQueryServiceTests
         await transaction.RollbackAsync(cancellationToken);
     }
 
+    [Fact]
+    public async Task GetDetailAsync_ReturnsSelectedValuesInCatalogOrderIncludingInactive()
+    {
+        long gameId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var owner = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0);
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, owner.Id);
+            arrangeDb.GameTagAssignments.AddRange(
+                new GameTagAssignment { GameId = game.Id, TagId = 28 },
+                new GameTagAssignment { GameId = game.Id, TagId = 10 });
+            arrangeDb.GamePlatformAssignments.AddRange(
+                new GamePlatformAssignment { GameId = game.Id, PlatformId = 12 },
+                new GamePlatformAssignment
+                {
+                    GameId = game.Id,
+                    PlatformId = GameClassificationCatalog.UnspecifiedPlatformId,
+                });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            gameId = game.Id;
+        }
+
+        await using var db = _fixture.NewDbContext();
+        var result = await new GameClassificationCatalogQueryService(db)
+            .GetDetailAsync(gameId, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(GameClassificationCatalog.UnspecifiedCode, result.Genre.Code);
+        Assert.False(result.Genre.IsActive);
+        Assert.Equal(
+            ["single-player", "pixel-art"],
+            result.Tags.Select(item => item.Code));
+        Assert.Equal(
+            ["unspecified", "linux"],
+            result.Platforms.Select(item => item.Code));
+        Assert.False(result.Platforms[0].IsActive);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
