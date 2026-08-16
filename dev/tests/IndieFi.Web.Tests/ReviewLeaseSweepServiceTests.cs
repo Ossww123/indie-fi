@@ -2,6 +2,9 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Contracts;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
@@ -57,6 +60,99 @@ public sealed class ReviewLeaseSweepServiceTests
         Assert.Null(assignmentState.CompletedAt);
         Assert.NotNull(assignmentState.ExpiredAt);
         Assert.Equal(ReviewRequestStatus.Queued, requestStatus);
+    }
+
+    [Fact]
+    public async Task SweepAsync_StagesStableExpirationEventOnce()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        await using (var expirationDb = _fixture.NewDbContext())
+        {
+            await expirationDb.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE review_assignments
+                   SET leased_until = now() - INTERVAL '1 minute'
+                 WHERE id = {0}
+                """,
+                [assignment.AssignmentId],
+                TestContext.Current.CancellationToken);
+        }
+
+        var publisher = new TestNotificationEventPublisher();
+        await using var sweepDb = _fixture.NewDbContext();
+        var service = new ReviewLeaseSweepService(
+            sweepDb,
+            NullLogger<ReviewLeaseSweepService>.Instance,
+            publisher);
+
+        var first = await service.SweepAsync();
+        var replay = await service.SweepAsync();
+
+        Assert.Equal(1, first.ExpiredCount);
+        Assert.Equal(0, replay.ExpiredCount);
+        var expiredAt = await sweepDb.ReviewAssignments
+            .Where(item => item.Id == assignment.AssignmentId)
+            .Select(item => item.ExpiredAt)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var staged = Assert.Single(publisher.Events);
+        Assert.Equal(
+            NotificationEventId.Create(
+                NotificationKind.ReviewExpired,
+                assignment.AssignmentId,
+                assignment.ReviewerId),
+            staged.EventId);
+        Assert.Equal(assignment.ReviewerId, staged.RecipientUserId);
+        Assert.Equal(NotificationKind.ReviewExpired, staged.Kind);
+        Assert.Equal(NotificationSourceTypes.ReviewAssignment, staged.SourceType);
+        Assert.Equal(assignment.AssignmentId, staged.SourceId);
+        Assert.Equal(expiredAt, staged.OccurredAt);
+    }
+
+    [Fact]
+    public async Task SweepAsync_WhenEventStagingFails_RollsBackExpirationAndRequeue()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        await using (var expirationDb = _fixture.NewDbContext())
+        {
+            await expirationDb.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE review_assignments
+                   SET leased_until = now() - INTERVAL '1 minute'
+                 WHERE id = {0}
+                """,
+                [assignment.AssignmentId],
+                TestContext.Current.CancellationToken);
+        }
+
+        await using (var sweepDb = _fixture.NewDbContext())
+        {
+            var service = new ReviewLeaseSweepService(
+                sweepDb,
+                NullLogger<ReviewLeaseSweepService>.Instance,
+                new TestNotificationEventPublisher
+                {
+                    Failure = new InvalidOperationException("staging failed"),
+                });
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.SweepAsync());
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var state = await (
+                from reviewAssignment in verificationDb.ReviewAssignments
+                join request in verificationDb.ReviewRequests
+                    on reviewAssignment.RequestId equals request.Id
+                where reviewAssignment.Id == assignment.AssignmentId
+                select new
+                {
+                    AssignmentStatus = reviewAssignment.Status,
+                    RequestStatus = request.Status,
+                    reviewAssignment.ExpiredAt,
+                })
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(ReviewAssignmentStatus.Active, state.AssignmentStatus);
+        Assert.Equal(ReviewRequestStatus.Assigned, state.RequestStatus);
+        Assert.Null(state.ExpiredAt);
     }
 
     [Fact]
@@ -410,7 +506,10 @@ public sealed class ReviewLeaseSweepServiceTests
     }
 
     private static ReviewLeaseSweepService NewSweepService(AppDbContext db) =>
-        new(db, NullLogger<ReviewLeaseSweepService>.Instance);
+        new(
+            db,
+            NullLogger<ReviewLeaseSweepService>.Instance,
+            new TestNotificationEventPublisher());
 
     private static FeedbackSubmissionService NewSubmissionService(AppDbContext db) =>
         new(

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Notifications.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -81,6 +82,8 @@ public sealed class ReviewLeaseSweepWorkerTests
         var services = new ServiceCollection();
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(_fixture.ConnectionString));
+        services.AddSingleton<INotificationEventPublisher>(
+            new TestNotificationEventPublisher());
         services.AddScoped<ReviewLeaseSweepService>();
         services.AddLogging();
         return services.BuildServiceProvider();

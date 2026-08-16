@@ -350,7 +350,8 @@ public sealed class AccountMutationBlockingTests
                 .ClaimNextAsync(assignment.ReviewerId);
             sweep = await new ReviewLeaseSweepService(
                     reviewerDb,
-                    NullLogger<ReviewLeaseSweepService>.Instance)
+                    NullLogger<ReviewLeaseSweepService>.Instance,
+                    new TestNotificationEventPublisher())
                 .SweepAsync(assignment.ReviewerId);
         }
 

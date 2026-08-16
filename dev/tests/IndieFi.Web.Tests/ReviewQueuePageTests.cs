@@ -296,7 +296,8 @@ public sealed class ReviewQueuePageTests
         {
             var result = await new ReviewLeaseSweepService(
                 sweepDb,
-                NullLogger<ReviewLeaseSweepService>.Instance).SweepAsync();
+                NullLogger<ReviewLeaseSweepService>.Instance,
+                new TestNotificationEventPublisher()).SweepAsync();
             Assert.Equal(1, result.ExpiredCount);
         }
 

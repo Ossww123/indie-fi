@@ -1,5 +1,8 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Contracts;
+using IndieFi.Web.Modules.Notifications.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -32,7 +35,7 @@ public class ReviewLeaseSweepService
                SET status = 'Expired', expired_at = now()
              WHERE status = 'Active'
                AND leased_until <= now()
-            RETURNING request_id
+            RETURNING id, request_id, reviewer_id, expired_at
         ),
         requeued AS (
             UPDATE review_requests
@@ -42,25 +45,31 @@ public class ReviewLeaseSweepService
                AND review_requests.status = 'Assigned'
             RETURNING review_requests.id
         )
-        SELECT count(*) AS "Value" FROM expired
+        SELECT id AS "AssignmentId",
+               reviewer_id AS "ReviewerId",
+               expired_at AS "ExpiredAt"
+          FROM expired
+         ORDER BY id
         """;
 
     private readonly AppDbContext _db;
     private readonly ILogger<ReviewLeaseSweepService> _logger;
+    private readonly INotificationEventPublisher _notificationPublisher;
 
     public ReviewLeaseSweepService(
         AppDbContext db,
-        ILogger<ReviewLeaseSweepService> logger)
+        ILogger<ReviewLeaseSweepService> logger,
+        INotificationEventPublisher notificationPublisher)
     {
         _db = db;
         _logger = logger;
+        _notificationPublisher = notificationPublisher;
     }
 
     public async Task<ReviewLeaseSweepResult> SweepAsync(long? requestedByUserId = null)
     {
-        await using var transaction = requestedByUserId is null
-            ? null
-            : await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
+        await using var transaction =
+            await AccountMutationGuard.BeginTransactionIfNeededAsync(_db);
         if (requestedByUserId is long userId
             && !await AccountMutationGuard.LockActiveAsync(_db, userId))
         {
@@ -70,12 +79,28 @@ public class ReviewLeaseSweepService
                 ReviewLeaseSweepOutcome.AccountUnavailable);
         }
 
-        var expiredCounts = await _db.Database
-            .SqlQueryRaw<long>(SweepSql)
+        var expired = await _db.Database
+            .SqlQueryRaw<ExpiredReviewAssignment>(SweepSql)
             .ToListAsync();
+
+        foreach (var assignment in expired)
+        {
+            await _notificationPublisher.StageAsync(
+                NotificationEventId.Create(
+                    NotificationKind.ReviewExpired,
+                    assignment.AssignmentId,
+                    assignment.ReviewerId),
+                assignment.ReviewerId,
+                NotificationKind.ReviewExpired,
+                NotificationSourceTypes.ReviewAssignment,
+                assignment.AssignmentId,
+                assignment.ExpiredAt);
+        }
+
+        await _db.SaveChangesAsync();
         await AccountMutationGuard.CommitIfOwnedAsync(transaction);
 
-        return Result(checked((int)expiredCounts[0]));
+        return Result(expired.Count);
     }
 
     private ReviewLeaseSweepResult Result(int expiredCount)
@@ -85,4 +110,9 @@ public class ReviewLeaseSweepService
             expiredCount);
         return new ReviewLeaseSweepResult(expiredCount);
     }
+
+    private sealed record ExpiredReviewAssignment(
+        long AssignmentId,
+        long ReviewerId,
+        DateTimeOffset ExpiredAt);
 }
