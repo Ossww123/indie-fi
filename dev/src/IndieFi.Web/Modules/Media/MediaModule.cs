@@ -20,6 +20,7 @@ public static class MediaModule
                 "Media worker settings are invalid.")
             .ValidateOnStart();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.TryAddSingleton<IMediaImageProcessor, SkiaMediaImageProcessor>();
         if (configuration.GetValue<bool>(
                 $"{MediaWorkerOptions.SectionName}:Enabled"))
         {
