@@ -87,6 +87,7 @@ public static class NotificationsModule
         services.AddScoped<NotificationProjectionService>();
         services.AddScoped<NotificationInboxService>();
         services.AddScoped<NotificationPreferenceService>();
+        services.AddScoped<NotificationEmailOperationsService>();
         services.AddScoped<KeyDropSubscriptionService>();
         services.AddScoped<FavoriteGameKeyDropFanoutService>();
         services.AddScoped<SubscribedKeyDropOpenedFanoutService>();
