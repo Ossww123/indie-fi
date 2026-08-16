@@ -8,5 +8,6 @@ public static class NotificationConsumerRegistration
         this IBusRegistrationConfigurator registration)
     {
         registration.AddConsumer<UserNotificationRequestedConsumer>();
+        registration.AddConsumer<UserNotificationsChangedConsumer>();
     }
 }

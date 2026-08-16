@@ -3,6 +3,7 @@ using IndieFi.Web.Modules.Notifications.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Globalization;
 
 namespace IndieFi.Web.Pages.Notifications;
 
@@ -83,4 +84,28 @@ public sealed class IndexModel : PageModel
         await _inbox.MarkAllReadAsync(userId, HttpContext.RequestAborted);
         return RedirectToPage(new { status = "all-read" });
     }
+
+    public async Task<IActionResult> OnGetSnapshotAsync()
+    {
+        if (_currentUser.UserId is not long userId)
+        {
+            return Challenge();
+        }
+
+        var snapshot = await _inbox.GetAsync(
+            userId,
+            pageSize: 1,
+            cancellationToken: HttpContext.RequestAborted);
+        Response.Headers.CacheControl = "no-store, no-cache";
+        Response.Headers.Pragma = "no-cache";
+        Response.Headers.Expires = "0";
+        return new JsonResult(new NotificationRealtimeSnapshot(
+            snapshot.UnreadCount,
+            snapshot.Items.FirstOrDefault()?.Id.ToString(
+                CultureInfo.InvariantCulture)));
+    }
+
+    public sealed record NotificationRealtimeSnapshot(
+        int UnreadCount,
+        string? LatestNotificationId);
 }
