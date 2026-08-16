@@ -6,6 +6,7 @@ using Xunit;
 
 namespace IndieFi.Web.Tests;
 
+[Collection(PostgreSqlCollection.Name)]
 public sealed class NotificationTelemetryTests
 {
     [Fact]
@@ -48,6 +49,16 @@ public sealed class NotificationTelemetryTests
             TimeSpan.FromMilliseconds(30));
         NotificationTelemetry.RecordEmailBatchFault(
             TimeSpan.FromMilliseconds(40));
+        NotificationTelemetry.UpdateOperationalSnapshot(new(
+            4,
+            50,
+            3,
+            2,
+            1,
+            25,
+            true));
+        NotificationTelemetry.RecordOperationsObservationFailure();
+        listener.RecordObservableInstruments();
 
         Assert.Contains(measurements, item =>
             item.InstrumentName == "indiefi.notifications.consumer.messages"
@@ -72,6 +83,19 @@ public sealed class NotificationTelemetryTests
         Assert.Contains(measurements, item =>
             item.InstrumentName == "indiefi.notifications.email.batch.duration"
             && item.Value == 30);
+        Assert.Contains(measurements, item =>
+            item.InstrumentName == "indiefi.notifications.outbox.backlog"
+            && item.Value == 4);
+        Assert.Contains(measurements, item =>
+            item.InstrumentName == "indiefi.notifications.email.oldest_due_age"
+            && item.Value == 25);
+        Assert.Contains(measurements, item =>
+            item.InstrumentName == "indiefi.notifications.rabbitmq.ready"
+            && item.Value == 1);
+        Assert.Contains(measurements, item =>
+            item.InstrumentName
+                == "indiefi.notifications.operations.observation_failures"
+            && item.Value == 1);
         Assert.All(
             measurements.SelectMany(item => item.Tags),
             tag => Assert.Contains(tag.Key, new[] { "contract", "outcome" }));

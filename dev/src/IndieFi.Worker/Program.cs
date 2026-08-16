@@ -35,5 +35,6 @@ builder.Services.AddNotificationsModule(
     registration => registration.AddNotificationConsumers());
 builder.Services.AddNotificationEmailDelivery(builder.Configuration);
 builder.Services.AddNotificationMaintenance(builder.Configuration);
+builder.Services.AddNotificationOperations(builder.Configuration);
 
 await builder.Build().RunAsync();

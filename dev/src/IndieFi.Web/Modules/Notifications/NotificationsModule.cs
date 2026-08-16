@@ -160,4 +160,34 @@ public static class NotificationsModule
         });
         return services;
     }
+
+    public static IServiceCollection AddNotificationOperations(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<NotificationOperationsOptions>()
+            .Bind(configuration.GetSection(NotificationOperationsOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<
+            IValidateOptions<NotificationOperationsOptions>,
+            NotificationOperationsOptionsValidator>();
+        services.AddSingleton<
+            INotificationTransportHealth,
+            MassTransitNotificationTransportHealth>();
+        services.AddScoped<NotificationOperationalSnapshotService>();
+        services.AddHostedService(provider =>
+        {
+            var options = provider
+                .GetRequiredService<IOptions<NotificationOperationsOptions>>()
+                .Value;
+            return new NotificationOperationsWorker(
+                provider.GetRequiredService<IServiceScopeFactory>(),
+                provider.GetRequiredService<INotificationTransportHealth>(),
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<ILogger<NotificationOperationsWorker>>(),
+                options.Enabled,
+                options.ObservationInterval);
+        });
+        return services;
+    }
 }

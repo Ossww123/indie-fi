@@ -28,6 +28,58 @@ public static class NotificationTelemetry
         "indiefi.notifications.email.batch.duration",
         "ms",
         "Notification email batch processing duration.");
+    private static readonly Counter<long> OperationsObservationFailures =
+        Meter.CreateCounter<long>(
+            "indiefi.notifications.operations.observation_failures",
+            "{failure}",
+            "Failures while collecting notification operational state.");
+
+    private static long _outboxBacklogCount;
+    private static double _oldestOutboxAgeSeconds;
+    private static long _emailPendingCount;
+    private static long _emailDueCount;
+    private static long _emailFailedCount;
+    private static double _oldestEmailDueAgeSeconds;
+    private static long _rabbitMqReady = -1;
+
+    static NotificationTelemetry()
+    {
+        Meter.CreateObservableGauge(
+            "indiefi.notifications.outbox.backlog",
+            () => Interlocked.Read(ref _outboxBacklogCount),
+            "{message}",
+            "Messages waiting in the PostgreSQL transactional Outbox.");
+        Meter.CreateObservableGauge(
+            "indiefi.notifications.outbox.oldest_age",
+            () => Volatile.Read(ref _oldestOutboxAgeSeconds),
+            "s",
+            "Age of the oldest PostgreSQL Outbox message.");
+        Meter.CreateObservableGauge(
+            "indiefi.notifications.email.pending",
+            () => Interlocked.Read(ref _emailPendingCount),
+            "{delivery}",
+            "Pending notification email deliveries.");
+        Meter.CreateObservableGauge(
+            "indiefi.notifications.email.due",
+            () => Interlocked.Read(ref _emailDueCount),
+            "{delivery}",
+            "Due notification email deliveries.");
+        Meter.CreateObservableGauge(
+            "indiefi.notifications.email.failed",
+            () => Interlocked.Read(ref _emailFailedCount),
+            "{delivery}",
+            "Unresolved failed notification email deliveries.");
+        Meter.CreateObservableGauge(
+            "indiefi.notifications.email.oldest_due_age",
+            () => Volatile.Read(ref _oldestEmailDueAgeSeconds),
+            "s",
+            "Age of the oldest due notification email delivery.");
+        Meter.CreateObservableGauge(
+            "indiefi.notifications.rabbitmq.ready",
+            () => Interlocked.Read(ref _rabbitMqReady),
+            "{state}",
+            "MassTransit RabbitMQ readiness (1 ready, 0 unhealthy, -1 unknown).");
+    }
 
     public static void RecordConsumer<T>(
         string outcome,
@@ -62,6 +114,26 @@ public static class NotificationTelemetry
     {
         RecordEmailOutcome("batch_fault", 1);
         EmailBatchDuration.Record(duration.TotalMilliseconds);
+    }
+
+    public static void UpdateOperationalSnapshot(
+        NotificationOperationalSnapshot snapshot)
+    {
+        Interlocked.Exchange(ref _outboxBacklogCount, snapshot.OutboxBacklogCount);
+        Volatile.Write(ref _oldestOutboxAgeSeconds, snapshot.OldestOutboxAgeSeconds);
+        Interlocked.Exchange(ref _emailPendingCount, snapshot.EmailPendingCount);
+        Interlocked.Exchange(ref _emailDueCount, snapshot.EmailDueCount);
+        Interlocked.Exchange(ref _emailFailedCount, snapshot.EmailFailedCount);
+        Volatile.Write(
+            ref _oldestEmailDueAgeSeconds,
+            snapshot.OldestEmailDueAgeSeconds);
+        Interlocked.Exchange(ref _rabbitMqReady, snapshot.RabbitMqReady ? 1 : 0);
+    }
+
+    public static void RecordOperationsObservationFailure()
+    {
+        Interlocked.Exchange(ref _rabbitMqReady, -1);
+        OperationsObservationFailures.Add(1);
     }
 
     private static void RecordEmailOutcome(string outcome, int count)
