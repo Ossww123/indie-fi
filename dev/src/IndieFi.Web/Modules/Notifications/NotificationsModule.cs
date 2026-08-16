@@ -128,4 +128,30 @@ public static class NotificationsModule
         });
         return services;
     }
+
+    public static IServiceCollection AddNotificationMaintenance(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<NotificationMaintenanceOptions>()
+            .Bind(configuration.GetSection(NotificationMaintenanceOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<
+            IValidateOptions<NotificationMaintenanceOptions>,
+            NotificationMaintenanceOptionsValidator>();
+        services.AddScoped<NotificationMaintenanceService>();
+        services.AddHostedService(provider =>
+        {
+            var options = provider
+                .GetRequiredService<IOptions<NotificationMaintenanceOptions>>()
+                .Value;
+            return new NotificationMaintenanceWorker(
+                provider.GetRequiredService<IServiceScopeFactory>(),
+                provider.GetRequiredService<ILogger<NotificationMaintenanceWorker>>(),
+                options.Enabled,
+                options.WorkerInterval,
+                options.BatchSize);
+        });
+        return services;
+    }
 }
