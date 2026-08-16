@@ -47,7 +47,11 @@ public static class MediaModule
         services.AddSingleton<S3MediaObjectStorage>();
         services.AddSingleton<IMediaObjectStorage>(provider =>
             provider.GetRequiredService<S3MediaObjectStorage>());
+        services.AddScoped<
+            IMediaProcessingPublisher,
+            MassTransitMediaProcessingPublisher>();
         services.AddScoped<MediaUploadUrlService>();
+        services.AddScoped<MediaUploadCompletionService>();
         services.AddHealthChecks()
             .AddCheck<MediaObjectStorageHealthCheck>("media-object-storage");
         return services;
