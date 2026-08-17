@@ -1,25 +1,36 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Media.Application;
+using IndieFi.Web.Modules.Media.Domain;
+using IndieFi.Web.Modules.Media.Infrastructure;
 using IndieFi.Web.Modules.Profiles.Application;
 using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages.Account;
 
 [Authorize]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ProfileModel : PageModel
 {
     private readonly ICurrentUser _currentUser;
     private readonly UserProfileManagementService _profileService;
+    private readonly IServiceProvider _services;
+    private readonly MediaObjectStorageOptions _storageOptions;
 
     public ProfileModel(
         ICurrentUser currentUser,
-        UserProfileManagementService profileService)
+        UserProfileManagementService profileService,
+        IServiceProvider services,
+        IOptions<MediaObjectStorageOptions> storageOptions)
     {
         _currentUser = currentUser;
         _profileService = profileService;
+        _services = services;
+        _storageOptions = storageOptions.Value;
     }
 
     [BindProperty]
@@ -35,6 +46,8 @@ public sealed class ProfileModel : PageModel
     public DateTimeOffset? NicknameChangeAvailableAt { get; private set; }
     public string FallbackDisplayIdentifier { get; private set; } = string.Empty;
     public long PublicProfileUserId { get; private set; }
+    public OwnerProfileMedia? Media { get; private set; }
+    public long MaximumProfileImageBytes => MediaPolicy.ProfileImageMaximumBytes;
 
     [TempData]
     public string? StatusMessage { get; set; }
@@ -57,6 +70,11 @@ public sealed class ProfileModel : PageModel
         Nickname = state.Nickname;
         Biography = state.Biography;
         ApplyDisplayState(userId, state);
+        if (!await LoadMediaAsync(userId))
+        {
+            return Challenge();
+        }
+
         return Page();
     }
 
@@ -110,6 +128,11 @@ public sealed class ProfileModel : PageModel
         }
 
         ApplyDisplayState(userId, state, result.NicknameChangeAvailableAt);
+        if (!await LoadMediaAsync(userId))
+        {
+            return Challenge();
+        }
+
         return Page();
     }
 
@@ -124,4 +147,37 @@ public sealed class ProfileModel : PageModel
         NicknameChangeAvailableAt = resultAvailableAt
             ?? state.NicknameChangeAvailableAt;
     }
+
+    private async Task<bool> LoadMediaAsync(long userId)
+    {
+        if (!_storageOptions.Enabled)
+        {
+            Media = null;
+            return true;
+        }
+
+        Media = await _services
+            .GetRequiredService<ProfileMediaQueryService>()
+            .GetOwnerAsync(userId, HttpContext.RequestAborted);
+        return Media is not null;
+    }
+
+    public static string MediaStatusText(MediaStatus status) => status switch
+    {
+        MediaStatus.UploadPending => "업로드 대기",
+        MediaStatus.ProcessingPending => "처리 대기",
+        MediaStatus.Processing => "처리 중",
+        MediaStatus.Ready => "공개 중",
+        MediaStatus.Failed => "처리 실패",
+        MediaStatus.Expired => "업로드 만료",
+        _ => "사용할 수 없음",
+    };
+
+    public static string FormatBytes(long bytes) =>
+        bytes >= 1024 * 1024
+            ? $"{bytes / (1024d * 1024d):0.#} MiB"
+            : $"{bytes / 1024d:0.#} KiB";
+
+    public static bool CanRemoveMedia(MediaStatus status) =>
+        MediaLifecyclePolicy.CanTransition(status, MediaStatus.DeletePending);
 }
