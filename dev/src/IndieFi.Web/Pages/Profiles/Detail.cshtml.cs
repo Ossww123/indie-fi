@@ -1,4 +1,5 @@
 using IndieFi.Web.Application.Abstractions;
+using IndieFi.Web.Modules.Feedback.Domain;
 using IndieFi.Web.Modules.Media.Application;
 using IndieFi.Web.Modules.Media.Infrastructure;
 using IndieFi.Web.Modules.Profiles.Application;
@@ -34,6 +35,16 @@ public sealed class DetailModel : PageModel
     public bool IsFollowing { get; private set; }
     public string? FollowMessage { get; private set; }
     public PublicProfileMediaImage? ProfileImage { get; private set; }
+    public string ReviewerGradeLabel => Profile.ReviewerGrade switch
+    {
+        ReviewerGrade.Unranked => "등급 산정 전",
+        ReviewerGrade.Bronze => "브론즈",
+        ReviewerGrade.Silver => "실버",
+        ReviewerGrade.Gold => "골드",
+        ReviewerGrade.Platinum => "플래티넘",
+        _ => throw new InvalidOperationException(
+            $"Unsupported reviewer grade: {Profile.ReviewerGrade}"),
+    };
 
     public async Task<IActionResult> OnGetAsync(long id, string? relationship)
     {

@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Feedback.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.Profiles.Application;
@@ -15,6 +16,7 @@ public sealed record PublicUserProfile(
     string DisplayName,
     string Biography,
     int CompletedReviewCount,
+    ReviewerGrade ReviewerGrade,
     IReadOnlyList<PublicProfileGame> Games);
 
 public sealed class PublicUserProfileQueryService
@@ -62,17 +64,29 @@ public sealed class PublicUserProfileQueryService
                 game.Description,
                 game.CreatedAt))
             .ToListAsync(cancellationToken);
-        var completedReviewCount = await _db.FeedbackSubmissions
+        var reputation = await _db.ReviewerReputations
             .AsNoTracking()
-            .CountAsync(
-                submission => submission.ReviewerId == userId,
-                cancellationToken);
+            .Where(item => item.ReviewerId == userId)
+            .Select(item => new PublicReviewerReputationSource(
+                item.CompletedReviewCount,
+                item.ExpiredAssignmentCount,
+                item.RatingCount,
+                item.RatingScoreSum))
+            .SingleOrDefaultAsync(cancellationToken);
+        var reviewerGrade = reputation is null
+            ? ReviewerGrade.Unranked
+            : ReviewerReputationPolicy.Calculate(
+                reputation.CompletedReviewCount,
+                reputation.ExpiredAssignmentCount,
+                reputation.RatingCount,
+                reputation.RatingScoreSum).Grade;
 
         return new PublicUserProfile(
             header.UserId,
             UserDisplayName.Resolve(header.UserId, header.Nickname),
             header.Biography,
-            completedReviewCount,
+            reputation?.CompletedReviewCount ?? 0,
+            reviewerGrade,
             games);
     }
 
@@ -80,4 +94,10 @@ public sealed class PublicUserProfileQueryService
         long UserId,
         string? Nickname,
         string Biography);
+
+    private sealed record PublicReviewerReputationSource(
+        int CompletedReviewCount,
+        int ExpiredAssignmentCount,
+        int RatingCount,
+        int RatingScoreSum);
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Feedback.Domain;
 using IndieFi.Web.Modules.Profiles.Domain;
 using Xunit;
 
@@ -43,6 +44,13 @@ public sealed class PublicProfilePageTests
             game.Title = "Public Profile Game";
             game.Description = "공개 게임 소개";
             gameId = game.Id;
+            db.ReviewerReputations.Add(new ReviewerReputation
+            {
+                ReviewerId = userId,
+                CompletedReviewCount = 5,
+                RatingCount = 3,
+                RatingScoreSum = 15,
+            });
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -60,7 +68,14 @@ public sealed class PublicProfilePageTests
         Assert.Contains("Public Gamer", html);
         Assert.Contains("게임을 만들고 리뷰합니다.", html);
         Assert.Contains("완료한 리뷰", html);
-        Assert.Contains("0개", html);
+        Assert.Contains("5개", html);
+        Assert.Contains("리뷰어 등급", html);
+        Assert.Contains("골드", html);
+        Assert.DoesNotContain("신뢰도 점수", html);
+        Assert.DoesNotContain("품질 점수", html);
+        Assert.DoesNotContain("완료 안정성 점수", html);
+        Assert.DoesNotContain("받은 평가 수", html);
+        Assert.DoesNotContain("만료한 작업 수", html);
         Assert.Contains("Public Profile Game", html);
         Assert.Contains("공개 게임 소개", html);
         Assert.Contains($"href=\"/Games/Detail/{gameId}\"", html);
@@ -109,6 +124,8 @@ public sealed class PublicProfilePageTests
         Assert.Contains("아직 등록한 게임이 없습니다.", html);
         Assert.Contains("완료한 리뷰", html);
         Assert.Contains("0개", html);
+        Assert.Contains("리뷰어 등급", html);
+        Assert.Contains("등급 산정 전", html);
     }
 
     [Fact]
