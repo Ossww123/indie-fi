@@ -46,8 +46,6 @@ public sealed class GameDiscoveryMigrationTests
               FROM games
              WHERE lower(title || ' ' || coalesce(description, ''))
                    LIKE '%galaxy%' ESCAPE '\'
-             ORDER BY created_at DESC, id DESC
-             LIMIT 25
             """,
             cancellationToken);
         var latestPlan = await ReadPlanAsync(
