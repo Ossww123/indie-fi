@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Feedback.Domain;
+using IndieFi.Web.Modules.Feedback.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -65,36 +67,147 @@ public sealed class ReviewerReputationService
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(reviewerId);
+        var startedAt = Stopwatch.GetTimestamp();
 
-        await _db.Database.ExecuteSqlRawAsync(
-            RefreshSql,
-            [new NpgsqlParameter("reviewerId", reviewerId)],
-            cancellationToken);
-        var snapshot = await GetAsync(reviewerId, cancellationToken);
+        try
+        {
+            var result = await RecalculateCoreAsync(reviewerId, cancellationToken);
+            var processedCount = result.Snapshot is null ? 0 : 1;
+            var repairedCount = result.Snapshot is not null && result.Repaired
+                ? 1
+                : 0;
+            FeedbackTelemetry.RecordReviewerRecalculation(
+                ReviewerRecalculationOperation.Single,
+                ReviewerRecalculationOutcome.Completed,
+                processedCount,
+                repairedCount,
+                Stopwatch.GetElapsedTime(startedAt));
 
-        _logger.LogInformation(
-            "ReviewerReputation recalculated reviewer={ReviewerId} revision={Revision}",
-            reviewerId,
-            snapshot?.Revision);
-        return snapshot;
+            _logger.LogInformation(
+                "ReviewerReputation recalculated outcome={Outcome} reviewer={ReviewerId} revision={Revision}",
+                result.Snapshot is null
+                    ? "missing"
+                    : result.Repaired
+                        ? "repaired"
+                        : "unchanged",
+                reviewerId,
+                result.Snapshot?.Revision);
+            return result.Snapshot;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            FeedbackTelemetry.RecordReviewerRecalculation(
+                ReviewerRecalculationOperation.Single,
+                ReviewerRecalculationOutcome.Cancelled,
+                processedCount: 0,
+                repairedCount: 0,
+                Stopwatch.GetElapsedTime(startedAt));
+            _logger.LogWarning(
+                "ReviewerReputation recalculation cancelled reviewer={ReviewerId}",
+                reviewerId);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            FeedbackTelemetry.RecordReviewerRecalculation(
+                ReviewerRecalculationOperation.Single,
+                ReviewerRecalculationOutcome.Failed,
+                processedCount: 0,
+                repairedCount: 0,
+                Stopwatch.GetElapsedTime(startedAt));
+            _logger.LogError(
+                exception,
+                "ReviewerReputation recalculation failed reviewer={ReviewerId}",
+                reviewerId);
+            throw;
+        }
     }
 
     public async Task<int> RecalculateAllAsync(
         CancellationToken cancellationToken = default)
     {
-        var reviewerIds = await _db.Database
-            .SqlQueryRaw<long>(CandidateReviewerSql)
-            .ToListAsync(cancellationToken);
+        var startedAt = Stopwatch.GetTimestamp();
+        var processedCount = 0;
+        var repairedCount = 0;
 
-        foreach (var reviewerId in reviewerIds)
+        try
         {
-            await RecalculateAsync(reviewerId, cancellationToken);
-        }
+            var reviewerIds = await _db.Database
+                .SqlQueryRaw<long>(CandidateReviewerSql)
+                .ToListAsync(cancellationToken);
 
-        _logger.LogInformation(
-            "ReviewerReputation full recalculation processed={ReviewerCount}",
-            reviewerIds.Count);
-        return reviewerIds.Count;
+            foreach (var reviewerId in reviewerIds)
+            {
+                var result = await RecalculateCoreAsync(
+                    reviewerId,
+                    cancellationToken);
+                if (result.Snapshot is not null)
+                {
+                    processedCount++;
+                    if (result.Repaired)
+                    {
+                        repairedCount++;
+                    }
+                }
+            }
+
+            FeedbackTelemetry.RecordReviewerRecalculation(
+                ReviewerRecalculationOperation.Full,
+                ReviewerRecalculationOutcome.Completed,
+                processedCount,
+                repairedCount,
+                Stopwatch.GetElapsedTime(startedAt));
+            _logger.LogInformation(
+                "ReviewerReputation full recalculation processed={ProcessedCount} repaired={RepairedCount}",
+                processedCount,
+                repairedCount);
+            return processedCount;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            FeedbackTelemetry.RecordReviewerRecalculation(
+                ReviewerRecalculationOperation.Full,
+                ReviewerRecalculationOutcome.Cancelled,
+                processedCount,
+                repairedCount,
+                Stopwatch.GetElapsedTime(startedAt));
+            _logger.LogWarning(
+                "ReviewerReputation full recalculation cancelled processed={ProcessedCount} repaired={RepairedCount}",
+                processedCount,
+                repairedCount);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            FeedbackTelemetry.RecordReviewerRecalculation(
+                ReviewerRecalculationOperation.Full,
+                ReviewerRecalculationOutcome.Failed,
+                processedCount,
+                repairedCount,
+                Stopwatch.GetElapsedTime(startedAt));
+            _logger.LogError(
+                exception,
+                "ReviewerReputation full recalculation failed processed={ProcessedCount} repaired={RepairedCount}",
+                processedCount,
+                repairedCount);
+            throw;
+        }
+    }
+
+    private async Task<RecalculationResult> RecalculateCoreAsync(
+        long reviewerId,
+        CancellationToken cancellationToken)
+    {
+        var before = await GetAsync(reviewerId, cancellationToken);
+        await _db.Database.ExecuteSqlRawAsync(
+            RefreshSql,
+            [new NpgsqlParameter("reviewerId", reviewerId)],
+            cancellationToken);
+        var after = await GetAsync(reviewerId, cancellationToken);
+        var repaired = before is null
+            ? after is not null
+            : after is null || before.Revision != after.Revision;
+        return new RecalculationResult(after, repaired);
     }
 
     private static ReviewerReputationSnapshot CreateSnapshot(
@@ -118,4 +231,8 @@ public sealed class ReviewerReputationService
             scores.TrustScore,
             scores.Grade);
     }
+
+    private sealed record RecalculationResult(
+        ReviewerReputationSnapshot? Snapshot,
+        bool Repaired);
 }
