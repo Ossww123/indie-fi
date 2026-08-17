@@ -4,6 +4,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
 using IndieFi.Web.Modules.Games.Application;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.Media.Application;
 using IndieFi.Web.Modules.Media.Infrastructure;
 using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Mvc;
@@ -80,6 +81,7 @@ public class DetailModel : PageModel
     public string OwnerDisplayName { get; private set; } = string.Empty;
     public bool IsOwner { get; private set; }
     public bool CanManageMedia => IsOwner && _mediaStorageOptions.Enabled;
+    public PublicGameMedia PublicMedia { get; private set; } = new(null, []);
     public bool CanManageFavorite { get; private set; }
     public bool IsFavorite { get; private set; }
     public string? FavoriteMessage { get; private set; }
@@ -118,6 +120,21 @@ public class DetailModel : PageModel
         // because feedback added later is left by other people. Ownership is only
         // enforced when editing a game.
         Game = game;
+        if (_mediaStorageOptions.Enabled)
+        {
+            var publicMedia = await HttpContext.RequestServices
+                .GetRequiredService<GameMediaQueryService>()
+                .GetPublicDetailAsync(
+                    game.Id,
+                    HttpContext.RequestAborted);
+            if (publicMedia is null)
+            {
+                return NotFound();
+            }
+
+            PublicMedia = publicMedia;
+        }
+
         var classifications = await _classificationCatalog.GetDetailAsync(
             game.Id,
             HttpContext.RequestAborted);

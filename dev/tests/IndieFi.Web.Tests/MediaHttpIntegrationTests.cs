@@ -429,6 +429,27 @@ public sealed class MediaHttpIntegrationTests
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
         Assert.Contains($"href=\"/Games/Media/{owner.GameId}\"", detailHtml);
+        Assert.Contains($"data-media-id=\"{media.CoverId}\"", detailHtml);
+        Assert.Contains(
+            $"data-media-id=\"{media.ReadyScreenshotId}\"",
+            detailHtml);
+        Assert.DoesNotContain(media.PendingId.ToString(), detailHtml);
+        Assert.DoesNotContain(media.FailedId.ToString(), detailHtml);
+        Assert.Contains("data-game-cover", detailHtml);
+        Assert.Contains("data-game-screenshot", detailHtml);
+        Assert.Contains("loading=\"lazy\"", detailHtml);
+
+        using var publicDetailResponse = await anonymousClient.GetAsync(
+            $"/Games/Detail/{owner.GameId}",
+            TestContext.Current.CancellationToken);
+        var publicDetailHtml = WebUtility.HtmlDecode(
+            await publicDetailResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, publicDetailResponse.StatusCode);
+        Assert.Contains($"data-media-id=\"{media.CoverId}\"", publicDetailHtml);
+        Assert.Contains(
+            $"data-media-id=\"{media.ReadyScreenshotId}\"",
+            publicDetailHtml);
     }
 
     [Fact]
