@@ -9,6 +9,7 @@ public static class GamesModule
     {
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddSingleton<PublicGameDiscoveryCursorCodec>();
+        services.AddScoped<PublicGameDiscoveryQueryService>();
         services.AddScoped<GameManagementService>();
         services.AddScoped<GamePlayLinkManagementService>();
         services.AddScoped<GameClassificationCatalogQueryService>();
