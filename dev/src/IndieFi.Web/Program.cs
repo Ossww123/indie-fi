@@ -11,6 +11,7 @@ using IndieFi.Web.Modules.Feedback;
 using IndieFi.Web.Modules.Games;
 using IndieFi.Web.Modules.KeyDistributions;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.Media;
 using IndieFi.Web.Modules.Notifications;
 using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Profiles;
@@ -114,6 +115,7 @@ builder.Services.AddFeedbackModule();
 builder.Services.AddIndieFiRealtime(builder.Configuration);
 builder.Services.AddKeyDistributionsModule(builder.Configuration);
 builder.Services.AddNotificationsModule(builder.Configuration);
+builder.Services.AddMediaModule(builder.Configuration, MediaHostRole.Web);
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);
@@ -210,6 +212,7 @@ app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+app.MapMediaEndpoints(builder.Configuration);
 app.MapHub<WaitingRoomHub>("/hubs/waiting-room")
    .RequireAuthorization();
 app.MapHub<NotificationHub>("/hubs/notifications")

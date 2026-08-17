@@ -235,7 +235,13 @@ public sealed class AccountMutationBlockingTests
             var games = new GameManagementService(
                 gameDb,
                 new TestSocialNotificationFanoutPublisher());
-            var create = await games.CreateAsync(userId, "Blocked game", null);
+            var create = await games.CreateAsync(
+                userId,
+                "Blocked game",
+                null,
+                new GameClassificationInput("action", [], ["windows"]),
+                [],
+                TestContext.Current.CancellationToken);
             var update = await games.UpdateAsync(
                 gameId,
                 userId,
@@ -453,6 +459,8 @@ public sealed class AccountMutationBlockingTests
         {
             ["Title"] = "Must not be created",
             ["Description"] = "The session became suspended before this POST.",
+            ["GenreCode"] = "action",
+            ["PlatformCodes"] = "windows",
             ["__RequestVerificationToken"] =
                 PageTestSupport.ExtractAntiforgeryToken(pageHtml),
         });

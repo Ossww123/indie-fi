@@ -2,8 +2,10 @@ using IndieFi.Web.Application.Validation;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Games.Domain;
 using IndieFi.Web.Modules.Notifications.Application;
 using IndieFi.Web.Modules.Notifications.Domain;
+using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.Games.Application;
 
@@ -44,6 +46,7 @@ public sealed class GameManagementService
 
     private readonly AppDbContext _db;
     private readonly GamePlayLinkManagementService _gamePlayLinkManagementService;
+    private readonly GameClassificationSelectionService _classificationSelectionService;
     private readonly ISocialNotificationFanoutPublisher _notificationFanout;
 
     public GameManagementService(
@@ -52,32 +55,49 @@ public sealed class GameManagementService
     {
         _db = db;
         _gamePlayLinkManagementService = new GamePlayLinkManagementService(db);
+        _classificationSelectionService = new GameClassificationSelectionService(db);
         _notificationFanout = notificationFanout;
     }
 
     public Task<CreateGameResult> CreateAsync(
         long ownerId,
         string? title,
-        string? description)
+        string? description,
+        GameClassificationInput classification,
+        IReadOnlyList<GamePlayLinkInput> links,
+        CancellationToken cancellationToken = default)
     {
-        return CreateAsync(ownerId, title, description, [], CancellationToken.None);
+        ArgumentNullException.ThrowIfNull(classification);
+        return CreateCoreAsync(
+            ownerId,
+            title,
+            description,
+            classification,
+            links,
+            cancellationToken);
     }
 
-    public async Task<CreateGameResult> CreateAsync(
+    private async Task<CreateGameResult> CreateCoreAsync(
         long ownerId,
         string? title,
         string? description,
+        GameClassificationInput classification,
         IReadOnlyList<GamePlayLinkInput> links,
         CancellationToken cancellationToken)
     {
         var violations = Validate(title, description);
         var linkValidation = GamePlayLinkManagementService.Validate(links);
         violations.AddRange(linkValidation.Violations);
+        var classificationValidation = await _classificationSelectionService
+            .ValidateForCreateAsync(classification, cancellationToken);
+        violations.AddRange(classificationValidation.Violations);
+
         if (violations.Count > 0)
         {
             return new CreateGameResult(CreateGameOutcome.Invalid, violations);
         }
 
+        var selection = classificationValidation.Selection!;
         await using var transaction =
             await AccountMutationGuard.BeginTransactionIfNeededAsync(_db, cancellationToken);
         if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId, cancellationToken))
@@ -91,12 +111,16 @@ public sealed class GameManagementService
         var game = new Game
         {
             OwnerId = ownerId,
+            GenreId = selection.GenreId,
             Title = title!.Trim(),
             Description = NormalizeDescription(description),
         };
 
         _db.Games.Add(game);
         await _db.SaveChangesAsync(cancellationToken);
+        AddClassificationAssignments(game.Id, selection);
+        await _db.SaveChangesAsync(cancellationToken);
+
         if (linkValidation.Links.Count > 0)
         {
             await _gamePlayLinkManagementService.ReplaceValidatedAsync(
@@ -147,6 +171,45 @@ public sealed class GameManagementService
         IReadOnlyList<GamePlayLinkInput>? links,
         CancellationToken cancellationToken)
     {
+        return await UpdateCoreAsync(
+            gameId,
+            ownerId,
+            title,
+            description,
+            classification: null,
+            links,
+            cancellationToken);
+    }
+
+    public Task<UpdateGameResult> UpdateAsync(
+        long gameId,
+        long ownerId,
+        string? title,
+        string? description,
+        GameClassificationInput classification,
+        IReadOnlyList<GamePlayLinkInput>? links,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(classification);
+        return UpdateCoreAsync(
+            gameId,
+            ownerId,
+            title,
+            description,
+            classification,
+            links,
+            cancellationToken);
+    }
+
+    private async Task<UpdateGameResult> UpdateCoreAsync(
+        long gameId,
+        long ownerId,
+        string? title,
+        string? description,
+        GameClassificationInput? classification,
+        IReadOnlyList<GamePlayLinkInput>? links,
+        CancellationToken cancellationToken)
+    {
         await using var transaction =
             await AccountMutationGuard.BeginTransactionIfNeededAsync(_db, cancellationToken);
         if (!await AccountMutationGuard.LockActiveAsync(_db, ownerId, cancellationToken))
@@ -176,6 +239,24 @@ public sealed class GameManagementService
             violations.AddRange(linkValidation.Violations);
         }
 
+        GameClassificationValidationResult? classificationValidation = null;
+        if (classification is not null)
+        {
+            var current = new CurrentGameClassification(
+                game.GenreId,
+                await _db.GameTagAssignments
+                    .Where(item => item.GameId == gameId)
+                    .Select(item => item.TagId)
+                    .ToListAsync(cancellationToken),
+                await _db.GamePlatformAssignments
+                    .Where(item => item.GameId == gameId)
+                    .Select(item => item.PlatformId)
+                    .ToListAsync(cancellationToken));
+            classificationValidation = await _classificationSelectionService
+                .ValidateForUpdateAsync(classification, current, cancellationToken);
+            violations.AddRange(classificationValidation.Violations);
+        }
+
         if (violations.Count > 0)
         {
             await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
@@ -184,11 +265,17 @@ public sealed class GameManagementService
 
         game.Title = title!.Trim();
         game.Description = NormalizeDescription(description);
-        if (linkValidation is null)
+        if (classificationValidation?.Selection is { } selection)
         {
-            await _db.SaveChangesAsync(cancellationToken);
+            game.GenreId = selection.GenreId;
+            await ReplaceClassificationAssignmentsAsync(
+                gameId,
+                selection,
+                cancellationToken);
         }
-        else
+
+        await _db.SaveChangesAsync(cancellationToken);
+        if (linkValidation is not null)
         {
             await _gamePlayLinkManagementService.ReplaceValidatedAsync(
                 gameId,
@@ -199,6 +286,38 @@ public sealed class GameManagementService
         await AccountMutationGuard.CommitIfOwnedAsync(transaction, cancellationToken);
 
         return new UpdateGameResult(UpdateGameOutcome.Updated, NoViolations);
+    }
+
+    private void AddClassificationAssignments(
+        long gameId,
+        ValidatedGameClassification selection)
+    {
+        _db.GameTagAssignments.AddRange(selection.TagIds.Select(tagId =>
+            new GameTagAssignment
+            {
+                GameId = gameId,
+                TagId = tagId,
+            }));
+        _db.GamePlatformAssignments.AddRange(selection.PlatformIds.Select(platformId =>
+            new GamePlatformAssignment
+            {
+                GameId = gameId,
+                PlatformId = platformId,
+            }));
+    }
+
+    private async Task ReplaceClassificationAssignmentsAsync(
+        long gameId,
+        ValidatedGameClassification selection,
+        CancellationToken cancellationToken)
+    {
+        await _db.GameTagAssignments
+            .Where(item => item.GameId == gameId)
+            .ExecuteDeleteAsync(cancellationToken);
+        await _db.GamePlatformAssignments
+            .Where(item => item.GameId == gameId)
+            .ExecuteDeleteAsync(cancellationToken);
+        AddClassificationAssignments(gameId, selection);
     }
 
     /// <summary>

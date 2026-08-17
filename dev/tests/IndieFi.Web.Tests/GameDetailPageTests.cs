@@ -1,6 +1,7 @@
 using System.Net;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
+using IndieFi.Web.Modules.Games.Domain;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -228,6 +229,40 @@ public sealed class GameDetailPageTests
     }
 
     [Fact]
+    public async Task Get_GameDetail_ShowsClassificationsInCatalogOrder()
+    {
+        long gameId;
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            var owner = await ReviewTestData.CreateUserWithCreditAsync(arrangeDb, balance: 0);
+            var game = await ReviewTestData.CreateGameAsync(arrangeDb, owner.Id);
+            game.GenreId = 12;
+            arrangeDb.GameTagAssignments.AddRange(
+                new GameTagAssignment { GameId = game.Id, TagId = 28 },
+                new GameTagAssignment { GameId = game.Id, TagId = 10 });
+            arrangeDb.GamePlatformAssignments.AddRange(
+                new GamePlatformAssignment { GameId = game.Id, PlatformId = 12 },
+                new GamePlatformAssignment { GameId = game.Id, PlatformId = 10 });
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            gameId = game.Id;
+        }
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync(
+            $"/Games/Detail/{gameId}",
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("게임 정보", html);
+        Assert.Contains("롤플레잉(RPG)", html);
+        AssertInOrder(html, "싱글플레이", "픽셀 아트");
+        AssertInOrder(html, "Windows", "Linux");
+    }
+
+    [Fact]
     public async Task Post_RequestFeedback_WithoutOperationId_IsRejected()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
@@ -287,5 +322,16 @@ public sealed class GameDetailPageTests
         }
 
         return count;
+    }
+
+    private static void AssertInOrder(string source, params string[] values)
+    {
+        var previousPosition = -1;
+        foreach (var value in values)
+        {
+            var position = source.IndexOf(value, StringComparison.Ordinal);
+            Assert.True(position > previousPosition, $"Expected '{value}' after the previous value.");
+            previousPosition = position;
+        }
     }
 }

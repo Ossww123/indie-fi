@@ -14,30 +14,163 @@
     <p class="mt-2 text-slate-500">인디 게임 피드백 플랫폼</p>
 </div>
 
+<section class="surface-card mb-8" aria-labelledby="discovery-filter-title">
+    <h2 id="discovery-filter-title" class="section-title">게임 찾기</h2>
+    <form method="get" data-discovery-filter class="space-y-5">
+        <div>
+            <label for="discovery-query" class="form-label">제목·소개 검색</label>
+            <input id="discovery-query"
+                   class="form-input"
+                   type="search"
+                   name="q"
+                   value="@Model.Query"
+                   minlength="2"
+                   maxlength="100"
+                   placeholder="두 글자 이상 입력" />
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-3">
+            <div>
+                <label for="discovery-genre" class="form-label">장르</label>
+                <select id="discovery-genre" class="form-input" name="genre">
+                    <option value="">전체 장르</option>
+                    @foreach (var genre in Model.Catalog.Genres)
+                    {
+                        <option value="@genre.Code" selected="@(Model.GenreCode == genre.Code)">@genre.DisplayName</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="discovery-created-from" class="form-label">등록 시작 시각</label>
+                <input id="discovery-created-from"
+                       class="form-input"
+                       type="text"
+                       name="createdFrom"
+                       value="@Model.CreatedFrom"
+                       placeholder="2026-08-01T00:00:00+09:00" />
+            </div>
+            <div>
+                <label for="discovery-created-before" class="form-label">등록 종료 시각</label>
+                <input id="discovery-created-before"
+                       class="form-input"
+                       type="text"
+                       name="createdBefore"
+                       value="@Model.CreatedBefore"
+                       placeholder="2026-09-01T00:00:00+09:00" />
+            </div>
+        </div>
+
+        <fieldset>
+            <legend class="form-label">태그 <span class="text-meta">선택한 항목을 모두 포함</span></legend>
+            <div class="flex flex-wrap gap-x-4 gap-y-2">
+                @foreach (var tag in Model.Catalog.Tags)
+                {
+                    <label class="inline-flex items-center gap-2 text-sm">
+                        <input type="checkbox"
+                               name="tags"
+                               value="@tag.Code"
+                               checked="@Model.TagCodes.Contains(tag.Code)" />
+                        <span>@tag.DisplayName</span>
+                    </label>
+                }
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend class="form-label">지원 플랫폼 <span class="text-meta">하나 이상 일치</span></legend>
+            <div class="flex flex-wrap gap-x-4 gap-y-2">
+                @foreach (var platform in Model.Catalog.Platforms)
+                {
+                    <label class="inline-flex items-center gap-2 text-sm">
+                        <input type="checkbox"
+                               name="platforms"
+                               value="@platform.Code"
+                               checked="@Model.PlatformCodes.Contains(platform.Code)" />
+                        <span>@platform.DisplayName</span>
+                    </label>
+                }
+            </div>
+        </fieldset>
+
+        <div class="flex flex-wrap gap-3">
+            <button type="submit" class="btn-primary">검색</button>
+            <a asp-page="/Index" class="btn-secondary">조건 초기화</a>
+        </div>
+    </form>
+</section>
+
+@if (Model.Violations.Count > 0)
+{
+    <div class="alert-danger mb-6" role="alert" data-discovery-validation>
+        <p class="font-semibold">검색 조건을 확인해 주세요.</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+            @foreach (var violation in Model.Violations)
+            {
+                <li>@violation.Message</li>
+            }
+        </ul>
+    </div>
+}
+
 <h2 class="section-title">게임 둘러보기</h2>
 @if (Model.Games.Count == 0)
 {
-    <div class="alert-neutral">아직 등록된 게임이 없습니다.</div>
+    <div class="alert-neutral">
+        @(Model.HasFilters ? "조건에 맞는 게임이 없습니다." : "아직 등록된 게임이 없습니다.")
+    </div>
 }
 else
 {
     <div class="surface-list">
         @foreach (var game in Model.Games)
         {
-            <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="surface-item surface-link">
-                <div class="flex items-center justify-between gap-4">
-                    <span class="font-semibold">@game.Title</span>
-                    <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+            <a asp-page="/Games/Detail"
+               asp-route-id="@game.Id"
+               class="surface-item surface-link"
+               data-discovery-result>
+                <div class="flex items-start gap-4">
+                    @if (Model.Covers.TryGetValue(game.Id, out var cover))
+                    {
+                        <img data-game-list-cover
+                             data-media-id="@cover.MediaId"
+                             src="@cover.Url"
+                             alt="@game.Title 대표 이미지"
+                             class="h-28 w-44 shrink-0 rounded-lg object-cover"
+                             width="176"
+                             height="112"
+                             loading="lazy"
+                             decoding="async"
+                             referrerpolicy="no-referrer" />
+                    }
+                    else
+                    {
+                        <div class="flex h-28 w-44 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-meta"
+                             data-game-list-cover-fallback
+                             aria-hidden="true">이미지 없음</div>
+                    }
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-4">
+                            <span class="font-semibold">@game.Title</span>
+                            <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                        </div>
+                        @if (game.Description is not null)
+                        {
+                            <div class="mt-2">@game.Description</div>
+                        }
+                        else
+                        {
+                            <div class="mt-2 text-slate-500">(소개 없음)</div>
+                        }
+                    </div>
                 </div>
-                @if (game.Description is not null)
-                {
-                    <div>@game.Description</div>
-                }
-                else
-                {
-                    <div class="text-slate-500">(소개 없음)</div>
-                }
             </a>
         }
+    </div>
+}
+
+@if (Model.NextPageUrl is not null)
+{
+    <div class="mt-6 flex justify-center">
+        <a data-discovery-next href="@Model.NextPageUrl" class="btn-secondary">다음 게임 보기</a>
     </div>
 }

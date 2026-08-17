@@ -1,0 +1,256 @@
+@page "{id:long}"
+@model MediaModel
+@using IndieFi.Web.Modules.Media.Domain
+@{
+    ViewData["Title"] = $"{Model.Media.GameTitle} 미디어 관리";
+    var hasCurrentCover = Model.Media.Covers.Any(item => item.IsCurrent);
+}
+
+<section data-game-media
+         data-game-id="@Model.Media.GameId"
+         data-max-screenshots="@Model.MaximumScreenshotCount"
+         data-max-file-bytes="@Model.MaximumFileBytes"
+         data-media-api-base="/api/media">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h1 class="page-title">@Model.Media.GameTitle 미디어 관리</h1>
+            <p class="mt-2 text-meta">대표 이미지와 공개 스크린샷을 관리합니다.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a asp-page="/Games/Edit"
+               asp-route-id="@Model.Media.GameId"
+               class="button-outline">게임 정보 수정</a>
+            <a asp-page="/Games/Detail"
+               asp-route-id="@Model.Media.GameId"
+               class="button-link">게임으로 돌아가기</a>
+        </div>
+    </div>
+
+    <div class="alert-neutral mb-6">
+        JPEG·PNG·WebP 이미지를 파일당 최대 10 MiB까지 올릴 수 있습니다.
+        대표 이미지는 1개, 스크린샷은 최대 @Model.MaximumScreenshotCount 개까지 공개됩니다.
+    </div>
+
+    <div class="alert-neutral mb-6 hidden"
+         data-media-notice
+         role="status"
+         aria-live="polite"></div>
+
+    <section aria-labelledby="game-cover-heading" class="mb-8">
+        <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h2 id="game-cover-heading" class="subsection-title">대표 이미지</h2>
+                <p class="mt-1 text-meta">새 이미지가 준비되면 현재 대표 이미지를 교체합니다.</p>
+            </div>
+            <form data-media-upload-form
+                  data-attachment-kind="GameCover"
+                  data-media-upload-mode="@(hasCurrentCover ? "replace" : "create")"
+                  class="flex flex-wrap items-end gap-2">
+                <div class="field-group">
+                    <label for="game-cover-file" class="field-label">대표 이미지 파일</label>
+                    <input id="game-cover-file"
+                           data-media-file
+                           class="field-input"
+                           type="file"
+                           accept="image/jpeg,image/png,image/webp" />
+                </div>
+                <button type="button"
+                        data-media-upload-submit
+                        class="button-primary"
+                        disabled>@(hasCurrentCover ? "교체 업로드" : "업로드")</button>
+                <button type="button"
+                        data-media-upload-cancel
+                        class="button-outline hidden"
+                        disabled>취소</button>
+            </form>
+        </div>
+
+        <div class="surface-list" data-media-list="GameCover">
+            @if (Model.Media.Covers.Count == 0)
+            {
+                <div class="surface-item text-meta" data-media-empty>
+                    등록된 대표 이미지가 없습니다.
+                </div>
+            }
+            else
+            {
+                @foreach (var item in Model.Media.Covers)
+                {
+                    <article class="surface-item"
+                             data-media-item
+                             data-media-id="@item.MediaId"
+                             data-media-status="@item.Status"
+                             data-attachment-kind="@item.AttachmentKind">
+                        <div class="flex flex-wrap items-center gap-4">
+                            @if (item.PreviewUrl is not null)
+                            {
+                                <img data-media-preview
+                                     src="@item.PreviewUrl"
+                                     alt="@Model.Media.GameTitle 대표 이미지 미리보기"
+                                     class="h-28 w-44 rounded-lg object-cover"
+                                     width="176"
+                                     height="112" />
+                            }
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-semibold" data-media-status-text>
+                                        @MediaModel.StatusText(item.Status)
+                                    </span>
+                                    @if (item.IsCurrent)
+                                    {
+                                        <span class="badge-success">현재 공개</span>
+                                    }
+                                </div>
+                                <p class="mt-1 text-meta">
+                                    @MediaModel.FormatBytes(item.DeclaredBytes)
+                                    · 갱신 @item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                </p>
+                                @if (item.FailureCode is not null)
+                                {
+                                    <p class="mt-2 field-error" data-media-failure>
+                                        오류 코드: @item.FailureCode
+                                    </p>
+                                }
+                                @if (MediaModel.CanRemove(item.Status))
+                                {
+                                    <div class="mt-3" data-media-actions>
+                                        <button type="button"
+                                                data-media-action="remove"
+                                                class="button-danger px-3 py-1.5"
+                                                aria-label="대표 이미지 제거"
+                                                disabled>제거</button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </article>
+                }
+            }
+        </div>
+    </section>
+
+    <section aria-labelledby="game-screenshot-heading">
+        <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h2 id="game-screenshot-heading" class="subsection-title">스크린샷</h2>
+                <p class="mt-1 text-meta">
+                    공개 중 @Model.Media.Screenshots.Count(item => item.IsCurrent) / @Model.MaximumScreenshotCount
+                </p>
+            </div>
+            <form data-media-upload-form
+                  data-attachment-kind="GameScreenshot"
+                  class="flex flex-wrap items-end gap-2">
+                <div class="field-group">
+                    <label for="game-screenshot-file" class="field-label">스크린샷 파일</label>
+                    <input id="game-screenshot-file"
+                           data-media-file
+                           class="field-input"
+                           type="file"
+                           accept="image/jpeg,image/png,image/webp" />
+                </div>
+                <button type="button"
+                        data-media-upload-submit
+                        class="button-primary"
+                        disabled>업로드</button>
+                <button type="button"
+                        data-media-upload-cancel
+                        class="button-outline hidden"
+                        disabled>취소</button>
+            </form>
+        </div>
+
+        <div class="surface-list" data-media-list="GameScreenshot">
+            @if (Model.Media.Screenshots.Count == 0)
+            {
+                <div class="surface-item text-meta" data-media-empty>
+                    등록된 스크린샷이 없습니다.
+                </div>
+            }
+            else
+            {
+                @foreach (var item in Model.Media.Screenshots)
+                {
+                    <article class="surface-item"
+                             data-media-item
+                             data-media-id="@item.MediaId"
+                             data-media-status="@item.Status"
+                             data-media-sort-order="@(item.SortOrder?.ToString() ?? string.Empty)"
+                             data-attachment-kind="@item.AttachmentKind">
+                        <div class="flex flex-wrap items-center gap-4">
+                            @if (item.PreviewUrl is not null)
+                            {
+                                <img data-media-preview
+                                     src="@item.PreviewUrl"
+                                     alt="@Model.Media.GameTitle 스크린샷 미리보기"
+                                     class="h-28 w-44 rounded-lg object-cover"
+                                     width="176"
+                                     height="112"
+                                     loading="lazy" />
+                            }
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-semibold" data-media-status-text>
+                                        @MediaModel.StatusText(item.Status)
+                                    </span>
+                                    @if (item.SortOrder is int sortOrder)
+                                    {
+                                        <span class="badge-neutral" data-media-sort-badge>
+                                            순서 @(sortOrder + 1)
+                                        </span>
+                                    }
+                                </div>
+                                <p class="mt-1 text-meta">
+                                    @MediaModel.FormatBytes(item.DeclaredBytes)
+                                    · 처리 시도 @item.ProcessingAttemptCount 회
+                                    · 갱신 @item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                </p>
+                                @if (item.FailureCode is not null)
+                                {
+                                    <p class="mt-2 field-error" data-media-failure>
+                                        오류 코드: @item.FailureCode
+                                    </p>
+                                }
+                                @if (item.Status == MediaStatus.Ready && item.IsCurrent)
+                                {
+                                    <div class="mt-3 flex flex-wrap gap-2" data-media-actions>
+                                        <button type="button"
+                                                data-media-action="up"
+                                                class="button-outline px-3 py-1.5"
+                                                aria-label="스크린샷 위로 이동"
+                                                disabled>위로</button>
+                                        <button type="button"
+                                                data-media-action="down"
+                                                class="button-outline px-3 py-1.5"
+                                                aria-label="스크린샷 아래로 이동"
+                                                disabled>아래로</button>
+                                        <button type="button"
+                                                data-media-action="remove"
+                                                class="button-danger px-3 py-1.5"
+                                                aria-label="스크린샷 제거"
+                                                disabled>제거</button>
+                                    </div>
+                                }
+                                else if (MediaModel.CanRemove(item.Status))
+                                {
+                                    <div class="mt-3" data-media-actions>
+                                        <button type="button"
+                                                data-media-action="remove"
+                                                class="button-danger px-3 py-1.5"
+                                                aria-label="스크린샷 제거"
+                                                disabled>제거</button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </article>
+                }
+            }
+        </div>
+    </section>
+</section>
+
+@section Scripts {
+    <script type="module"
+            src="~/js/dist/games/media.js"
+            asp-append-version="true"></script>
+}

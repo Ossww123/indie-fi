@@ -2,6 +2,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
 using IndieFi.Web.Modules.Games.Domain;
+using IndieFi.Web.Modules.Media.Domain;
 using IndieFi.Web.Modules.Notifications.Domain;
 using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
@@ -48,6 +49,15 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GamePlayLink> GamePlayLinks => Set<GamePlayLink>();
+    public DbSet<GameGenre> GameGenres => Set<GameGenre>();
+    public DbSet<GameTag> GameTags => Set<GameTag>();
+    public DbSet<GamePlatform> GamePlatforms => Set<GamePlatform>();
+    public DbSet<GameTagAssignment> GameTagAssignments => Set<GameTagAssignment>();
+    public DbSet<GamePlatformAssignment> GamePlatformAssignments =>
+        Set<GamePlatformAssignment>();
+
+    public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
+    public DbSet<MediaUploadAttempt> MediaUploadAttempts => Set<MediaUploadAttempt>();
 
     public DbSet<KeyDrop> KeyDrops => Set<KeyDrop>();
 
@@ -449,6 +459,11 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
                 .HasColumnName("owner_id")
                 .IsRequired();
 
+            game.Property(g => g.GenreId)
+                .HasColumnName("genre_id")
+                .HasDefaultValue(GameClassificationCatalog.UnspecifiedGenreId)
+                .IsRequired();
+
             game.Property(g => g.Title)
                 .HasColumnName("title")
                 .HasMaxLength(200)
@@ -467,6 +482,436 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
             game.HasOne<User>()
                 .WithMany()
                 .HasForeignKey(g => g.OwnerId);
+
+            game.HasOne<GameGenre>()
+                .WithMany()
+                .HasForeignKey(g => g.GenreId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Media ownership uses this pair so a game identifier cannot be
+            // combined with a different user identifier in a media row.
+            game.HasAlternateKey(g => new { g.Id, g.OwnerId });
+        });
+
+        modelBuilder.Entity<MediaAsset>(media =>
+        {
+            media.ToTable("media_assets", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_media_assets_id",
+                    "id <> '00000000-0000-0000-0000-000000000000'::uuid");
+                table.HasCheckConstraint(
+                    "CK_media_assets_status",
+                    "status IN ('UploadPending', 'ProcessingPending', 'Processing', " +
+                    "'Ready', 'Failed', 'Expired', 'DeletePending', 'Deleted')");
+                table.HasCheckConstraint(
+                    "CK_media_assets_target_shape",
+                    "(attachment_kind IN ('GameCover', 'GameScreenshot') AND " +
+                    "game_id IS NOT NULL AND profile_user_id IS NULL) OR " +
+                    "(attachment_kind = 'ProfileImage' AND game_id IS NULL AND " +
+                    "profile_user_id IS NOT NULL AND profile_user_id = owner_user_id)");
+                table.HasCheckConstraint(
+                    "CK_media_assets_declared_upload",
+                    "declared_content_type IN ('image/jpeg', 'image/png', 'image/webp') AND " +
+                    "declared_bytes > 0 AND " +
+                    $"((attachment_kind IN ('GameCover', 'GameScreenshot') AND declared_bytes <= {MediaPolicy.GameImageMaximumBytes}) OR " +
+                    $"(attachment_kind = 'ProfileImage' AND declared_bytes <= {MediaPolicy.ProfileImageMaximumBytes}))");
+                table.HasCheckConstraint(
+                    "CK_media_assets_revision",
+                    "revision > 0");
+                table.HasCheckConstraint(
+                    "CK_media_assets_source_metadata",
+                    "(source_content_type IS NULL AND source_bytes IS NULL AND source_etag IS NULL) OR " +
+                    "(source_content_type IS NOT NULL AND source_bytes IS NOT NULL AND source_etag IS NOT NULL AND " +
+                    "source_content_type = declared_content_type AND source_bytes = declared_bytes AND " +
+                    "char_length(source_etag) BETWEEN 3 AND 130 AND " +
+                    "left(source_etag, 1) = chr(34) AND right(source_etag, 1) = chr(34))");
+                table.HasCheckConstraint(
+                    "CK_media_assets_source_state",
+                    "(status IN ('UploadPending', 'Expired') AND source_content_type IS NULL) OR " +
+                    "(status IN ('ProcessingPending', 'Processing', 'Ready') AND source_content_type IS NOT NULL) OR " +
+                    "status IN ('Failed', 'DeletePending', 'Deleted')");
+                table.HasCheckConstraint(
+                    "CK_media_assets_detected_image",
+                    "(detected_content_type IS NULL AND pixel_width IS NULL AND " +
+                    "pixel_height IS NULL AND frame_count IS NULL) OR " +
+                    "(detected_content_type IS NOT NULL AND pixel_width IS NOT NULL AND " +
+                    "pixel_height IS NOT NULL AND frame_count IS NOT NULL AND " +
+                    "detected_content_type IN ('image/jpeg', 'image/png', 'image/webp') AND " +
+                    "frame_count = 1 AND pixel_width > 0 AND pixel_height > 0 AND " +
+                    $"((attachment_kind IN ('GameCover', 'GameScreenshot') AND pixel_width <= 12000 AND pixel_height <= 12000 AND pixel_width::bigint * pixel_height <= 40000000) OR " +
+                    "(attachment_kind = 'ProfileImage' AND pixel_width <= 8192 AND pixel_height <= 8192 AND pixel_width::bigint * pixel_height <= 16000000)))");
+                table.HasCheckConstraint(
+                    "CK_media_assets_processing",
+                    $"processing_attempt_count BETWEEN 0 AND {MediaLifecyclePolicy.MaximumProcessingAttempts} AND " +
+                    "((processing_lease_id IS NULL AND processing_lease_expires_at IS NULL) OR " +
+                    "(status = 'Processing' AND processing_lease_id <> '00000000-0000-0000-0000-000000000000'::uuid AND processing_lease_expires_at IS NOT NULL)) AND " +
+                    "(status <> 'Processing' OR (processing_attempt_count > 0 AND processing_lease_id IS NOT NULL)) AND " +
+                    "(next_processing_attempt_at IS NULL OR status = 'ProcessingPending') AND " +
+                    "(status <> 'UploadPending' OR processing_attempt_count = 0)");
+                table.HasCheckConstraint(
+                    "CK_media_assets_failure",
+                    "(status = 'Failed' AND failure_code IS NOT NULL AND " +
+                    "failure_code ~ '^[a-z0-9][a-z0-9_.-]{0,63}$') OR " +
+                    "(status <> 'Failed' AND failure_code IS NULL)");
+                table.HasCheckConstraint(
+                    "CK_media_assets_publication",
+                    "is_current = (status = 'Ready') AND " +
+                    "((is_current = FALSE AND sort_order IS NULL AND published_at IS NULL) OR " +
+                    "(is_current = TRUE AND published_at IS NOT NULL AND " +
+                    "((attachment_kind = 'GameScreenshot' AND sort_order BETWEEN 0 AND 7) OR " +
+                    "(attachment_kind IN ('GameCover', 'ProfileImage') AND sort_order IS NULL)))) AND " +
+                    "(status <> 'Ready' OR detected_content_type IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "CK_media_assets_timestamps",
+                    "updated_at >= created_at AND status_changed_at >= created_at AND " +
+                    "status_changed_at <= updated_at AND upload_expires_at = created_at + interval '24 hours' AND " +
+                    "(published_at IS NULL OR published_at >= created_at) AND " +
+                    "(source_deleted_at IS NULL OR source_deleted_at >= created_at) AND " +
+                    "(deletion_completed_at IS NULL OR deletion_completed_at >= created_at)");
+                table.HasCheckConstraint(
+                    "CK_media_assets_tombstone",
+                    "(deletion_completed_at IS NULL AND tombstone_expires_at IS NULL) OR " +
+                    "(status IN ('Failed', 'Expired', 'Deleted') AND deletion_completed_at IS NOT NULL AND " +
+                    "tombstone_expires_at >= deletion_completed_at + interval '30 days')");
+            });
+
+            media.HasKey(item => item.Id);
+            media.Property(item => item.Id).HasColumnName("id");
+            media.Property(item => item.OwnerUserId).HasColumnName("owner_user_id");
+            media.Property(item => item.GameId).HasColumnName("game_id");
+            media.Property(item => item.ProfileUserId).HasColumnName("profile_user_id");
+            media.Property(item => item.AttachmentKind)
+                .HasColumnName("attachment_kind")
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            media.Property(item => item.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .HasMaxLength(32);
+            media.Property(item => item.DeclaredContentType)
+                .HasColumnName("declared_content_type")
+                .HasMaxLength(32);
+            media.Property(item => item.DeclaredBytes).HasColumnName("declared_bytes");
+            media.Property(item => item.Revision)
+                .HasColumnName("revision")
+                .HasDefaultValue(1);
+            media.Property(item => item.SourceContentType)
+                .HasColumnName("source_content_type")
+                .HasMaxLength(32);
+            media.Property(item => item.SourceBytes).HasColumnName("source_bytes");
+            media.Property(item => item.SourceETag)
+                .HasColumnName("source_etag")
+                .HasMaxLength(130);
+            media.Property(item => item.DetectedContentType)
+                .HasColumnName("detected_content_type")
+                .HasMaxLength(32);
+            media.Property(item => item.PixelWidth).HasColumnName("pixel_width");
+            media.Property(item => item.PixelHeight).HasColumnName("pixel_height");
+            media.Property(item => item.FrameCount).HasColumnName("frame_count");
+            media.Property(item => item.ProcessingAttemptCount)
+                .HasColumnName("processing_attempt_count");
+            media.Property(item => item.ProcessingLeaseId)
+                .HasColumnName("processing_lease_id");
+            media.Property(item => item.ProcessingLeaseExpiresAt)
+                .HasColumnName("processing_lease_expires_at");
+            media.Property(item => item.NextProcessingAttemptAt)
+                .HasColumnName("next_processing_attempt_at");
+            media.Property(item => item.FailureCode)
+                .HasColumnName("failure_code")
+                .HasMaxLength(64);
+            media.Property(item => item.IsCurrent)
+                .HasColumnName("is_current")
+                .HasDefaultValue(false);
+            media.Property(item => item.SortOrder).HasColumnName("sort_order");
+            media.Property(item => item.PublishedAt).HasColumnName("published_at");
+            media.Property(item => item.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            media.Property(item => item.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasDefaultValueSql("now()");
+            media.Property(item => item.StatusChangedAt)
+                .HasColumnName("status_changed_at")
+                .HasDefaultValueSql("now()");
+            media.Property(item => item.UploadExpiresAt)
+                .HasColumnName("upload_expires_at")
+                .HasDefaultValueSql("now() + interval '24 hours'")
+                .ValueGeneratedOnAdd();
+            media.Property(item => item.SourceDeletedAt).HasColumnName("source_deleted_at");
+            media.Property(item => item.DeletionCompletedAt)
+                .HasColumnName("deletion_completed_at");
+            media.Property(item => item.TombstoneExpiresAt)
+                .HasColumnName("tombstone_expires_at");
+
+            media.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(item => item.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            media.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => new { item.GameId, item.OwnerUserId })
+                .HasPrincipalKey(game => new { game.Id, game.OwnerId })
+                .OnDelete(DeleteBehavior.Restrict);
+            media.HasOne<UserProfile>()
+                .WithMany()
+                .HasForeignKey(item => item.ProfileUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            media.HasIndex(item => new { item.OwnerUserId, item.Status });
+            media.HasIndex(item => new { item.Status, item.UploadExpiresAt });
+            media.HasIndex(item => new { item.Status, item.NextProcessingAttemptAt });
+            media.HasIndex(item => new { item.Status, item.TombstoneExpiresAt });
+            media.HasIndex(item => new { item.GameId, item.AttachmentKind, item.Status });
+            media.HasIndex(item => new { item.ProfileUserId, item.Status });
+            media.HasIndex(item => new
+                {
+                    item.GameId,
+                    item.AttachmentKind,
+                    item.IsCurrent,
+                })
+                .IsUnique()
+                .HasFilter("is_current = TRUE AND attachment_kind = 'GameCover'")
+                .HasDatabaseName("IX_media_assets_current_game_cover");
+            media.HasIndex(item => new { item.ProfileUserId, item.IsCurrent })
+                .IsUnique()
+                .HasFilter("is_current = TRUE AND attachment_kind = 'ProfileImage'")
+                .HasDatabaseName("IX_media_assets_current_profile_image");
+            media.HasIndex(item => new { item.GameId, item.SortOrder })
+                .IsUnique()
+                .HasFilter("is_current = TRUE AND attachment_kind = 'GameScreenshot'")
+                .HasDatabaseName("IX_media_assets_current_game_screenshot_order");
+            media.HasIndex(item => new { item.GameId, item.AttachmentKind })
+                .IsUnique()
+                .HasFilter(
+                    "attachment_kind = 'GameCover' AND " +
+                    "status IN ('UploadPending', 'ProcessingPending', 'Processing')")
+                .HasDatabaseName("IX_media_assets_active_game_cover_candidate");
+            media.HasIndex(item => new { item.ProfileUserId, item.AttachmentKind })
+                .IsUnique()
+                .HasFilter(
+                    "attachment_kind = 'ProfileImage' AND " +
+                    "status IN ('UploadPending', 'ProcessingPending', 'Processing')")
+                .HasDatabaseName("IX_media_assets_active_profile_image_candidate");
+        });
+
+        modelBuilder.Entity<MediaUploadAttempt>(attempt =>
+        {
+            attempt.ToTable("media_upload_attempts", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_media_upload_attempts_id",
+                    "id <> '00000000-0000-0000-0000-000000000000'::uuid");
+                table.HasCheckConstraint(
+                    "CK_media_upload_attempts_lifetime",
+                    "url_expires_at > issued_at AND " +
+                    "url_expires_at <= issued_at + interval '15 minutes'");
+                table.HasCheckConstraint(
+                    "CK_media_upload_attempts_outcome",
+                    "(superseded_at IS NULL OR superseded_at >= issued_at) AND " +
+                    "(completed_at IS NULL OR completed_at >= issued_at) AND " +
+                    "NOT (superseded_at IS NOT NULL AND completed_at IS NOT NULL)");
+            });
+
+            attempt.HasKey(item => item.Id);
+            attempt.Property(item => item.Id).HasColumnName("id");
+            attempt.Property(item => item.MediaId).HasColumnName("media_id");
+            attempt.Property(item => item.IssuedAt)
+                .HasColumnName("issued_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+            attempt.Property(item => item.UrlExpiresAt)
+                .HasColumnName("url_expires_at")
+                .HasDefaultValueSql("now() + interval '15 minutes'")
+                .ValueGeneratedOnAdd();
+            attempt.Property(item => item.SupersededAt).HasColumnName("superseded_at");
+            attempt.Property(item => item.CompletedAt).HasColumnName("completed_at");
+
+            attempt.HasOne(item => item.Media)
+                .WithMany(item => item.UploadAttempts)
+                .HasForeignKey(item => item.MediaId)
+                .OnDelete(DeleteBehavior.Cascade);
+            attempt.HasIndex(item => item.MediaId)
+                .IsUnique()
+                .HasFilter("superseded_at IS NULL")
+                .HasDatabaseName("IX_media_upload_attempts_current");
+            attempt.HasIndex(item => item.UrlExpiresAt)
+                .HasFilter("superseded_at IS NULL AND completed_at IS NULL")
+                .HasDatabaseName("IX_media_upload_attempts_pending_expiry");
+        });
+
+        modelBuilder.Entity<GameGenre>(genre =>
+        {
+            genre.ToTable("game_genres", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_genres_code_format",
+                    "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+                table.HasCheckConstraint(
+                    "CK_game_genres_display_name_format",
+                    "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+                table.HasCheckConstraint(
+                    "CK_game_genres_sort_order_range",
+                    $"sort_order >= 0 AND sort_order <= {GameClassificationPolicy.MaxSortOrder}");
+            });
+            genre.HasKey(item => item.Id);
+            genre.Property(item => item.Id)
+                .HasColumnName("id")
+                .ValueGeneratedNever();
+            genre.Property(item => item.Code)
+                .HasColumnName("code")
+                .HasMaxLength(GameClassificationPolicy.CodeMaxLength)
+                .IsRequired();
+            genre.Property(item => item.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(GameClassificationPolicy.DisplayNameMaxLength)
+                .IsRequired();
+            genre.Property(item => item.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired();
+            genre.Property(item => item.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired();
+            genre.HasIndex(item => item.Code).IsUnique();
+            genre.HasIndex(item => item.DisplayName).IsUnique();
+            genre.HasIndex(item => new { item.SortOrder, item.Code })
+                .HasDatabaseName("IX_game_genres_active_sort")
+                .HasFilter("is_active = TRUE");
+            genre.HasData(GameClassificationCatalog.Genres.Select(item => new GameGenre
+            {
+                Id = item.Id,
+                Code = item.Code,
+                DisplayName = item.DisplayName,
+                SortOrder = item.SortOrder,
+                IsActive = item.IsActive,
+            }));
+        });
+
+        modelBuilder.Entity<GameTag>(tag =>
+        {
+            tag.ToTable("game_tags", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_tags_code_format",
+                    "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+                table.HasCheckConstraint(
+                    "CK_game_tags_display_name_format",
+                    "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+                table.HasCheckConstraint(
+                    "CK_game_tags_sort_order_range",
+                    $"sort_order >= 0 AND sort_order <= {GameClassificationPolicy.MaxSortOrder}");
+            });
+            tag.HasKey(item => item.Id);
+            tag.Property(item => item.Id)
+                .HasColumnName("id")
+                .ValueGeneratedNever();
+            tag.Property(item => item.Code)
+                .HasColumnName("code")
+                .HasMaxLength(GameClassificationPolicy.CodeMaxLength)
+                .IsRequired();
+            tag.Property(item => item.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(GameClassificationPolicy.DisplayNameMaxLength)
+                .IsRequired();
+            tag.Property(item => item.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired();
+            tag.Property(item => item.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired();
+            tag.HasIndex(item => item.Code).IsUnique();
+            tag.HasIndex(item => item.DisplayName).IsUnique();
+            tag.HasIndex(item => new { item.SortOrder, item.Code })
+                .HasDatabaseName("IX_game_tags_active_sort")
+                .HasFilter("is_active = TRUE");
+            tag.HasData(GameClassificationCatalog.Tags.Select(item => new GameTag
+            {
+                Id = item.Id,
+                Code = item.Code,
+                DisplayName = item.DisplayName,
+                SortOrder = item.SortOrder,
+                IsActive = item.IsActive,
+            }));
+        });
+
+        modelBuilder.Entity<GamePlatform>(platform =>
+        {
+            platform.ToTable("game_platforms", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_game_platforms_code_format",
+                    "code ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+                table.HasCheckConstraint(
+                    "CK_game_platforms_display_name_format",
+                    "length(btrim(display_name)) > 0 AND display_name = btrim(display_name)");
+                table.HasCheckConstraint(
+                    "CK_game_platforms_sort_order_range",
+                    $"sort_order >= 0 AND sort_order <= {GameClassificationPolicy.MaxSortOrder}");
+            });
+            platform.HasKey(item => item.Id);
+            platform.Property(item => item.Id)
+                .HasColumnName("id")
+                .ValueGeneratedNever();
+            platform.Property(item => item.Code)
+                .HasColumnName("code")
+                .HasMaxLength(GameClassificationPolicy.CodeMaxLength)
+                .IsRequired();
+            platform.Property(item => item.DisplayName)
+                .HasColumnName("display_name")
+                .HasMaxLength(GameClassificationPolicy.DisplayNameMaxLength)
+                .IsRequired();
+            platform.Property(item => item.SortOrder)
+                .HasColumnName("sort_order")
+                .IsRequired();
+            platform.Property(item => item.IsActive)
+                .HasColumnName("is_active")
+                .IsRequired();
+            platform.HasIndex(item => item.Code).IsUnique();
+            platform.HasIndex(item => item.DisplayName).IsUnique();
+            platform.HasIndex(item => new { item.SortOrder, item.Code })
+                .HasDatabaseName("IX_game_platforms_active_sort")
+                .HasFilter("is_active = TRUE");
+            platform.HasData(GameClassificationCatalog.Platforms.Select(item => new GamePlatform
+            {
+                Id = item.Id,
+                Code = item.Code,
+                DisplayName = item.DisplayName,
+                SortOrder = item.SortOrder,
+                IsActive = item.IsActive,
+            }));
+        });
+
+        modelBuilder.Entity<GameTagAssignment>(assignment =>
+        {
+            assignment.ToTable("game_tag_assignments");
+            assignment.HasKey(item => new { item.GameId, item.TagId });
+            assignment.Property(item => item.GameId).HasColumnName("game_id");
+            assignment.Property(item => item.TagId).HasColumnName("tag_id");
+            assignment.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => item.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+            assignment.HasOne<GameTag>()
+                .WithMany()
+                .HasForeignKey(item => item.TagId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<GamePlatformAssignment>(assignment =>
+        {
+            assignment.ToTable("game_platform_assignments");
+            assignment.HasKey(item => new { item.GameId, item.PlatformId });
+            assignment.Property(item => item.GameId).HasColumnName("game_id");
+            assignment.Property(item => item.PlatformId).HasColumnName("platform_id");
+            assignment.HasOne<Game>()
+                .WithMany()
+                .HasForeignKey(item => item.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+            assignment.HasOne<GamePlatform>()
+                .WithMany()
+                .HasForeignKey(item => item.PlatformId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<GamePlayLink>(link =>

@@ -17,7 +17,62 @@ public abstract class GameFormPageModel : PageModel
     public string? Description { get; set; }
 
     [BindProperty]
+    public string? GenreCode { get; set; }
+
+    [BindProperty]
+    public List<string> TagCodes { get; set; } = [];
+
+    [BindProperty]
+    public List<string> PlatformCodes { get; set; } = [];
+
+    [BindProperty]
     public List<GamePlayLinkFormInput> Links { get; set; } = [];
+
+    public GameClassificationSelectionCatalog ClassificationCatalog { get; private set; } =
+        new([], [], []);
+
+    protected GameClassificationInput CreateClassificationInput()
+    {
+        return new GameClassificationInput(GenreCode, TagCodes, PlatformCodes);
+    }
+
+    protected async Task LoadActiveClassificationCatalogAsync(
+        GameClassificationCatalogQueryService service,
+        CancellationToken cancellationToken)
+    {
+        ClassificationCatalog = await service.GetActiveAsync(cancellationToken);
+    }
+
+    protected async Task<bool> LoadEditorClassificationCatalogAsync(
+        GameClassificationCatalogQueryService service,
+        long gameId,
+        bool loadSelections,
+        CancellationToken cancellationToken)
+    {
+        var editor = await service.GetForGameAsync(gameId, cancellationToken);
+        if (editor is null)
+        {
+            return false;
+        }
+
+        ClassificationCatalog = editor.Options;
+        if (loadSelections)
+        {
+            GenreCode = editor.Options.Genres
+                .Single(item => item.Id == editor.SelectedGenreId)
+                .Code;
+            TagCodes = editor.Options.Tags
+                .Where(item => editor.SelectedTagIds.Contains(item.Id))
+                .Select(item => item.Code)
+                .ToList();
+            PlatformCodes = editor.Options.Platforms
+                .Where(item => editor.SelectedPlatformIds.Contains(item.Id))
+                .Select(item => item.Code)
+                .ToList();
+        }
+
+        return true;
+    }
 
     protected IReadOnlyList<GamePlayLinkInput> CreateLinkInputs()
     {
