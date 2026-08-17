@@ -73,4 +73,7 @@ public sealed class MediaModel : PageModel
         bytes >= 1024 * 1024
             ? $"{bytes / (1024d * 1024d):0.#} MiB"
             : $"{bytes / 1024d:0.#} KiB";
+
+    public static bool CanRemove(MediaStatus status) =>
+        MediaLifecyclePolicy.CanTransition(status, MediaStatus.DeletePending);
 }

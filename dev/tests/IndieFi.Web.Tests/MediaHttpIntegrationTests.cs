@@ -402,7 +402,12 @@ public sealed class MediaHttpIntegrationTests
         Assert.Contains("data-attachment-kind=\"GameCover\"", html);
         Assert.Contains("data-attachment-kind=\"GameScreenshot\"", html);
         Assert.Contains("data-media-upload-cancel", html);
+        Assert.Contains("data-media-upload-mode=\"replace\"", html);
+        Assert.Contains("data-media-action=\"remove\"", html);
+        Assert.Contains("data-media-action=\"up\"", html);
+        Assert.Contains("data-media-action=\"down\"", html);
         Assert.Contains($"data-media-id=\"{media.CoverId}\"", html);
+        Assert.Contains($"data-media-id=\"{media.ReadyScreenshotId}\"", html);
         Assert.Contains($"data-media-id=\"{media.PendingId}\"", html);
         Assert.Contains($"data-media-id=\"{media.FailedId}\"", html);
         Assert.Contains("처리 대기", html);
@@ -694,6 +699,30 @@ public sealed class MediaHttpIntegrationTests
             StatusChangedAt = now.AddMinutes(-3),
             UploadExpiresAt = now.AddHours(23).AddMinutes(56),
         };
+        var readyScreenshot = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            GameId = owner.GameId,
+            AttachmentKind = MediaAttachmentKind.GameScreenshot,
+            Status = MediaStatus.Ready,
+            DeclaredContentType = "image/webp",
+            DeclaredBytes = 3072,
+            SourceContentType = "image/webp",
+            SourceBytes = 3072,
+            SourceETag = $"\"{Guid.NewGuid():N}\"",
+            DetectedContentType = "image/webp",
+            PixelWidth = 160,
+            PixelHeight = 90,
+            FrameCount = 1,
+            IsCurrent = true,
+            SortOrder = 0,
+            PublishedAt = now.AddMinutes(-5),
+            CreatedAt = now.AddMinutes(-6),
+            UpdatedAt = now.AddMinutes(-5),
+            StatusChangedAt = now.AddMinutes(-5),
+            UploadExpiresAt = now.AddHours(23).AddMinutes(54),
+        };
         var failed = new MediaAsset
         {
             Id = Guid.NewGuid(),
@@ -710,9 +739,13 @@ public sealed class MediaHttpIntegrationTests
             UploadExpiresAt = now.AddHours(23).AddMinutes(58),
         };
         await using var db = _postgresql.NewDbContext();
-        db.MediaAssets.AddRange(cover, pending, failed);
+        db.MediaAssets.AddRange(cover, readyScreenshot, pending, failed);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        return new OwnerPageMedia(cover.Id, pending.Id, failed.Id);
+        return new OwnerPageMedia(
+            cover.Id,
+            readyScreenshot.Id,
+            pending.Id,
+            failed.Id);
     }
 
     private static HttpClient CreateClient(WebApplicationFactory<Program> factory) =>
@@ -842,6 +875,7 @@ public sealed class MediaHttpIntegrationTests
 
     private sealed record OwnerPageMedia(
         Guid CoverId,
+        Guid ReadyScreenshotId,
         Guid PendingId,
         Guid FailedId);
 }

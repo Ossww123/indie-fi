@@ -48,6 +48,7 @@ const maximumFileBytes = readPositiveInteger(
 );
 const apiBase = requireDataset(root.dataset.mediaApiBase, "media API base");
 let antiforgeryPromise: Promise<MediaAntiforgeryResponse> | null = null;
+let managementActionBusy = false;
 
 for (const form of root.querySelectorAll<HTMLFormElement>("[data-media-upload-form]")) {
   const input = getRequiredElement<HTMLInputElement>("[data-media-file]", form);
@@ -79,6 +80,34 @@ for (const form of root.querySelectorAll<HTMLFormElement>("[data-media-upload-fo
   });
 }
 
+root.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const button = target.closest<HTMLButtonElement>("[data-media-action]");
+  const item = button?.closest<HTMLElement>("[data-media-item]");
+  if (button === null || button === undefined
+    || item === null || item === undefined
+    || button.disabled || managementActionBusy) {
+    return;
+  }
+
+  switch (button.dataset.mediaAction) {
+    case "remove":
+      void removeMedia(item);
+      break;
+    case "up":
+      void reorderScreenshot(item, -1);
+      break;
+    case "down":
+      void reorderScreenshot(item, 1);
+      break;
+  }
+});
+
+refreshManagementButtons();
 root.dataset.clientReady = "true";
 
 async function uploadSelectedFile(
@@ -345,6 +374,114 @@ async function releaseCancelledReservation(
   }
 }
 
+async function removeMedia(item: HTMLElement): Promise<void> {
+  const mediaId = requireDataset(item.dataset.mediaId, "media id");
+  if (!window.confirm("이 이미지를 제거하시겠습니까? 공개 중인 이미지는 즉시 화면에서 내려갑니다.")) {
+    return;
+  }
+
+  setManagementActionBusy(true);
+  try {
+    const antiforgery = await getAntiforgery();
+    await sendJson<unknown>(
+      `${apiBase}/${encodeURIComponent(mediaId)}`,
+      "DELETE",
+      undefined,
+      antiforgery,
+    );
+    item.dataset.mediaStatus = "DeletePending";
+    showNotice("이미지를 공개에서 내리고 삭제를 요청했습니다.", "success");
+    window.setTimeout(() => window.location.reload(), 600);
+  } catch (error: unknown) {
+    showNotice(toUserMessage(error), "warning");
+    setManagementActionBusy(false);
+  }
+}
+
+async function reorderScreenshot(
+  item: HTMLElement,
+  direction: -1 | 1,
+): Promise<void> {
+  const screenshots = getReadyScreenshots();
+  const currentIndex = screenshots.indexOf(item);
+  const targetIndex = currentIndex + direction;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= screenshots.length) {
+    refreshManagementButtons();
+    return;
+  }
+
+  const reordered = screenshots.slice();
+  const target = reordered[targetIndex];
+  if (target === undefined) {
+    return;
+  }
+  reordered[currentIndex] = target;
+  reordered[targetIndex] = item;
+
+  setManagementActionBusy(true);
+  try {
+    const antiforgery = await getAntiforgery();
+    await sendJson<unknown>(
+      `${apiBase}/games/${gameId}/screenshots/order`,
+      "PUT",
+      {
+        mediaIds: reordered.map((screenshot) =>
+          requireDataset(screenshot.dataset.mediaId, "media id")),
+      },
+      antiforgery,
+    );
+
+    if (direction < 0) {
+      target.before(item);
+    } else {
+      target.after(item);
+    }
+    showNotice("스크린샷 순서를 저장했습니다.", "success");
+  } catch (error: unknown) {
+    showNotice(toUserMessage(error), "warning");
+  } finally {
+    setManagementActionBusy(false);
+  }
+}
+
+function getReadyScreenshots(): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(
+    "[data-media-list='GameScreenshot'] [data-media-item][data-media-status='Ready']",
+  ));
+}
+
+function setManagementActionBusy(busy: boolean): void {
+  managementActionBusy = busy;
+  root.dataset.managementBusy = String(busy);
+  refreshManagementButtons();
+}
+
+function refreshManagementButtons(): void {
+  for (const button of root.querySelectorAll<HTMLButtonElement>("[data-media-action]")) {
+    button.disabled = managementActionBusy;
+  }
+
+  const screenshots = getReadyScreenshots();
+  screenshots.forEach((item, index) => {
+    item.dataset.mediaSortOrder = String(index);
+    const badge = item.querySelector<HTMLElement>("[data-media-sort-badge]");
+    if (badge !== null) {
+      badge.textContent = `순서 ${index + 1}`;
+    }
+
+    const up = item.querySelector<HTMLButtonElement>("[data-media-action='up']");
+    const down = item.querySelector<HTMLButtonElement>("[data-media-action='down']");
+    if (up !== null) {
+      up.disabled = managementActionBusy || index === 0;
+      up.setAttribute("aria-label", `스크린샷 ${index + 1} 위로 이동`);
+    }
+    if (down !== null) {
+      down.disabled = managementActionBusy || index === screenshots.length - 1;
+      down.setAttribute("aria-label", `스크린샷 ${index + 1} 아래로 이동`);
+    }
+  });
+}
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
   let payload: unknown;
   try {
@@ -391,6 +528,10 @@ function messageForCode(code: string): string {
       return "현재 계정으로는 미디어를 변경할 수 없습니다.";
     case "media_not_found":
       return "업로드 항목을 찾을 수 없습니다. 페이지를 새로고침해 주세요.";
+    case "invalid_screenshot_order":
+      return "스크린샷 구성이 변경되었습니다. 페이지를 새로고침해 주세요.";
+    case "media_not_removable":
+      return "현재 처리 상태에서는 이미지를 제거할 수 없습니다.";
     case "antiforgery_validation_failed":
       return "보안 확인이 만료되었습니다. 페이지를 새로고침해 주세요.";
     default:
