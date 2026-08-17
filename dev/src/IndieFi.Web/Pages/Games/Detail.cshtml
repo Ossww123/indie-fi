@@ -29,6 +29,12 @@
         <a asp-page="/Games/Edit"
            asp-route-id="@Model.Game.Id"
            class="button-outline px-3 py-1.5">수정</a>
+        @if (Model.CanManageMedia)
+        {
+            <a asp-page="/Games/Media"
+               asp-route-id="@Model.Game.Id"
+               class="button-outline px-3 py-1.5">미디어 관리</a>
+        }
         <a asp-page="/KeyDrops/New"
            asp-route-gameId="@Model.Game.Id"
            class="button-outline px-3 py-1.5">드롭 예약</a>

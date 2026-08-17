@@ -358,6 +358,68 @@ public sealed class MediaHttpIntegrationTests
     }
 
     [Fact]
+    public async Task GameMediaPage_RendersOwnerStateAndHidesForeignGames()
+    {
+        var owner = await CreateAccountWithGameAsync();
+        var other = await CreateAccountWithGameAsync();
+        var media = await AddOwnerPageMediaAsync(owner);
+        await using var baseFactory = new WebAppFactory(_postgresql.ConnectionString);
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+            ConfigureMediaHost(builder, Prefix()));
+        using var anonymousClient = CreateClient(factory);
+        using var ownerClient = CreateClient(factory);
+        using var otherClient = CreateClient(factory);
+        await PageTestSupport.LoginAsync(ownerClient, owner.Email, owner.Password);
+        await PageTestSupport.LoginAsync(otherClient, other.Email, other.Password);
+
+        using (var anonymous = await anonymousClient.GetAsync(
+            $"/Games/Media/{owner.GameId}",
+            TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.Redirect, anonymous.StatusCode);
+            Assert.StartsWith("/Login", anonymous.Headers.Location?.PathAndQuery);
+        }
+
+        using (var foreign = await otherClient.GetAsync(
+            $"/Games/Media/{owner.GameId}",
+            TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        }
+
+        using var response = await ownerClient.GetAsync(
+            $"/Games/Media/{owner.GameId}",
+            TestContext.Current.CancellationToken);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("data-game-media", html);
+        Assert.Contains($"data-game-id=\"{owner.GameId}\"", html);
+        Assert.Contains("data-max-screenshots=\"8\"", html);
+        Assert.Contains("data-max-file-bytes=\"10485760\"", html);
+        Assert.Contains("accept=\"image/jpeg,image/png,image/webp\"", html);
+        Assert.Contains("data-attachment-kind=\"GameCover\"", html);
+        Assert.Contains("data-attachment-kind=\"GameScreenshot\"", html);
+        Assert.Contains($"data-media-id=\"{media.CoverId}\"", html);
+        Assert.Contains($"data-media-id=\"{media.PendingId}\"", html);
+        Assert.Contains($"data-media-id=\"{media.FailedId}\"", html);
+        Assert.Contains("처리 대기", html);
+        Assert.Contains("image_invalid_format", html);
+        Assert.Contains("data-media-preview", html);
+        Assert.Contains($"href=\"/Games/Detail/{owner.GameId}\"", html);
+
+        using var detailResponse = await ownerClient.GetAsync(
+            $"/Games/Detail/{owner.GameId}",
+            TestContext.Current.CancellationToken);
+        var detailHtml = WebUtility.HtmlDecode(
+            await detailResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        Assert.Contains($"href=\"/Games/Media/{owner.GameId}\"", detailHtml);
+    }
+
+    [Fact]
     public async Task ConcurrentScreenshotReservations_CannotCreateNinthAttachment()
     {
         var owner = await CreateAccountWithGameAsync();
@@ -581,6 +643,71 @@ public sealed class MediaHttpIntegrationTests
         return screenshots.Select(item => item.Id).ToArray();
     }
 
+    private async Task<OwnerPageMedia> AddOwnerPageMediaAsync(TestAccount owner)
+    {
+        var now = DateTimeOffset.UtcNow;
+        now = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
+        var cover = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            GameId = owner.GameId,
+            AttachmentKind = MediaAttachmentKind.GameCover,
+            Status = MediaStatus.Ready,
+            DeclaredContentType = "image/png",
+            DeclaredBytes = 1024,
+            SourceContentType = "image/png",
+            SourceBytes = 1024,
+            SourceETag = $"\"{Guid.NewGuid():N}\"",
+            DetectedContentType = "image/png",
+            PixelWidth = 80,
+            PixelHeight = 45,
+            FrameCount = 1,
+            IsCurrent = true,
+            PublishedAt = now.AddMinutes(-5),
+            CreatedAt = now.AddHours(-1),
+            UpdatedAt = now.AddMinutes(-5),
+            StatusChangedAt = now.AddMinutes(-5),
+            UploadExpiresAt = now.AddHours(23),
+        };
+        var pending = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            GameId = owner.GameId,
+            AttachmentKind = MediaAttachmentKind.GameScreenshot,
+            Status = MediaStatus.ProcessingPending,
+            DeclaredContentType = "image/webp",
+            DeclaredBytes = 2048,
+            SourceContentType = "image/webp",
+            SourceBytes = 2048,
+            SourceETag = $"\"{Guid.NewGuid():N}\"",
+            CreatedAt = now.AddMinutes(-4),
+            UpdatedAt = now.AddMinutes(-3),
+            StatusChangedAt = now.AddMinutes(-3),
+            UploadExpiresAt = now.AddHours(23).AddMinutes(56),
+        };
+        var failed = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            GameId = owner.GameId,
+            AttachmentKind = MediaAttachmentKind.GameScreenshot,
+            Status = MediaStatus.Failed,
+            DeclaredContentType = "image/jpeg",
+            DeclaredBytes = 4096,
+            FailureCode = "image_invalid_format",
+            CreatedAt = now.AddMinutes(-2),
+            UpdatedAt = now.AddMinutes(-1),
+            StatusChangedAt = now.AddMinutes(-1),
+            UploadExpiresAt = now.AddHours(23).AddMinutes(58),
+        };
+        await using var db = _postgresql.NewDbContext();
+        db.MediaAssets.AddRange(cover, pending, failed);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return new OwnerPageMedia(cover.Id, pending.Id, failed.Id);
+    }
+
     private static HttpClient CreateClient(WebApplicationFactory<Program> factory) =>
         factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -705,6 +832,11 @@ public sealed class MediaHttpIntegrationTests
         long GameId,
         string Email,
         string Password);
+
+    private sealed record OwnerPageMedia(
+        Guid CoverId,
+        Guid PendingId,
+        Guid FailedId);
 }
 
 [CollectionDefinition(Name, DisableParallelization = true)]

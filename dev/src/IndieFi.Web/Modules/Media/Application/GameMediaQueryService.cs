@@ -20,6 +20,7 @@ public sealed record OwnerGameMediaItem(
 
 public sealed record OwnerGameMedia(
     long GameId,
+    string GameTitle,
     IReadOnlyList<OwnerGameMediaItem> Covers,
     IReadOnlyList<OwnerGameMediaItem> Screenshots);
 
@@ -60,9 +61,12 @@ public sealed class GameMediaQueryService
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ownerUserId);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(gameId);
 
-        if (!await _db.Games.AsNoTracking().AnyAsync(
-                game => game.Id == gameId && game.OwnerId == ownerUserId,
-                cancellationToken))
+        var game = await _db.Games
+            .AsNoTracking()
+            .Where(item => item.Id == gameId && item.OwnerId == ownerUserId)
+            .Select(item => new OwnerGameSnapshot(item.Id, item.Title))
+            .SingleOrDefaultAsync(cancellationToken);
+        if (game is null)
         {
             return null;
         }
@@ -117,7 +121,8 @@ public sealed class GameMediaQueryService
         }
 
         return new OwnerGameMedia(
-            gameId,
+            game.GameId,
+            game.Title,
             items.Where(item =>
                     item.AttachmentKind == MediaAttachmentKind.GameCover)
                 .ToArray(),
@@ -249,6 +254,8 @@ public sealed class GameMediaQueryService
         DateTimeOffset? PublishedAt,
         DateTimeOffset CreatedAt,
         DateTimeOffset UpdatedAt);
+
+    private sealed record OwnerGameSnapshot(long GameId, string Title);
 
     private sealed record PublicSnapshot(
         Guid MediaId,

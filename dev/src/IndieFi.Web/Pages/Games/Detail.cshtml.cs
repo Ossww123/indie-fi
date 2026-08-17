@@ -4,10 +4,12 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
 using IndieFi.Web.Modules.Games.Application;
 using IndieFi.Web.Modules.KeyDistributions.Application;
+using IndieFi.Web.Modules.Media.Infrastructure;
 using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages.Games;
 
@@ -52,6 +54,7 @@ public class DetailModel : PageModel
     private readonly FavoriteGameService _favoriteGameService;
     private readonly PublicKeyDropReader _publicKeyDropReader;
     private readonly GameClassificationCatalogQueryService _classificationCatalog;
+    private readonly MediaObjectStorageOptions _mediaStorageOptions;
 
     public DetailModel(
         AppDbContext db,
@@ -60,7 +63,8 @@ public class DetailModel : PageModel
         UserDisplayNameResolver displayNames,
         FavoriteGameService favoriteGameService,
         PublicKeyDropReader publicKeyDropReader,
-        GameClassificationCatalogQueryService classificationCatalog)
+        GameClassificationCatalogQueryService classificationCatalog,
+        IOptions<MediaObjectStorageOptions> mediaStorageOptions)
     {
         _db = db;
         _currentUser = currentUser;
@@ -69,11 +73,13 @@ public class DetailModel : PageModel
         _favoriteGameService = favoriteGameService;
         _publicKeyDropReader = publicKeyDropReader;
         _classificationCatalog = classificationCatalog;
+        _mediaStorageOptions = mediaStorageOptions.Value;
     }
 
     public Game Game { get; private set; } = null!;
     public string OwnerDisplayName { get; private set; } = string.Empty;
     public bool IsOwner { get; private set; }
+    public bool CanManageMedia => IsOwner && _mediaStorageOptions.Enabled;
     public bool CanManageFavorite { get; private set; }
     public bool IsFavorite { get; private set; }
     public string? FavoriteMessage { get; private set; }
