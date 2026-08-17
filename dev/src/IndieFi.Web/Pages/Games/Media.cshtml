@@ -56,6 +56,10 @@
                         data-media-upload-submit
                         class="button-primary"
                         disabled>업로드</button>
+                <button type="button"
+                        data-media-upload-cancel
+                        class="button-outline hidden"
+                        disabled>취소</button>
             </form>
         </div>
 
@@ -136,6 +140,10 @@
                         data-media-upload-submit
                         class="button-primary"
                         disabled>업로드</button>
+                <button type="button"
+                        data-media-upload-cancel
+                        class="button-outline hidden"
+                        disabled>취소</button>
             </form>
         </div>
 
@@ -196,3 +204,9 @@
         </div>
     </section>
 </section>
+
+@section Scripts {
+    <script type="module"
+            src="~/js/dist/games/media.js"
+            asp-append-version="true"></script>
+}

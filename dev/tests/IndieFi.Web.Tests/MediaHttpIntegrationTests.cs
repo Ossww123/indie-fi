@@ -401,6 +401,7 @@ public sealed class MediaHttpIntegrationTests
         Assert.Contains("accept=\"image/jpeg,image/png,image/webp\"", html);
         Assert.Contains("data-attachment-kind=\"GameCover\"", html);
         Assert.Contains("data-attachment-kind=\"GameScreenshot\"", html);
+        Assert.Contains("data-media-upload-cancel", html);
         Assert.Contains($"data-media-id=\"{media.CoverId}\"", html);
         Assert.Contains($"data-media-id=\"{media.PendingId}\"", html);
         Assert.Contains($"data-media-id=\"{media.FailedId}\"", html);
@@ -408,6 +409,12 @@ public sealed class MediaHttpIntegrationTests
         Assert.Contains("image_invalid_format", html);
         Assert.Contains("data-media-preview", html);
         Assert.Contains($"href=\"/Games/Detail/{owner.GameId}\"", html);
+        Assert.Contains("/js/dist/games/media", html);
+
+        using var moduleResponse = await ownerClient.GetAsync(
+            "/js/dist/games/media.js",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, moduleResponse.StatusCode);
 
         using var detailResponse = await ownerClient.GetAsync(
             $"/Games/Detail/{owner.GameId}",
