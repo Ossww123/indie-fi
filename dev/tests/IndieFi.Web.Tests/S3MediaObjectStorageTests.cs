@@ -386,7 +386,9 @@ public sealed class S3MediaObjectStorageTests
         var services = new ServiceCollection();
         services.AddSingleton<IHostEnvironment>(
             new TestHostEnvironment(Environments.Production));
-        services.AddMediaModule(Configuration(enabled: true));
+        services.AddMediaModule(
+            Configuration(enabled: true),
+            MediaHostRole.Web);
         using var provider = services.BuildServiceProvider();
 
         var client = provider.GetRequiredService<IAmazonS3>();
@@ -415,7 +417,9 @@ public sealed class S3MediaObjectStorageTests
         var services = new ServiceCollection();
         services.AddSingleton<IHostEnvironment>(
             new TestHostEnvironment(Environments.Production));
-        services.AddMediaModule(Configuration(enabled: false));
+        services.AddMediaModule(
+            Configuration(enabled: false),
+            MediaHostRole.Web);
         using var provider = services.BuildServiceProvider();
 
         Assert.Null(provider.GetService<IAmazonS3>());

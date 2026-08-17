@@ -123,7 +123,7 @@ public sealed class MediaOperationalSnapshotTests
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddMediaModule(configuration);
+        services.AddMediaModule(configuration, MediaHostRole.Worker);
         using var provider = services.BuildServiceProvider();
 
         var exception = Assert.Throws<OptionsValidationException>(() =>

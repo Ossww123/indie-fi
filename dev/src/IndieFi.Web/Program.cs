@@ -115,7 +115,7 @@ builder.Services.AddFeedbackModule();
 builder.Services.AddIndieFiRealtime(builder.Configuration);
 builder.Services.AddKeyDistributionsModule(builder.Configuration);
 builder.Services.AddNotificationsModule(builder.Configuration);
-builder.Services.AddMediaModule(builder.Configuration);
+builder.Services.AddMediaModule(builder.Configuration, MediaHostRole.Web);
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);

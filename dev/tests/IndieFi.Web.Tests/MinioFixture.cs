@@ -67,7 +67,7 @@ public sealed class MinioFixture : IAsyncLifetime
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(
             new TestHostEnvironment(Environments.Development));
-        services.AddMediaModule(configuration);
+        services.AddMediaModule(configuration, MediaHostRole.Web);
         return services.BuildServiceProvider(validateScopes: true);
     }
 

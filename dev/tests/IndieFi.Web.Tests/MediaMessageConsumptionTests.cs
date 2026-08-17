@@ -207,7 +207,7 @@ public sealed class MediaMessageConsumptionTests
         services.AddLogging();
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql("Host=localhost;Database=unused"));
-        services.AddMediaModule(configuration);
+        services.AddMediaModule(configuration, MediaHostRole.Worker);
         services.AddNotificationsModule(
             configuration,
             registration => registration.AddMediaConsumers(configuration));

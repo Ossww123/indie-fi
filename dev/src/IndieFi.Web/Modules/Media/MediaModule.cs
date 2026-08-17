@@ -11,10 +11,36 @@ public static class MediaModule
 {
     public static IServiceCollection AddMediaModule(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        MediaHostRole hostRole)
     {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+        if (!Enum.IsDefined(hostRole))
+        {
+            throw new ArgumentOutOfRangeException(nameof(hostRole));
+        }
+
         var objectStorageEnabled = configuration.GetValue<bool>(
             $"{MediaObjectStorageOptions.SectionName}:Enabled");
+        var configuredWorkerEnabled = configuration.GetValue<bool>(
+            $"{MediaWorkerOptions.SectionName}:Enabled");
+        if (hostRole == MediaHostRole.Web && configuredWorkerEnabled)
+        {
+            throw new InvalidOperationException(
+                "Media:Worker:Enabled must be false in IndieFi.Web; "
+                + "media background processing runs only in IndieFi.Worker.");
+        }
+
+        if (hostRole == MediaHostRole.Worker
+            && objectStorageEnabled
+            && !configuredWorkerEnabled)
+        {
+            throw new InvalidOperationException(
+                "Media:Worker:Enabled must be true in IndieFi.Worker when "
+                + "Media:ObjectStorage:Enabled is true.");
+        }
+
         services.AddOptions<MediaWorkerOptions>()
             .Bind(configuration.GetSection(MediaWorkerOptions.SectionName))
             .Validate(
@@ -29,8 +55,8 @@ public static class MediaModule
         services.TryAddSingleton<
             IMediaImageDerivativeEncoder,
             SkiaMediaImageDerivativeEncoder>();
-        var workerEnabled = configuration.GetValue<bool>(
-            $"{MediaWorkerOptions.SectionName}:Enabled");
+        var workerEnabled = hostRole == MediaHostRole.Worker
+            && configuredWorkerEnabled;
         if (workerEnabled)
         {
             services.AddScoped<MediaMessageAuthorityService>();

@@ -158,7 +158,9 @@ public sealed class MediaWorkerIntegrationTests :
         builder.Configuration.AddInMemoryCollection(settings);
         builder.Services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(_postgres.ConnectionString));
-        builder.Services.AddMediaModule(builder.Configuration);
+        builder.Services.AddMediaModule(
+            builder.Configuration,
+            workerEnabled ? MediaHostRole.Worker : MediaHostRole.Web);
         builder.Services.AddNotificationsModule(
             builder.Configuration,
             registration => registration.AddMediaConsumers(builder.Configuration));
