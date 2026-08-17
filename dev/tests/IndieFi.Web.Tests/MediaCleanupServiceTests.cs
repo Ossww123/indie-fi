@@ -193,6 +193,89 @@ public sealed class MediaCleanupServiceTests
                 || key.Contains(deletePending.Id.ToString("N"), StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task CleanupBatch_WhenLifecycleAlreadyRemovedObjects_StillExpiresReservation()
+    {
+        var now = new DateTimeOffset(1900, 1, 4, 0, 0, 0, TimeSpan.Zero);
+        var storage = new DeletionObjectStorage();
+        var media = await CreateMediaAsync(
+            MediaStatus.UploadPending,
+            now,
+            uploadExpired: true,
+            withUploadAttempt: true);
+
+        MediaCleanupBatchResult result;
+        await using (var db = _fixture.NewDbContext())
+        {
+            result = await NewCleanupService(db, storage, now).RunBatchAsync(
+                batchSize: 10,
+                TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(1, result.ExpiredCount);
+        Assert.Equal(0, result.FailedCount);
+        await using var verificationDb = _fixture.NewDbContext();
+        var stored = await verificationDb.MediaAssets.AsNoTracking().SingleAsync(
+            item => item.Id == media.Id,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(MediaStatus.Expired, stored.Status);
+        Assert.NotNull(stored.DeletionCompletedAt);
+        Assert.NotNull(stored.TombstoneExpiresAt);
+    }
+
+    [Fact]
+    public async Task ConcurrentCleanupBatches_LockCandidateBeforeDeletingObjects()
+    {
+        var now = new DateTimeOffset(1900, 1, 5, 0, 0, 0, TimeSpan.Zero);
+        var storage = new CoordinatedDeletionObjectStorage();
+        var media = await CreateMediaAsync(
+            MediaStatus.UploadPending,
+            now,
+            uploadExpired: true,
+            withUploadAttempt: true);
+
+        var firstTask = RunCleanupBatchAsync(storage, now);
+        await storage.FirstDeleteStarted.Task.WaitAsync(
+            TestContext.Current.CancellationToken);
+        var secondTask = RunCleanupBatchAsync(storage, now);
+
+        MediaCleanupBatchResult second;
+        try
+        {
+            second = await secondTask.WaitAsync(
+                TimeSpan.FromSeconds(5),
+                TestContext.Current.CancellationToken);
+            Assert.Equal(0, second.ExpiredCount);
+            Assert.Equal(1, storage.DeleteCallCount);
+        }
+        finally
+        {
+            storage.ReleaseFirstDelete.TrySetResult();
+        }
+
+        var first = await firstTask;
+        Assert.Equal(1, first.ExpiredCount);
+        Assert.Equal(0, first.FailedCount);
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.Equal(
+            MediaStatus.Expired,
+            await verificationDb.MediaAssets
+                .Where(item => item.Id == media.Id)
+                .Select(item => item.Status)
+                .SingleAsync(TestContext.Current.CancellationToken));
+    }
+
+    private async Task<MediaCleanupBatchResult> RunCleanupBatchAsync(
+        IMediaObjectStorage storage,
+        DateTimeOffset now)
+    {
+        await using var db = _fixture.NewDbContext();
+        return await NewCleanupService(db, storage, now).RunBatchAsync(
+            batchSize: 10,
+            TestContext.Current.CancellationToken);
+    }
+
     private async Task<MediaAsset> CreateMediaAsync(
         MediaStatus status,
         DateTimeOffset now,
@@ -284,6 +367,21 @@ public sealed class MediaCleanupServiceTests
             new MediaObjectDeletionService(storage),
             new MutableTimeProvider(now));
 
+    private static MediaCleanupService NewCleanupService(
+        AppDbContext db,
+        IMediaObjectStorage storage,
+        DateTimeOffset now)
+    {
+        var objectDeletion = new MediaObjectDeletionService(storage);
+        var timeProvider = new MutableTimeProvider(now);
+        return new MediaCleanupService(
+            db,
+            objectDeletion,
+            new MediaDeletionWorkExecutor(db, objectDeletion, timeProvider),
+            timeProvider,
+            NullLogger<MediaCleanupService>.Instance);
+    }
+
     private static void AddAllObjects(
         DeletionObjectStorage storage,
         MediaAsset media)
@@ -338,6 +436,35 @@ public sealed class MediaCleanupServiceTests
 
             _keys.Remove(objectKey.Value);
             return Task.CompletedTask;
+        }
+
+        public Task<Uri> CreateUploadUrlAsync(ObjectStorageUploadUrlRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Uri> CreateDownloadUrlAsync(ObjectStorageDownloadUrlRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ObjectStorageMetadata?> GetMetadataAsync(MediaObjectKey objectKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ObjectStorageReadResult> OpenReadAsync(MediaObjectKey objectKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task WriteAsync(ObjectStorageWriteRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task CopyAsync(ObjectStorageCopyRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class CoordinatedDeletionObjectStorage : IMediaObjectStorage
+    {
+        private int _deleteCallCount;
+
+        public TaskCompletionSource FirstDeleteStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReleaseFirstDelete { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int DeleteCallCount => Volatile.Read(ref _deleteCallCount);
+
+        public async Task DeleteIfExistsAsync(
+            MediaObjectKey objectKey,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _deleteCallCount) == 1)
+            {
+                FirstDeleteStarted.TrySetResult();
+                await ReleaseFirstDelete.Task.WaitAsync(cancellationToken);
+            }
         }
 
         public Task<Uri> CreateUploadUrlAsync(ObjectStorageUploadUrlRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();

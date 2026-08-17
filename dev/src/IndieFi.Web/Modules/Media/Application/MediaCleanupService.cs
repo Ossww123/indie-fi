@@ -61,6 +61,8 @@ public sealed class MediaCleanupService
                 media.Id,
                 media.Revision,
                 media.Status,
+                media.UploadExpiresAt,
+                media.SourceDeletedAt,
                 media.DeletionCompletedAt,
                 media.TombstoneExpiresAt))
             .ToArrayAsync(cancellationToken);
@@ -70,10 +72,26 @@ public sealed class MediaCleanupService
         var deletionCompleted = 0;
         var tombstoneRemoved = 0;
         var failed = 0;
-        foreach (var candidate in candidates)
+        foreach (var selectedCandidate in candidates)
         {
             try
             {
+                await using var transaction = _db.Database.CurrentTransaction is null
+                    ? await _db.Database.BeginTransactionAsync(cancellationToken)
+                    : null;
+                var candidate = await LockCandidateAsync(
+                    selectedCandidate.Id,
+                    cancellationToken);
+                if (candidate is null || !IsCandidateDue(candidate, now))
+                {
+                    if (transaction is not null)
+                    {
+                        await transaction.CommitAsync(cancellationToken);
+                    }
+
+                    continue;
+                }
+
                 if (candidate.DeletionCompletedAt is not null
                     && candidate.TombstoneExpiresAt <= now)
                 {
@@ -111,6 +129,11 @@ public sealed class MediaCleanupService
                         now,
                         cancellationToken);
                 }
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                }
             }
             catch (MediaObjectStorageException exception)
             {
@@ -118,9 +141,9 @@ public sealed class MediaCleanupService
                 _logger.LogWarning(
                     exception,
                     "Media cleanup object deletion failed mediaId={MediaId} revision={Revision} status={Status} failureCode={FailureCode}",
-                    candidate.Id,
-                    candidate.Revision,
-                    candidate.Status,
+                    selectedCandidate.Id,
+                    selectedCandidate.Revision,
+                    selectedCandidate.Status,
                     exception.FailureCode);
             }
         }
@@ -238,6 +261,42 @@ public sealed class MediaCleanupService
             .Select(attempt => attempt.Id)
             .ToArrayAsync(cancellationToken);
 
+    private async Task<CleanupCandidate?> LockCandidateAsync(
+        Guid mediaId,
+        CancellationToken cancellationToken)
+    {
+        var rows = await _db.MediaAssets
+            .FromSqlInterpolated(
+                $"SELECT * FROM media_assets WHERE id = {mediaId} FOR UPDATE SKIP LOCKED")
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var media = rows.SingleOrDefault();
+        return media is null
+            ? null
+            : new CleanupCandidate(
+                media.Id,
+                media.Revision,
+                media.Status,
+                media.UploadExpiresAt,
+                media.SourceDeletedAt,
+                media.DeletionCompletedAt,
+                media.TombstoneExpiresAt);
+    }
+
+    private static bool IsCandidateDue(
+        CleanupCandidate candidate,
+        DateTimeOffset now) =>
+        (candidate.Status == MediaStatus.UploadPending
+            && candidate.UploadExpiresAt <= now)
+        || candidate.Status == MediaStatus.DeletePending
+        || (candidate.Status == MediaStatus.Ready
+            && candidate.SourceDeletedAt is null)
+        || ((candidate.Status == MediaStatus.Failed
+                || candidate.Status == MediaStatus.Expired
+                || candidate.Status == MediaStatus.Deleted)
+            && (candidate.DeletionCompletedAt is null
+                || candidate.TombstoneExpiresAt <= now));
+
     private static Microsoft.EntityFrameworkCore.Query.UpdateSettersBuilder<MediaAsset>
         TerminalSetters(
             Microsoft.EntityFrameworkCore.Query.UpdateSettersBuilder<MediaAsset> setters,
@@ -283,6 +342,8 @@ public sealed class MediaCleanupService
         Guid Id,
         int Revision,
         MediaStatus Status,
+        DateTimeOffset UploadExpiresAt,
+        DateTimeOffset? SourceDeletedAt,
         DateTimeOffset? DeletionCompletedAt,
         DateTimeOffset? TombstoneExpiresAt);
 }
