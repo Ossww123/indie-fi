@@ -358,7 +358,7 @@ public sealed class MediaHttpIntegrationTests
     }
 
     [Fact]
-    public async Task GameMediaPage_RendersOwnerStateAndHidesForeignGames()
+    public async Task GameMediaUserFlow_RendersReordersRemovesAndServesPrivateObjects()
     {
         var owner = await CreateAccountWithGameAsync();
         var other = await CreateAccountWithGameAsync();
@@ -366,6 +366,32 @@ public sealed class MediaHttpIntegrationTests
         await using var baseFactory = new WebAppFactory(_postgresql.ConnectionString);
         await using var factory = baseFactory.WithWebHostBuilder(builder =>
             ConfigureMediaHost(builder, Prefix()));
+        byte[] derivedPayload =
+        [
+            0x52, 0x49, 0x46, 0x46,
+            0x04, 0x00, 0x00, 0x00,
+            0x57, 0x45, 0x42, 0x50,
+        ];
+        await WriteDerivedAsync(
+            factory.Services,
+            media.CoverId,
+            MediaDerivedVariant.GameList,
+            derivedPayload);
+        await WriteDerivedAsync(
+            factory.Services,
+            media.CoverId,
+            MediaDerivedVariant.GameDisplay,
+            derivedPayload);
+        await WriteDerivedAsync(
+            factory.Services,
+            media.ReadyScreenshotId,
+            MediaDerivedVariant.GameDisplay,
+            derivedPayload);
+        await WriteDerivedAsync(
+            factory.Services,
+            media.SecondReadyScreenshotId,
+            MediaDerivedVariant.GameDisplay,
+            derivedPayload);
         using var anonymousClient = CreateClient(factory);
         using var ownerClient = CreateClient(factory);
         using var otherClient = CreateClient(factory);
@@ -408,6 +434,9 @@ public sealed class MediaHttpIntegrationTests
         Assert.Contains("data-media-action=\"down\"", html);
         Assert.Contains($"data-media-id=\"{media.CoverId}\"", html);
         Assert.Contains($"data-media-id=\"{media.ReadyScreenshotId}\"", html);
+        Assert.Contains(
+            $"data-media-id=\"{media.SecondReadyScreenshotId}\"",
+            html);
         Assert.Contains($"data-media-id=\"{media.PendingId}\"", html);
         Assert.Contains($"data-media-id=\"{media.FailedId}\"", html);
         Assert.Contains("처리 대기", html);
@@ -450,6 +479,89 @@ public sealed class MediaHttpIntegrationTests
         Assert.Contains(
             $"data-media-id=\"{media.ReadyScreenshotId}\"",
             publicDetailHtml);
+
+        using var homeResponse = await anonymousClient.GetAsync(
+            "/",
+            TestContext.Current.CancellationToken);
+        var homeHtml = WebUtility.HtmlDecode(
+            await homeResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, homeResponse.StatusCode);
+        Assert.Contains("data-game-list-cover", homeHtml);
+        Assert.Contains($"data-media-id=\"{media.CoverId}\"", homeHtml);
+
+        using var ownGamesResponse = await ownerClient.GetAsync(
+            "/Games",
+            TestContext.Current.CancellationToken);
+        var ownGamesHtml = WebUtility.HtmlDecode(
+            await ownGamesResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, ownGamesResponse.StatusCode);
+        Assert.Contains("data-game-list-cover", ownGamesHtml);
+        Assert.Contains($"data-media-id=\"{media.CoverId}\"", ownGamesHtml);
+
+        var listCoverUrl = ReadImageSource(homeHtml, media.CoverId);
+        using (var objectClient = new HttpClient())
+        using (var objectResponse = await objectClient.GetAsync(
+            listCoverUrl,
+            TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, objectResponse.StatusCode);
+            Assert.Equal(
+                "image/webp",
+                objectResponse.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(
+                derivedPayload,
+                await objectResponse.Content.ReadAsByteArrayAsync(
+                    TestContext.Current.CancellationToken));
+        }
+
+        var ownerAntiforgery = await GetAntiforgeryAsync(ownerClient);
+        using (var reordered = await SendJsonAsync(
+            ownerClient,
+            HttpMethod.Put,
+            $"/api/media/games/{owner.GameId}/screenshots/order",
+            new GameScreenshotOrderRequest(
+            [
+                media.SecondReadyScreenshotId,
+                media.ReadyScreenshotId,
+            ]),
+            ownerAntiforgery))
+        {
+            Assert.Equal(HttpStatusCode.OK, reordered.StatusCode);
+        }
+
+        using (var reorderedDetail = await anonymousClient.GetAsync(
+            $"/Games/Detail/{owner.GameId}",
+            TestContext.Current.CancellationToken))
+        {
+            var reorderedHtml = WebUtility.HtmlDecode(
+                await reorderedDetail.Content.ReadAsStringAsync(
+                    TestContext.Current.CancellationToken));
+            Assert.True(
+                reorderedHtml.IndexOf(
+                    media.SecondReadyScreenshotId.ToString(),
+                    StringComparison.Ordinal)
+                < reorderedHtml.IndexOf(
+                    media.ReadyScreenshotId.ToString(),
+                    StringComparison.Ordinal));
+        }
+
+        using (var removed = await DeleteAsync(
+            ownerClient,
+            media.CoverId,
+            ownerAntiforgery))
+        {
+            Assert.Equal(HttpStatusCode.Accepted, removed.StatusCode);
+        }
+
+        using var afterRemoval = await anonymousClient.GetAsync(
+            "/",
+            TestContext.Current.CancellationToken);
+        var afterRemovalHtml = WebUtility.HtmlDecode(
+            await afterRemoval.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.DoesNotContain(media.CoverId.ToString(), afterRemovalHtml);
     }
 
     [Fact]
@@ -744,6 +856,30 @@ public sealed class MediaHttpIntegrationTests
             StatusChangedAt = now.AddMinutes(-5),
             UploadExpiresAt = now.AddHours(23).AddMinutes(54),
         };
+        var secondReadyScreenshot = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            GameId = owner.GameId,
+            AttachmentKind = MediaAttachmentKind.GameScreenshot,
+            Status = MediaStatus.Ready,
+            DeclaredContentType = "image/webp",
+            DeclaredBytes = 3072,
+            SourceContentType = "image/webp",
+            SourceBytes = 3072,
+            SourceETag = $"\"{Guid.NewGuid():N}\"",
+            DetectedContentType = "image/webp",
+            PixelWidth = 160,
+            PixelHeight = 90,
+            FrameCount = 1,
+            IsCurrent = true,
+            SortOrder = 1,
+            PublishedAt = now.AddMinutes(-5),
+            CreatedAt = now.AddMinutes(-5),
+            UpdatedAt = now.AddMinutes(-4),
+            StatusChangedAt = now.AddMinutes(-4),
+            UploadExpiresAt = now.AddHours(23).AddMinutes(55),
+        };
         var failed = new MediaAsset
         {
             Id = Guid.NewGuid(),
@@ -760,11 +896,17 @@ public sealed class MediaHttpIntegrationTests
             UploadExpiresAt = now.AddHours(23).AddMinutes(58),
         };
         await using var db = _postgresql.NewDbContext();
-        db.MediaAssets.AddRange(cover, readyScreenshot, pending, failed);
+        db.MediaAssets.AddRange(
+            cover,
+            readyScreenshot,
+            secondReadyScreenshot,
+            pending,
+            failed);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         return new OwnerPageMedia(
             cover.Id,
             readyScreenshot.Id,
+            secondReadyScreenshot.Id,
             pending.Id,
             failed.Id);
     }
@@ -876,6 +1018,34 @@ public sealed class MediaHttpIntegrationTests
             $"The response did not contain {typeof(T).Name} JSON.");
     }
 
+    private static async Task WriteDerivedAsync(
+        IServiceProvider services,
+        Guid mediaId,
+        MediaDerivedVariant variant,
+        byte[] content)
+    {
+        using var stream = new MemoryStream(content, writable: false);
+        await services.GetRequiredService<IMediaObjectStorage>().WriteAsync(
+            MediaObjectAccessPolicy.CreateDerivedWriteRequest(
+                MediaObjectKey.Derived(mediaId, revision: 1, variant),
+                stream,
+                content.LongLength),
+            TestContext.Current.CancellationToken);
+    }
+
+    private static Uri ReadImageSource(string html, Guid mediaId)
+    {
+        var marker = $"data-media-id=\"{mediaId}\"";
+        var markerIndex = html.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(markerIndex >= 0, $"Media marker not found: {mediaId}");
+        var tagEnd = html.IndexOf('>', markerIndex);
+        var sourceStart = html.IndexOf("src=\"", markerIndex, StringComparison.Ordinal);
+        Assert.True(sourceStart >= 0 && sourceStart < tagEnd);
+        sourceStart += "src=\"".Length;
+        var sourceEnd = html.IndexOf('"', sourceStart);
+        return new Uri(html[sourceStart..sourceEnd]);
+    }
+
     private static void AssertNoStore(HttpResponseMessage response)
     {
         Assert.True(response.Headers.CacheControl?.NoStore);
@@ -897,6 +1067,7 @@ public sealed class MediaHttpIntegrationTests
     private sealed record OwnerPageMedia(
         Guid CoverId,
         Guid ReadyScreenshotId,
+        Guid SecondReadyScreenshotId,
         Guid PendingId,
         Guid FailedId);
 }

@@ -25,18 +25,41 @@ else
         @foreach (var game in Model.Games)
         {
             <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="surface-item surface-link">
-                <div class="flex items-center justify-between gap-4">
-                    <span class="font-semibold">@game.Title</span>
-                    <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                <div class="flex items-start gap-4">
+                    @if (Model.Covers.TryGetValue(game.Id, out var cover))
+                    {
+                        <img data-game-list-cover
+                             data-media-id="@cover.MediaId"
+                             src="@cover.Url"
+                             alt="@game.Title 대표 이미지"
+                             class="h-28 w-44 shrink-0 rounded-lg object-cover"
+                             width="176"
+                             height="112"
+                             loading="lazy"
+                             decoding="async"
+                             referrerpolicy="no-referrer" />
+                    }
+                    else
+                    {
+                        <div class="flex h-28 w-44 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-meta"
+                             data-game-list-cover-fallback
+                             aria-hidden="true">이미지 없음</div>
+                    }
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-4">
+                            <span class="font-semibold">@game.Title</span>
+                            <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                        </div>
+                        @if (game.Description is not null)
+                        {
+                            <div class="mt-2">@game.Description</div>
+                        }
+                        else
+                        {
+                            <div class="mt-2 text-slate-500">(소개 없음)</div>
+                        }
+                    </div>
                 </div>
-                @if (game.Description is not null)
-                {
-                    <div>@game.Description</div>
-                }
-                else
-                {
-                    <div class="text-slate-500">(소개 없음)</div>
-                }
             </a>
         }
     </div>
