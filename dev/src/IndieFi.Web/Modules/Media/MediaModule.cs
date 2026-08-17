@@ -86,6 +86,7 @@ public static class MediaModule
         services.AddScoped<MediaUploadCompletionService>();
         services.AddScoped<MediaPublicationService>();
         services.AddScoped<GameMediaQueryService>();
+        services.AddScoped<ProfileMediaQueryService>();
         services.AddScoped<GameScreenshotOrderService>();
         if (workerEnabled)
         {
