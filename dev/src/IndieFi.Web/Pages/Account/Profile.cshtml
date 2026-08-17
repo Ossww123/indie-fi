@@ -202,3 +202,12 @@
 
     <button type="submit" class="button-primary">프로필 저장</button>
 </form>
+
+@section Scripts {
+    @if (Model.Media is not null)
+    {
+        <script type="module"
+                src="~/js/dist/account/profile-media.js"
+                asp-append-version="true"></script>
+    }
+}

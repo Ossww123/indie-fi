@@ -1,6 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Media.Domain;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Modules.Media.Application;
@@ -87,9 +88,10 @@ public sealed class MediaUploadReservationService
                 MediaUploadReservationOutcome.AccountUnavailable);
         }
 
-        // Lock the concrete target second so every media write uses one lock order.
-        // Owner filtering intentionally makes a foreign game indistinguishable from
-        // a missing one.
+        // Lock the concrete target second when it exists so every media write uses
+        // one lock order. A missing self-owned profile is created under the account
+        // lock below. Owner filtering intentionally makes a foreign game
+        // indistinguishable from a missing one.
         if (!await LockOwnedTargetAsync(
                 ownerUserId,
                 target,
@@ -169,6 +171,17 @@ public sealed class MediaUploadReservationService
                 MediaUploadReservationOutcome.CapacityExceeded);
         }
 
+        if (target.Kind == MediaTargetKind.Profile
+            && !await _db.UserProfiles.AnyAsync(
+                profile => profile.UserId == target.Id,
+                cancellationToken))
+        {
+            // The account row locked above serializes this creation with profile
+            // edits and other media reservations. The profile and reservation are
+            // persisted by the same SaveChanges/transaction below.
+            _db.UserProfiles.Add(new UserProfile { UserId = target.Id });
+        }
+
         var media = new MediaAsset
         {
             Id = Guid.NewGuid(),
@@ -211,12 +224,14 @@ public sealed class MediaUploadReservationService
                 return false;
             }
 
-            var profiles = await _db.UserProfiles
+            await _db.UserProfiles
                 .FromSqlInterpolated(
                     $"SELECT * FROM user_profiles WHERE user_id = {target.Id} FOR UPDATE")
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
-            return profiles.Count == 1;
+            // A missing row is a valid empty profile for its owning account. The
+            // locked account row is the serialization point until it is created.
+            return true;
         }
 
         if (target.Kind == MediaTargetKind.Game)

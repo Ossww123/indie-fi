@@ -55,6 +55,12 @@ public sealed class ProfileMediaManagementPageTests
         Assert.Contains("data-default-profile-image", html);
         Assert.Contains("기본 프로필 이미지", html);
         Assert.Contains("등록된 프로필 이미지가 없습니다.", html);
+        Assert.Contains("/js/dist/account/profile-media", html);
+
+        using var moduleResponse = await client.GetAsync(
+            "/js/dist/account/profile-media.js",
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, moduleResponse.StatusCode);
     }
 
     [Fact]

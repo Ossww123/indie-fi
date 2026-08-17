@@ -67,6 +67,62 @@ public sealed class MediaUploadReservationServiceTests
     }
 
     [Fact]
+    public async Task ReserveAsync_ProfileImageForNewAccount_CreatesEmptyProfileAtomically()
+    {
+        var target = await CreateOwnerTargetsAsync(gameCount: 0);
+
+        await using (var db = _fixture.NewDbContext())
+        {
+            var result = await new MediaUploadReservationService(db).ReserveAsync(
+                target.OwnerId,
+                MediaTarget.Profile(target.OwnerId),
+                MediaAttachmentKind.ProfileImage,
+                "image/png",
+                512,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(MediaUploadReservationOutcome.Reserved, result.Outcome);
+            Assert.NotNull(result.MediaId);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var profile = await verificationDb.UserProfiles
+            .AsNoTracking()
+            .SingleAsync(
+                item => item.UserId == target.OwnerId,
+                TestContext.Current.CancellationToken);
+        Assert.Null(profile.Nickname);
+        Assert.Empty(profile.Biography);
+        Assert.True(await verificationDb.MediaAssets.AnyAsync(
+            item => item.ProfileUserId == target.OwnerId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ReserveAsync_ProfileImageForAnotherAccount_ReturnsTargetNotFound()
+    {
+        var actor = await CreateOwnerTargetsAsync(gameCount: 0);
+        var other = await CreateOwnerTargetsAsync(gameCount: 0);
+
+        await using var db = _fixture.NewDbContext();
+        var result = await new MediaUploadReservationService(db).ReserveAsync(
+            actor.OwnerId,
+            MediaTarget.Profile(other.OwnerId),
+            MediaAttachmentKind.ProfileImage,
+            "image/png",
+            512,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(MediaUploadReservationOutcome.TargetNotFound, result.Outcome);
+        Assert.False(await db.UserProfiles.AnyAsync(
+            profile => profile.UserId == other.OwnerId,
+            TestContext.Current.CancellationToken));
+        Assert.False(await db.MediaAssets.AnyAsync(
+            media => media.OwnerUserId == actor.OwnerId,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ReserveAsync_InsideCallerTransaction_DoesNotCommitIt()
     {
         var target = await CreateOwnerTargetsAsync(gameCount: 1);
