@@ -292,6 +292,72 @@ public sealed class MediaHttpIntegrationTests
     }
 
     [Fact]
+    public async Task ScreenshotOrderEndpoint_RequiresCsrfOwnershipAndTheCompleteSet()
+    {
+        var owner = await CreateAccountWithGameAsync();
+        var other = await CreateAccountWithGameAsync();
+        var screenshots = await AddReadyScreenshotsAsync(owner, count: 3);
+        await using var baseFactory = new WebAppFactory(_postgresql.ConnectionString);
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+            ConfigureMediaHost(builder, Prefix()));
+        using var ownerClient = CreateClient(factory);
+        using var otherClient = CreateClient(factory);
+        await PageTestSupport.LoginAsync(ownerClient, owner.Email, owner.Password);
+        await PageTestSupport.LoginAsync(otherClient, other.Email, other.Password);
+        var request = new GameScreenshotOrderRequest(
+            [screenshots[2], screenshots[0], screenshots[1]]);
+
+        using (var missingAntiforgery = await ownerClient.PutAsJsonAsync(
+            $"/api/media/games/{owner.GameId}/screenshots/order",
+            request,
+            TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, missingAntiforgery.StatusCode);
+            Assert.Equal(
+                "antiforgery_validation_failed",
+                (await ReadRequiredAsync<MediaApiError>(missingAntiforgery)).Code);
+        }
+
+        var otherAntiforgery = await GetAntiforgeryAsync(otherClient);
+        using (var foreign = await SendJsonAsync(
+            otherClient,
+            HttpMethod.Put,
+            $"/api/media/games/{owner.GameId}/screenshots/order",
+            request,
+            otherAntiforgery))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        }
+
+        var ownerAntiforgery = await GetAntiforgeryAsync(ownerClient);
+        using (var incomplete = await SendJsonAsync(
+            ownerClient,
+            HttpMethod.Put,
+            $"/api/media/games/{owner.GameId}/screenshots/order",
+            new GameScreenshotOrderRequest([screenshots[0]]),
+            ownerAntiforgery))
+        {
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, incomplete.StatusCode);
+            Assert.Equal(
+                "invalid_screenshot_order",
+                (await ReadRequiredAsync<MediaApiError>(incomplete)).Code);
+        }
+
+        using var reordered = await SendJsonAsync(
+            ownerClient,
+            HttpMethod.Put,
+            $"/api/media/games/{owner.GameId}/screenshots/order",
+            request,
+            ownerAntiforgery);
+        Assert.Equal(HttpStatusCode.OK, reordered.StatusCode);
+        AssertNoStore(reordered);
+        var response = await ReadRequiredAsync<GameScreenshotOrderResponse>(
+            reordered);
+        Assert.Equal(owner.GameId, response.GameId);
+        Assert.Equal(request.MediaIds, response.MediaIds);
+    }
+
+    [Fact]
     public async Task ConcurrentScreenshotReservations_CannotCreateNinthAttachment()
     {
         var owner = await CreateAccountWithGameAsync();
@@ -476,6 +542,43 @@ public sealed class MediaHttpIntegrationTests
                 DeclaredBytes = 1024,
             }));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task<IReadOnlyList<Guid>> AddReadyScreenshotsAsync(
+        TestAccount owner,
+        int count)
+    {
+        var now = DateTimeOffset.UtcNow;
+        now = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
+        var screenshots = Enumerable.Range(0, count).Select(index =>
+            new MediaAsset
+            {
+                Id = Guid.NewGuid(),
+                OwnerUserId = owner.UserId,
+                GameId = owner.GameId,
+                AttachmentKind = MediaAttachmentKind.GameScreenshot,
+                Status = MediaStatus.Ready,
+                DeclaredContentType = "image/png",
+                DeclaredBytes = 1024,
+                SourceContentType = "image/png",
+                SourceBytes = 1024,
+                SourceETag = $"\"{Guid.NewGuid():N}\"",
+                DetectedContentType = "image/png",
+                PixelWidth = 80,
+                PixelHeight = 45,
+                FrameCount = 1,
+                IsCurrent = true,
+                SortOrder = index,
+                PublishedAt = now.AddMinutes(-5),
+                CreatedAt = now.AddHours(-1),
+                UpdatedAt = now.AddMinutes(-5),
+                StatusChangedAt = now.AddMinutes(-5),
+                UploadExpiresAt = now.AddHours(23),
+            }).ToArray();
+        await using var db = _postgresql.NewDbContext();
+        db.MediaAssets.AddRange(screenshots);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return screenshots.Select(item => item.Id).ToArray();
     }
 
     private static HttpClient CreateClient(WebApplicationFactory<Program> factory) =>

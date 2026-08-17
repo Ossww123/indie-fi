@@ -52,6 +52,13 @@ public sealed record MediaAntiforgeryResponse(
     string RequestToken,
     string HeaderName);
 
+public sealed record GameScreenshotOrderRequest(
+    IReadOnlyList<Guid>? MediaIds);
+
+public sealed record GameScreenshotOrderResponse(
+    long GameId,
+    IReadOnlyList<Guid> MediaIds);
+
 public sealed record MediaApiError(string Code, string Message);
 
 public static class MediaEndpoints
@@ -83,6 +90,9 @@ public static class MediaEndpoints
             CompleteAsync);
         group.MapGet("/{mediaId:guid}", FindStatusAsync);
         group.MapDelete("/{mediaId:guid}", RemoveAsync);
+        group.MapPut(
+            "/games/{gameId:long}/screenshots/order",
+            ReorderScreenshotsAsync);
 
         return endpoints;
     }
@@ -401,6 +411,59 @@ public static class MediaEndpoints
                 "The media cannot be removed from its current state."),
             _ => throw new InvalidOperationException(
                 "The publication service returned an unknown outcome."),
+        };
+    }
+
+    private static async Task<IResult> ReorderScreenshotsAsync(
+        long gameId,
+        GameScreenshotOrderRequest request,
+        ICurrentUser currentUser,
+        GameScreenshotOrderService orderService,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetOwnerId(currentUser, out var ownerUserId))
+        {
+            return Error(
+                StatusCodes.Status401Unauthorized,
+                "authentication_required",
+                "Authentication is required.");
+        }
+
+        if (gameId <= 0)
+        {
+            return NotFound();
+        }
+
+        if (request.MediaIds is null)
+        {
+            return Error(
+                StatusCodes.Status422UnprocessableEntity,
+                "invalid_screenshot_order",
+                "The complete ready screenshot order is required.");
+        }
+
+        var result = await orderService.ReorderAsync(
+            ownerUserId,
+            gameId,
+            request.MediaIds,
+            cancellationToken);
+        return result.Outcome switch
+        {
+            GameScreenshotOrderOutcome.Reordered => Results.Ok(
+                new GameScreenshotOrderResponse(
+                    gameId,
+                    result.MediaIds!)),
+            GameScreenshotOrderOutcome.AccountUnavailable => Error(
+                StatusCodes.Status403Forbidden,
+                "account_unavailable",
+                "The account cannot mutate media."),
+            GameScreenshotOrderOutcome.GameNotFound => NotFound(),
+            GameScreenshotOrderOutcome.InvalidOrder => Error(
+                StatusCodes.Status422UnprocessableEntity,
+                "invalid_screenshot_order",
+                "The submitted order must contain every ready screenshot exactly once."),
+            _ => throw new InvalidOperationException(
+                "The screenshot order service returned an unknown outcome."),
         };
     }
 
