@@ -11,6 +11,7 @@ using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
@@ -142,9 +143,70 @@ public sealed class MediaWorkerIntegrationTests :
         }
     }
 
+    [Fact]
+    public async Task StorageTimeout_ReplacementWorkerRetriesAndConvergesToReady()
+    {
+        await ResetAsync();
+        var settings = BuildSettings();
+        var timeoutStorage = new TimeoutOnceMediaObjectStorageState();
+        using var producer = BuildHost(settings, workerEnabled: false);
+        using var delayedWorker = BuildHost(
+            settings,
+            workerEnabled: true,
+            services =>
+            {
+                services.RemoveAll<IMediaObjectStorage>();
+                services.AddSingleton<IMediaObjectStorage>(provider =>
+                    new TimeoutOnceMediaObjectStorage(
+                        provider.GetRequiredService<S3MediaObjectStorage>(),
+                        timeoutStorage));
+            });
+
+        await producer.StartAsync(TestContext.Current.CancellationToken);
+        await delayedWorker.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            var media = await ArrangeMediaAsync(
+                producer.Services,
+                MediaStatus.ProcessingPending);
+            await StageAsync(producer.Services, media.MediaId);
+            await WaitForStateAsync(
+                media.MediaId,
+                MediaStatus.ProcessingPending,
+                attemptCount: 1,
+                requireNextAttempt: true);
+            Assert.True(timeoutStorage.WasInjected);
+
+            await delayedWorker.StopAsync(CancellationToken.None);
+            await MakeRetryDueAsync(media.MediaId);
+            using var replacementWorker = BuildHost(settings, workerEnabled: true);
+            await replacementWorker.StartAsync(TestContext.Current.CancellationToken);
+            try
+            {
+                await WaitForStateAsync(
+                    media.MediaId,
+                    MediaStatus.Ready,
+                    attemptCount: 2);
+                Assert.NotNull(await GetDerivativeEtagAsync(
+                    producer.Services,
+                    media.MediaId));
+            }
+            finally
+            {
+                await replacementWorker.StopAsync(CancellationToken.None);
+            }
+        }
+        finally
+        {
+            await delayedWorker.StopAsync(CancellationToken.None);
+            await producer.StopAsync(CancellationToken.None);
+        }
+    }
+
     private IHost BuildHost(
         IReadOnlyDictionary<string, string?> baseSettings,
-        bool workerEnabled)
+        bool workerEnabled,
+        Action<IServiceCollection>? configureServices = null)
     {
         var settings = new Dictionary<string, string?>(baseSettings)
         {
@@ -164,6 +226,7 @@ public sealed class MediaWorkerIntegrationTests :
         builder.Services.AddNotificationsModule(
             builder.Configuration,
             registration => registration.AddMediaConsumers(builder.Configuration));
+        configureServices?.Invoke(builder.Services);
         return builder.Build();
     }
 
@@ -463,4 +526,73 @@ public sealed class MediaWorkerIntegrationTests :
     }
 
     private sealed record ArrangedMedia(Guid MediaId, Guid EventId);
+
+    private sealed class TimeoutOnceMediaObjectStorageState
+    {
+        private int _wasInjected;
+
+        public bool WasInjected => Volatile.Read(ref _wasInjected) == 1;
+
+        public bool TryInject() =>
+            Interlocked.CompareExchange(ref _wasInjected, 1, 0) == 0;
+    }
+
+    private sealed class TimeoutOnceMediaObjectStorage : IMediaObjectStorage
+    {
+        private readonly IMediaObjectStorage _inner;
+        private readonly TimeoutOnceMediaObjectStorageState _state;
+
+        public TimeoutOnceMediaObjectStorage(
+            IMediaObjectStorage inner,
+            TimeoutOnceMediaObjectStorageState state)
+        {
+            _inner = inner;
+            _state = state;
+        }
+
+        public Task<Uri> CreateUploadUrlAsync(
+            ObjectStorageUploadUrlRequest request,
+            CancellationToken cancellationToken = default) =>
+            _inner.CreateUploadUrlAsync(request, cancellationToken);
+
+        public Task<Uri> CreateDownloadUrlAsync(
+            ObjectStorageDownloadUrlRequest request,
+            CancellationToken cancellationToken = default) =>
+            _inner.CreateDownloadUrlAsync(request, cancellationToken);
+
+        public Task<ObjectStorageMetadata?> GetMetadataAsync(
+            MediaObjectKey objectKey,
+            CancellationToken cancellationToken = default) =>
+            _inner.GetMetadataAsync(objectKey, cancellationToken);
+
+        public async Task<ObjectStorageReadResult> OpenReadAsync(
+            MediaObjectKey objectKey,
+            CancellationToken cancellationToken = default)
+        {
+            if (_state.TryInject())
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+                throw new MediaObjectStorageException(
+                    MediaObjectStorageFailureCode.TimedOut,
+                    "Injected delayed storage timeout.");
+            }
+
+            return await _inner.OpenReadAsync(objectKey, cancellationToken);
+        }
+
+        public Task WriteAsync(
+            ObjectStorageWriteRequest request,
+            CancellationToken cancellationToken = default) =>
+            _inner.WriteAsync(request, cancellationToken);
+
+        public Task CopyAsync(
+            ObjectStorageCopyRequest request,
+            CancellationToken cancellationToken = default) =>
+            _inner.CopyAsync(request, cancellationToken);
+
+        public Task DeleteIfExistsAsync(
+            MediaObjectKey objectKey,
+            CancellationToken cancellationToken = default) =>
+            _inner.DeleteIfExistsAsync(objectKey, cancellationToken);
+    }
 }
