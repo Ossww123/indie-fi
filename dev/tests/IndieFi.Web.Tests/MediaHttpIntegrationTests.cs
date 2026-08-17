@@ -421,6 +421,7 @@ public sealed class MediaHttpIntegrationTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertNoStore(response);
         Assert.Contains("data-game-media", html);
         Assert.Contains($"data-game-id=\"{owner.GameId}\"", html);
         Assert.Contains("data-max-screenshots=\"8\"", html);
@@ -458,6 +459,7 @@ public sealed class MediaHttpIntegrationTests
             await detailResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        AssertNoStore(detailResponse);
         Assert.Contains($"href=\"/Games/Media/{owner.GameId}\"", detailHtml);
         Assert.Contains($"data-media-id=\"{media.CoverId}\"", detailHtml);
         Assert.Contains(
@@ -476,10 +478,15 @@ public sealed class MediaHttpIntegrationTests
             await publicDetailResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, publicDetailResponse.StatusCode);
+        AssertNoStore(publicDetailResponse);
         Assert.Contains($"data-media-id=\"{media.CoverId}\"", publicDetailHtml);
         Assert.Contains(
             $"data-media-id=\"{media.ReadyScreenshotId}\"",
             publicDetailHtml);
+        Assert.DoesNotContain(media.PendingId.ToString(), publicDetailHtml);
+        Assert.DoesNotContain(media.FailedId.ToString(), publicDetailHtml);
+        Assert.DoesNotContain("staging/", publicDetailHtml);
+        Assert.DoesNotContain("sources/", publicDetailHtml);
 
         using var homeResponse = await anonymousClient.GetAsync(
             "/",
@@ -488,8 +495,13 @@ public sealed class MediaHttpIntegrationTests
             await homeResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, homeResponse.StatusCode);
+        AssertNoStore(homeResponse);
         Assert.Contains("data-game-list-cover", homeHtml);
         Assert.Contains($"data-media-id=\"{media.CoverId}\"", homeHtml);
+        Assert.DoesNotContain(media.PendingId.ToString(), homeHtml);
+        Assert.DoesNotContain(media.FailedId.ToString(), homeHtml);
+        Assert.DoesNotContain("staging/", homeHtml);
+        Assert.DoesNotContain("sources/", homeHtml);
 
         using var ownGamesResponse = await ownerClient.GetAsync(
             "/Games",
@@ -498,6 +510,7 @@ public sealed class MediaHttpIntegrationTests
             await ownGamesResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, ownGamesResponse.StatusCode);
+        AssertNoStore(ownGamesResponse);
         Assert.Contains("data-game-list-cover", ownGamesHtml);
         Assert.Contains($"data-media-id=\"{media.CoverId}\"", ownGamesHtml);
 
@@ -629,6 +642,7 @@ public sealed class MediaHttpIntegrationTests
             await managementResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, managementResponse.StatusCode);
+        AssertNoStore(managementResponse);
         Assert.Contains($"data-media-id=\"{media.CurrentId}\"", managementHtml);
         Assert.Contains($"data-media-id=\"{media.PendingId}\"", managementHtml);
         Assert.Contains($"data-media-id=\"{media.FailedId}\"", managementHtml);

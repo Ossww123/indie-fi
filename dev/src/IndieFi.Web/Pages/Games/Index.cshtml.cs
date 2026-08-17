@@ -4,6 +4,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Media.Application;
 using IndieFi.Web.Modules.Media.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Options;
 namespace IndieFi.Web.Pages.Games;
 
 [Authorize]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class IndexModel : PageModel
 {
     private readonly AppDbContext _db;
@@ -33,6 +35,11 @@ public class IndexModel : PageModel
 
     public async Task OnGetAsync()
     {
+        if (_mediaStorageOptions.Enabled)
+        {
+            Response.Headers["Referrer-Policy"] = "no-referrer";
+        }
+
         var ownerId = _currentUser.GetRequiredUserId();
 
         // Only the signed-in user's own games; the owner id comes from the cookie,

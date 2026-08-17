@@ -10,6 +10,7 @@ using Microsoft.Extensions.Primitives;
 
 namespace IndieFi.Web.Pages;
 
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class IndexModel : PageModel
 {
     private readonly PublicGameDiscoveryQueryService _discovery;
@@ -65,7 +66,6 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
-        Response.Headers.CacheControl = "no-store";
         Response.Headers["Referrer-Policy"] = "no-referrer";
         var cancellationToken = HttpContext.RequestAborted;
         Catalog = await _catalogs.GetActiveAsync(cancellationToken);

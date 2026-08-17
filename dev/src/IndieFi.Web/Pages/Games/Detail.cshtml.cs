@@ -16,6 +16,7 @@ namespace IndieFi.Web.Pages.Games;
 
 // Public: anyone (including logged-out visitors) can view a game's detail and its
 // key drops. IsOwner stays false for anonymous users, hiding the owner-only actions.
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class DetailModel : PageModel
 {
     public sealed record RequestNotice(
@@ -98,6 +99,11 @@ public class DetailModel : PageModel
         string? request,
         string? favorite)
     {
+        if (_mediaStorageOptions.Enabled)
+        {
+            Response.Headers["Referrer-Policy"] = "no-referrer";
+        }
+
         // 028 showed that TempData notices can be lost, so the result travels in the URL.
         // Query strings are user-controlled, so only known codes may select displayed text.
         RequestMessage = RequestNotices

@@ -41,6 +41,8 @@ public sealed class MediaModel : PageModel
             return NotFound();
         }
 
+        Response.Headers["Referrer-Policy"] = "no-referrer";
+
         var media = await _services
             .GetRequiredService<GameMediaQueryService>()
             .GetOwnerAsync(

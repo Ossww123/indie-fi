@@ -54,6 +54,11 @@ public sealed class ProfileModel : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
+        if (_storageOptions.Enabled)
+        {
+            Response.Headers["Referrer-Policy"] = "no-referrer";
+        }
+
         if (_currentUser.UserId is not long userId)
         {
             return Challenge();
