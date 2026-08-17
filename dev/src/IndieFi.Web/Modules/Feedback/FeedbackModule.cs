@@ -9,6 +9,7 @@ public static class FeedbackModule
         services.AddScoped<ReviewRequestService>();
         services.AddScoped<ReviewClaimService>();
         services.AddScoped<FeedbackSubmissionService>();
+        services.AddScoped<FeedbackRatingService>();
         services.AddScoped<ReviewLeaseSweepService>();
         services.AddScoped<ReviewDeadlineNotificationService>();
 
