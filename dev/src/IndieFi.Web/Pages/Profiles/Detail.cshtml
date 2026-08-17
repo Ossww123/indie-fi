@@ -10,18 +10,32 @@
 }
 
 <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
-    <div class="flex size-24 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700"
-         data-default-profile-image>
-        <svg class="size-12"
-             viewBox="0 0 24 24"
-             fill="none"
-             stroke="currentColor"
-             stroke-width="1.5"
-             role="img"
-             aria-label="기본 프로필 이미지">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.12a7.5 7.5 0 0 1 15 0A17.9 17.9 0 0 1 12 21.75a17.9 17.9 0 0 1-7.5-1.63Z" />
-        </svg>
-    </div>
+    @if (Model.ProfileImage is { } profileImage)
+    {
+        <img data-profile-image
+             data-media-id="@profileImage.MediaId"
+             src="@profileImage.Url"
+             alt="@Model.Profile.DisplayName 프로필 이미지"
+             class="size-24 shrink-0 rounded-full bg-slate-100 object-cover"
+             width="96"
+             height="96"
+             referrerpolicy="no-referrer" />
+    }
+    else
+    {
+        <div class="flex size-24 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700"
+             data-default-profile-image>
+            <svg class="size-12"
+                 viewBox="0 0 24 24"
+                 fill="none"
+                 stroke="currentColor"
+                 stroke-width="1.5"
+                 role="img"
+                 aria-label="기본 프로필 이미지">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.12a7.5 7.5 0 0 1 15 0A17.9 17.9 0 0 1 12 21.75a17.9 17.9 0 0 1-7.5-1.63Z" />
+            </svg>
+        </div>
+    }
     <div>
         <div class="flex flex-wrap items-center gap-3">
             <h1 class="page-title">@Model.Profile.DisplayName</h1>

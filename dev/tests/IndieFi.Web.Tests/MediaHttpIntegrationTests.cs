@@ -6,6 +6,7 @@ using IndieFi.Web.Modules.Media;
 using IndieFi.Web.Modules.Media.Application;
 using IndieFi.Web.Modules.Media.Domain;
 using IndieFi.Web.Modules.Media.Infrastructure;
+using IndieFi.Web.Modules.Profiles.Domain;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -565,6 +566,109 @@ public sealed class MediaHttpIntegrationTests
     }
 
     [Fact]
+    public async Task ProfileMediaUserFlow_ShowsOnlyCurrentImageAndReturnsToDefaultAfterRemoval()
+    {
+        var owner = await CreateAccountWithGameAsync();
+        var media = await AddProfilePageMediaAsync(owner);
+        await using var baseFactory = new WebAppFactory(_postgresql.ConnectionString);
+        await using var factory = baseFactory.WithWebHostBuilder(builder =>
+            ConfigureMediaHost(builder, Prefix()));
+        byte[] derivedPayload =
+        [
+            0x52, 0x49, 0x46, 0x46,
+            0x04, 0x00, 0x00, 0x00,
+            0x57, 0x45, 0x42, 0x50,
+        ];
+        await WriteDerivedAsync(
+            factory.Services,
+            media.CurrentId,
+            MediaDerivedVariant.ProfileDisplay,
+            derivedPayload);
+        await WriteDerivedAsync(
+            factory.Services,
+            media.CurrentId,
+            MediaDerivedVariant.ProfileThumbnail,
+            derivedPayload);
+        using var anonymousClient = CreateClient(factory);
+        using var ownerClient = CreateClient(factory);
+        await PageTestSupport.LoginAsync(ownerClient, owner.Email, owner.Password);
+
+        using var publicResponse = await anonymousClient.GetAsync(
+            $"/Profiles/{owner.UserId}",
+            TestContext.Current.CancellationToken);
+        var publicHtml = WebUtility.HtmlDecode(
+            await publicResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.OK, publicResponse.StatusCode);
+        AssertNoStore(publicResponse);
+        Assert.Contains("data-profile-image", publicHtml);
+        Assert.Contains($"data-media-id=\"{media.CurrentId}\"", publicHtml);
+        Assert.DoesNotContain("data-default-profile-image", publicHtml);
+        Assert.DoesNotContain(media.PendingId.ToString(), publicHtml);
+        Assert.DoesNotContain(media.FailedId.ToString(), publicHtml);
+
+        var publicImageUrl = ReadImageSource(publicHtml, media.CurrentId);
+        using (var objectClient = new HttpClient())
+        using (var imageResponse = await objectClient.GetAsync(
+            publicImageUrl,
+            TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, imageResponse.StatusCode);
+            Assert.Equal("image/webp", imageResponse.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(
+                derivedPayload,
+                await imageResponse.Content.ReadAsByteArrayAsync(
+                    TestContext.Current.CancellationToken));
+        }
+
+        using var managementResponse = await ownerClient.GetAsync(
+            "/Account/Profile",
+            TestContext.Current.CancellationToken);
+        var managementHtml = WebUtility.HtmlDecode(
+            await managementResponse.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, managementResponse.StatusCode);
+        Assert.Contains($"data-media-id=\"{media.CurrentId}\"", managementHtml);
+        Assert.Contains($"data-media-id=\"{media.PendingId}\"", managementHtml);
+        Assert.Contains($"data-media-id=\"{media.FailedId}\"", managementHtml);
+        Assert.Contains("/js/dist/account/profile-media", managementHtml);
+
+        var thumbnailUrl = ReadImageSource(managementHtml, media.CurrentId);
+        using (var objectClient = new HttpClient())
+        using (var thumbnailResponse = await objectClient.GetAsync(
+            thumbnailUrl,
+            TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, thumbnailResponse.StatusCode);
+            Assert.Equal(
+                derivedPayload,
+                await thumbnailResponse.Content.ReadAsByteArrayAsync(
+                    TestContext.Current.CancellationToken));
+        }
+
+        var antiforgery = await GetAntiforgeryAsync(ownerClient);
+        using (var removal = await DeleteAsync(
+            ownerClient,
+            media.CurrentId,
+            antiforgery))
+        {
+            Assert.Equal(HttpStatusCode.Accepted, removal.StatusCode);
+        }
+
+        using var afterRemoval = await anonymousClient.GetAsync(
+            $"/Profiles/{owner.UserId}",
+            TestContext.Current.CancellationToken);
+        var afterRemovalHtml = WebUtility.HtmlDecode(
+            await afterRemoval.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.OK, afterRemoval.StatusCode);
+        Assert.Contains("data-default-profile-image", afterRemovalHtml);
+        Assert.DoesNotContain("data-profile-image", afterRemovalHtml);
+        Assert.DoesNotContain(media.CurrentId.ToString(), afterRemovalHtml);
+    }
+
+    [Fact]
     public async Task ConcurrentScreenshotReservations_CannotCreateNinthAttachment()
     {
         var owner = await CreateAccountWithGameAsync();
@@ -911,6 +1015,82 @@ public sealed class MediaHttpIntegrationTests
             failed.Id);
     }
 
+    private async Task<ProfilePageMedia> AddProfilePageMediaAsync(TestAccount owner)
+    {
+        var now = DateTimeOffset.UtcNow;
+        now = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
+        var profile = new UserProfile
+        {
+            UserId = owner.UserId,
+            Nickname = $"Profile{owner.UserId}",
+            NormalizedNickname = $"PROFILE{owner.UserId}",
+            Biography = "프로필 이미지 통합 테스트",
+            NicknameChangedAt = now.AddDays(-8),
+            CreatedAt = now.AddDays(-8),
+            UpdatedAt = now.AddDays(-8),
+        };
+        var current = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            ProfileUserId = owner.UserId,
+            AttachmentKind = MediaAttachmentKind.ProfileImage,
+            Status = MediaStatus.Ready,
+            DeclaredContentType = "image/png",
+            DeclaredBytes = 1024,
+            SourceContentType = "image/png",
+            SourceBytes = 1024,
+            SourceETag = $"\"{Guid.NewGuid():N}\"",
+            DetectedContentType = "image/png",
+            PixelWidth = 80,
+            PixelHeight = 80,
+            FrameCount = 1,
+            IsCurrent = true,
+            PublishedAt = now.AddMinutes(-5),
+            CreatedAt = now.AddHours(-1),
+            UpdatedAt = now.AddMinutes(-5),
+            StatusChangedAt = now.AddMinutes(-5),
+            UploadExpiresAt = now.AddHours(23),
+        };
+        var pending = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            ProfileUserId = owner.UserId,
+            AttachmentKind = MediaAttachmentKind.ProfileImage,
+            Status = MediaStatus.ProcessingPending,
+            DeclaredContentType = "image/webp",
+            DeclaredBytes = 2048,
+            SourceContentType = "image/webp",
+            SourceBytes = 2048,
+            SourceETag = $"\"{Guid.NewGuid():N}\"",
+            CreatedAt = now.AddMinutes(-4),
+            UpdatedAt = now.AddMinutes(-3),
+            StatusChangedAt = now.AddMinutes(-3),
+            UploadExpiresAt = now.AddHours(23).AddMinutes(56),
+        };
+        var failed = new MediaAsset
+        {
+            Id = Guid.NewGuid(),
+            OwnerUserId = owner.UserId,
+            ProfileUserId = owner.UserId,
+            AttachmentKind = MediaAttachmentKind.ProfileImage,
+            Status = MediaStatus.Failed,
+            DeclaredContentType = "image/jpeg",
+            DeclaredBytes = 4096,
+            FailureCode = "image_invalid_format",
+            CreatedAt = now.AddMinutes(-2),
+            UpdatedAt = now.AddMinutes(-1),
+            StatusChangedAt = now.AddMinutes(-1),
+            UploadExpiresAt = now.AddHours(23).AddMinutes(58),
+        };
+        await using var db = _postgresql.NewDbContext();
+        db.UserProfiles.Add(profile);
+        db.MediaAssets.AddRange(current, pending, failed);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return new ProfilePageMedia(current.Id, pending.Id, failed.Id);
+    }
+
     private static HttpClient CreateClient(WebApplicationFactory<Program> factory) =>
         factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -1068,6 +1248,11 @@ public sealed class MediaHttpIntegrationTests
         Guid CoverId,
         Guid ReadyScreenshotId,
         Guid SecondReadyScreenshotId,
+        Guid PendingId,
+        Guid FailedId);
+
+    private sealed record ProfilePageMedia(
+        Guid CurrentId,
         Guid PendingId,
         Guid FailedId);
 }

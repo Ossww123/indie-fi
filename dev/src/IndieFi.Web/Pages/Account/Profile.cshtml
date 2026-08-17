@@ -75,7 +75,8 @@
 
         @if (currentImage?.PreviewUrl is not null)
         {
-            <img src="@currentImage.PreviewUrl"
+            <img data-media-id="@currentImage.MediaId"
+                 src="@currentImage.PreviewUrl"
                  alt="현재 프로필 이미지"
                  class="mb-4 size-28 rounded-full object-cover"
                  width="112"
