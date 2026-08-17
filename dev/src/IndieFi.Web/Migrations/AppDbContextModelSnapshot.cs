@@ -989,6 +989,135 @@ namespace IndieFi.Web.Migrations
                         });
                 });
 
+            modelBuilder.Entity("IndieFi.Web.Modules.Feedback.Domain.FeedbackRating", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("FeedbackSubmissionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("feedback_submission_id");
+
+                    b.Property<long>("RaterId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("rater_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<long>("ReviewerId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reviewer_id");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("revision");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer")
+                        .HasColumnName("score");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeedbackSubmissionId")
+                        .IsUnique();
+
+                    b.HasIndex("RaterId");
+
+                    b.HasIndex("ReviewerId");
+
+                    b.HasIndex("FeedbackSubmissionId", "ReviewerId");
+
+                    b.ToTable("feedback_ratings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_feedback_ratings_distinct_users", "rater_id <> reviewer_id");
+
+                            t.HasCheckConstraint("CK_feedback_ratings_reason", "reason IS NULL OR (length(reason) > 0 AND reason = btrim(reason))");
+
+                            t.HasCheckConstraint("CK_feedback_ratings_revision", "revision > 0");
+
+                            t.HasCheckConstraint("CK_feedback_ratings_score", "score BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("CK_feedback_ratings_timestamps", "updated_at >= created_at");
+                        });
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Feedback.Domain.ReviewerReputation", b =>
+                {
+                    b.Property<long>("ReviewerId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reviewer_id");
+
+                    b.Property<int>("CompletedReviewCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("completed_review_count");
+
+                    b.Property<int>("ExpiredAssignmentCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("expired_assignment_count");
+
+                    b.Property<int>("RatingCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rating_count");
+
+                    b.Property<int>("RatingScoreSum")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rating_score_sum");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("revision");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("ReviewerId");
+
+                    b.ToTable("reviewer_reputations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_reviewer_reputations_counts", "completed_review_count >= 0 AND expired_assignment_count >= 0 AND rating_count >= 0 AND rating_score_sum >= 0");
+
+                            t.HasCheckConstraint("CK_reviewer_reputations_rating_aggregate", "(rating_count = 0 AND rating_score_sum = 0) OR (rating_count > 0 AND rating_score_sum::bigint >= rating_count::bigint AND rating_score_sum::bigint <= rating_count::bigint * 5)");
+
+                            t.HasCheckConstraint("CK_reviewer_reputations_revision", "revision > 0");
+                        });
+                });
+
             modelBuilder.Entity("IndieFi.Web.Modules.Games.Domain.GameGenre", b =>
                 {
                     b.Property<long>("Id")
@@ -2744,6 +2873,38 @@ namespace IndieFi.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Feedback.Domain.FeedbackRating", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RaterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IndieFi.Web.Entities.FeedbackSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("FeedbackSubmissionId", "ReviewerId")
+                        .HasPrincipalKey("Id", "ReviewerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_feedback_ratings_feedback_submission_reviewer");
+                });
+
+            modelBuilder.Entity("IndieFi.Web.Modules.Feedback.Domain.ReviewerReputation", b =>
+                {
+                    b.HasOne("IndieFi.Web.Entities.User", null)
+                        .WithOne()
+                        .HasForeignKey("IndieFi.Web.Modules.Feedback.Domain.ReviewerReputation", "ReviewerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IndieFi.Web.Modules.Games.Domain.GamePlatformAssignment", b =>
