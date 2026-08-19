@@ -337,6 +337,52 @@
     @apply max-w-xl space-y-content-stack;
   }
 
+  .auth-shell {
+    @apply mx-auto w-full max-w-md;
+  }
+
+  .auth-header {
+    @apply mb-6 text-center;
+  }
+
+  .auth-eyebrow {
+    @apply text-xs font-extrabold tracking-[0.18em] text-brand-primary;
+  }
+
+  .auth-title {
+    @apply mt-2 text-3xl font-extrabold tracking-[-0.025em] text-brand-ink;
+  }
+
+  .auth-description {
+    @apply mt-3 text-sm text-brand-ink/65;
+  }
+
+  .auth-card {
+    @apply rounded-2xl border border-brand-ink/10 bg-brand-surface p-5 shadow-lg sm:p-7;
+  }
+
+  .auth-form {
+    @apply space-y-content-stack;
+  }
+
+  .auth-divider {
+    @apply my-6 flex items-center gap-3 text-xs font-medium text-brand-ink/55;
+  }
+
+  .auth-divider::before,
+  .auth-divider::after {
+    @apply h-px flex-1 bg-brand-ink/10;
+    content: "";
+  }
+
+  .auth-links {
+    @apply mt-5 flex flex-col items-center gap-1 border-t border-brand-ink/10 pt-5 text-sm;
+  }
+
+  .auth-state-actions {
+    @apply flex flex-col gap-2 sm:flex-row;
+  }
+
   .field-group {
     @apply space-y-1.5;
   }

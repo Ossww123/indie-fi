@@ -4,55 +4,57 @@
     ViewData["Title"] = "로그인";
 }
 
-<h1 class="page-title mb-6">로그인</h1>
+<section class="auth-shell" data-auth-page="login">
+    <header class="auth-header">
+        <p class="auth-eyebrow">WELCOME BACK</p>
+        <h1 class="auth-title">로그인</h1>
+        <p class="auth-description">관심 있는 인디 게임과 새로운 피드백을 이어서 확인하세요.</p>
+    </header>
 
-@if (Model.StatusMessage is not null)
-{
-    <div class="alert-success mb-6" role="status">@Model.StatusMessage</div>
-}
+    <div class="auth-card">
+        @if (Model.StatusMessage is not null)
+        {
+            <div class="alert-success" role="status">@Model.StatusMessage</div>
+        }
 
-@if (Model.GoogleErrorMessage is not null)
-{
-    <div class="alert-warning mb-6" role="alert">@Model.GoogleErrorMessage</div>
-}
+        @if (Model.GoogleErrorMessage is not null)
+        {
+            <div class="alert-warning" role="alert">@Model.GoogleErrorMessage</div>
+        }
 
-<form method="post" class="form-stack">
-    <input type="hidden" asp-for="ReturnUrl" />
-    <div asp-validation-summary="ModelOnly"></div>
+        <form method="post" class="auth-form">
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div asp-validation-summary="ModelOnly"></div>
 
-    <div class="field-group">
-        <label asp-for="Email" class="field-label">이메일</label>
-        <input asp-for="Email" class="field-input" autocomplete="email" />
-        <span asp-validation-for="Email" class="field-error"></span>
+            <div class="field-group">
+                <label asp-for="Email" class="field-label">이메일</label>
+                <input asp-for="Email" class="field-input" autocomplete="email" />
+                <span asp-validation-for="Email" class="field-error"></span>
+            </div>
+
+            <div class="field-group">
+                <label asp-for="Password" class="field-label">비밀번호</label>
+                <input asp-for="Password" class="field-input" autocomplete="current-password" />
+                <span asp-validation-for="Password" class="field-error"></span>
+            </div>
+
+            <button type="submit" class="button-primary w-full">로그인</button>
+        </form>
+
+        @if (Model.GoogleLoginAvailable)
+        {
+            <div class="auth-divider" aria-hidden="true">또는</div>
+
+            <form method="post" asp-page="/GoogleLogin" asp-page-handler="Challenge">
+                <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+                <button type="submit" class="button-outline w-full">Google로 계속하기</button>
+            </form>
+        }
+
+        <nav class="auth-links" aria-label="로그인 도움말">
+            <a asp-page="/Signup" class="text-link">처음이신가요? 가입하기</a>
+            <a asp-page="/ForgotPassword" class="text-link">비밀번호를 잊으셨나요?</a>
+            <a asp-page="/ResendConfirmationEmail" class="text-link">확인 메일 다시 받기</a>
+        </nav>
     </div>
-
-    <div class="field-group">
-        <label asp-for="Password" class="field-label">비밀번호</label>
-        <input asp-for="Password" class="field-input" autocomplete="current-password" />
-        <span asp-validation-for="Password" class="field-error"></span>
-    </div>
-
-    <button type="submit" class="button-primary">로그인</button>
-</form>
-
-@if (Model.GoogleLoginAvailable)
-{
-    <div class="my-6 flex items-center gap-3" aria-hidden="true">
-        <span class="h-px flex-1 bg-slate-200"></span>
-        <span class="text-xs font-medium text-slate-500">또는</span>
-        <span class="h-px flex-1 bg-slate-200"></span>
-    </div>
-
-    <form method="post" asp-page="/GoogleLogin" asp-page-handler="Challenge">
-        <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-        <button type="submit" class="button-outline w-full">Google로 계속하기</button>
-    </form>
-}
-
-<a asp-page="/ResendConfirmationEmail" class="button-link mt-4">
-    확인 메일 다시 받기
-</a>
-
-<a asp-page="/ForgotPassword" class="button-link mt-2">
-    비밀번호를 잊으셨나요?
-</a>
+</section>
