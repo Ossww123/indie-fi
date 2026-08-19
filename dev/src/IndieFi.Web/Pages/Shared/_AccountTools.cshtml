@@ -1,0 +1,20 @@
+@{
+    var currentPage = ViewContext.RouteData.Values["page"]?.ToString();
+}
+
+<nav class="account-tools" aria-label="내 활동과 계정 도구">
+    <a asp-page="/Games/Index"
+       class="account-tool-link @(currentPage == "/Games/Index" ? "account-tool-link-active" : null)">내 게임</a>
+    <a asp-page="/Account/FavoriteGames"
+       class="account-tool-link @(currentPage == "/Account/FavoriteGames" ? "account-tool-link-active" : null)">관심 게임</a>
+    <a asp-page="/Account/Following"
+       class="account-tool-link @(currentPage == "/Account/Following" ? "account-tool-link-active" : null)">팔로잉</a>
+    <a asp-page="/Notifications/Index"
+       class="account-tool-link @(currentPage is "/Notifications/Index" or "/Account/Notifications" ? "account-tool-link-active" : null)">알림</a>
+    <a asp-page="/Credits/Index"
+       class="account-tool-link @(currentPage == "/Credits/Index" ? "account-tool-link-active" : null)">크레딧</a>
+    <a asp-page="/Account/Profile"
+       class="account-tool-link @(currentPage == "/Account/Profile" ? "account-tool-link-active" : null)">프로필 설정</a>
+    <a asp-page="/Account/Password"
+       class="account-tool-link @(currentPage == "/Account/Password" ? "account-tool-link-active" : null)">비밀번호</a>
+</nav>

@@ -438,6 +438,31 @@
     @apply text-white/65;
   }
 
+  .account-tools {
+    @apply mb-8 flex gap-2 overflow-x-auto rounded-xl border border-brand-ink/10 bg-brand-surface p-2 shadow-sm;
+    scrollbar-width: thin;
+  }
+
+  .account-tool-link {
+    @apply inline-flex shrink-0 items-center rounded-lg px-3 py-2 text-sm font-semibold text-brand-ink/65 transition-colors hover:bg-brand-soft/40 hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
+  }
+
+  .account-tool-link-active {
+    @apply bg-brand-soft/65 text-brand-deep;
+  }
+
+  .account-balance {
+    @apply mb-6 flex flex-col gap-2 rounded-2xl border border-brand-primary/15 bg-brand-deep p-5 text-white shadow-lg sm:flex-row sm:items-end sm:justify-between sm:p-7;
+  }
+
+  .account-balance-value {
+    @apply text-3xl font-black tracking-tight;
+  }
+
+  .account-card-grid {
+    @apply grid gap-4 sm:grid-cols-2;
+  }
+
   .section-title {
     @apply mb-3 text-section-title font-bold tracking-[-0.015em] text-brand-ink;
   }

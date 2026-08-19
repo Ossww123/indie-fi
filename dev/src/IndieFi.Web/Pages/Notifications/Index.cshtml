@@ -4,10 +4,10 @@
     ViewData["Title"] = "알림";
 }
 
-<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
-    <div>
+<header class="page-heading">
+    <div class="page-heading-copy">
         <h1 class="page-title">알림</h1>
-        <p class="mt-2 text-sm text-slate-600">
+        <p class="page-description">
             읽지 않은 알림 <strong data-notification-unread-count>@Model.Snapshot.UnreadCount</strong>개
         </p>
     </div>
@@ -20,7 +20,9 @@
             </form>
         }
     </div>
-</div>
+</header>
+
+<partial name="_AccountTools" />
 
 @if (Model.Notice is not null)
 {
@@ -33,10 +35,10 @@
 }
 else
 {
-    <div class="surface-list" data-notification-list>
+    <div class="space-y-3" data-notification-list>
         @foreach (var item in Model.Snapshot.Items)
         {
-            <article class="surface-item @(item.ReadAt is null ? "surface-item-emphasis" : null)"
+            <article class="surface-card @(item.ReadAt is null ? "surface-item-emphasis border-brand-primary/25 bg-brand-soft/20" : null)"
                      data-notification-id="@item.Id"
                      data-notification-read="@(item.ReadAt is not null ? "true" : "false")">
                 <div class="flex flex-wrap items-start justify-between gap-3">

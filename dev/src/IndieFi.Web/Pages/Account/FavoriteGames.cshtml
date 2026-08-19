@@ -4,8 +4,14 @@
     ViewData["Title"] = "관심 게임";
 }
 
-<h1 class="page-title mb-2">관심 게임</h1>
-<p class="mb-6 text-sm text-slate-600">내가 관심 게임으로 등록한 목록입니다.</p>
+<header class="page-heading">
+    <div class="page-heading-copy">
+        <h1 class="page-title">관심 게임</h1>
+        <p class="page-description">다시 살펴보고 싶은 게임을 모아 둔 개인 목록입니다.</p>
+    </div>
+</header>
+
+<partial name="_AccountTools" />
 
 @if (Model.Items.Count == 0)
 {
@@ -13,10 +19,10 @@
 }
 else
 {
-    <div class="surface-list">
+    <div class="account-card-grid">
         @foreach (var item in Model.Items)
         {
-            <div class="surface-item">
+            <article class="surface-card">
                 <div class="flex items-center justify-between gap-4">
                     <a asp-page="/Games/Detail"
                        asp-route-id="@item.GameId"
@@ -37,9 +43,7 @@ else
                 {
                     <div class="mt-2">@item.Description</div>
                 }
-            </div>
+            </article>
         }
     </div>
 }
-
-<a asp-page="/Account/Profile" class="text-link mt-6 inline-block">← 내 프로필 설정으로</a>
