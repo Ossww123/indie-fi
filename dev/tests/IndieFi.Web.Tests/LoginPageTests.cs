@@ -44,6 +44,7 @@ public sealed class LoginPageTests
         Assert.Contains("인디 게임을 발견하고", decodedHtml);
         Assert.Contains("data-confirmation-dialog", html);
         Assert.Contains("/js/dist/layout/confirmation.js", html);
+        Assert.Contains("/js/dist/layout/form-state.js", html);
         Assert.DoesNotContain("data-account-menu", html);
 
         var footerStart = html.IndexOf("data-footer-navigation", StringComparison.Ordinal);

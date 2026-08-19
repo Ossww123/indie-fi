@@ -666,6 +666,19 @@
     @apply px-2 text-brand-primary hover:bg-brand-soft/60 hover:text-brand-deep;
   }
 
+  form[data-submit-pending="true"] {
+    @apply cursor-progress;
+  }
+
+  [data-submit-pending-button="true"] {
+    @apply pointer-events-none opacity-70;
+  }
+
+  [data-submit-pending-button="true"]::before {
+    @apply size-4 animate-spin rounded-full border-2 border-current border-r-transparent;
+    content: "";
+  }
+
   .alert-success,
   .alert-warning,
   .alert-danger,
