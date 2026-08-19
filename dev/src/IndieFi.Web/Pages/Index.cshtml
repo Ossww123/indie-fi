@@ -14,13 +14,13 @@
     <p class="mt-2 text-slate-500">인디 게임 피드백 플랫폼</p>
 </div>
 
-<section class="surface-card mb-8" aria-labelledby="discovery-filter-title">
+<section class="surface-list mb-8 p-5 sm:p-6" aria-labelledby="discovery-filter-title">
     <h2 id="discovery-filter-title" class="section-title">게임 찾기</h2>
     <form method="get" data-discovery-filter class="space-y-5">
         <div>
-            <label for="discovery-query" class="form-label">제목·소개 검색</label>
+            <label for="discovery-query" class="field-label">제목·소개 검색</label>
             <input id="discovery-query"
-                   class="form-input"
+                   class="field-input"
                    type="search"
                    name="q"
                    value="@Model.Query"
@@ -31,8 +31,8 @@
 
         <div class="grid gap-4 md:grid-cols-3">
             <div>
-                <label for="discovery-genre" class="form-label">장르</label>
-                <select id="discovery-genre" class="form-input" name="genre">
+                <label for="discovery-genre" class="field-label">장르</label>
+                <select id="discovery-genre" class="field-input" name="genre">
                     <option value="">전체 장르</option>
                     @foreach (var genre in Model.Catalog.Genres)
                     {
@@ -41,18 +41,18 @@
                 </select>
             </div>
             <div>
-                <label for="discovery-created-from" class="form-label">등록 시작 시각</label>
+                <label for="discovery-created-from" class="field-label">등록 시작 시각</label>
                 <input id="discovery-created-from"
-                       class="form-input"
+                       class="field-input"
                        type="text"
                        name="createdFrom"
                        value="@Model.CreatedFrom"
                        placeholder="2026-08-01T00:00:00+09:00" />
             </div>
             <div>
-                <label for="discovery-created-before" class="form-label">등록 종료 시각</label>
+                <label for="discovery-created-before" class="field-label">등록 종료 시각</label>
                 <input id="discovery-created-before"
-                       class="form-input"
+                       class="field-input"
                        type="text"
                        name="createdBefore"
                        value="@Model.CreatedBefore"
@@ -61,7 +61,7 @@
         </div>
 
         <fieldset>
-            <legend class="form-label">태그 <span class="text-meta">선택한 항목을 모두 포함</span></legend>
+            <legend class="field-label">태그 <span class="text-meta">선택한 항목을 모두 포함</span></legend>
             <div class="flex flex-wrap gap-x-4 gap-y-2">
                 @foreach (var tag in Model.Catalog.Tags)
                 {
@@ -77,7 +77,7 @@
         </fieldset>
 
         <fieldset>
-            <legend class="form-label">지원 플랫폼 <span class="text-meta">하나 이상 일치</span></legend>
+            <legend class="field-label">지원 플랫폼 <span class="text-meta">하나 이상 일치</span></legend>
             <div class="flex flex-wrap gap-x-4 gap-y-2">
                 @foreach (var platform in Model.Catalog.Platforms)
                 {
@@ -93,8 +93,8 @@
         </fieldset>
 
         <div class="flex flex-wrap gap-3">
-            <button type="submit" class="btn-primary">검색</button>
-            <a asp-page="/Index" class="btn-secondary">조건 초기화</a>
+            <button type="submit" class="button-primary">검색</button>
+            <a asp-page="/Index" class="button-outline">조건 초기화</a>
         </div>
     </form>
 </section>
@@ -171,6 +171,6 @@ else
 @if (Model.NextPageUrl is not null)
 {
     <div class="mt-6 flex justify-center">
-        <a data-discovery-next href="@Model.NextPageUrl" class="btn-secondary">다음 게임 보기</a>
+        <a data-discovery-next href="@Model.NextPageUrl" class="button-outline">다음 게임 보기</a>
     </div>
 }
