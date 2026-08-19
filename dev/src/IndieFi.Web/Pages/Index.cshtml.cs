@@ -64,6 +64,13 @@ public class IndexModel : PageModel
         || !string.IsNullOrEmpty(CreatedFrom)
         || !string.IsNullOrEmpty(CreatedBefore);
 
+    public bool HasAdvancedFilters =>
+        !string.IsNullOrEmpty(GenreCode)
+        || TagCodes.Length > 0
+        || PlatformCodes.Length > 0
+        || !string.IsNullOrEmpty(CreatedFrom)
+        || !string.IsNullOrEmpty(CreatedBefore);
+
     public async Task<IActionResult> OnGetAsync()
     {
         Response.Headers["Referrer-Policy"] = "no-referrer";
