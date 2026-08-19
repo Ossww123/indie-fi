@@ -4,13 +4,23 @@
 @source "../entries";
 @source "../shared";
 
+@theme static {
+  --color-brand-canvas: #f8f6fb;
+  --color-brand-surface: #ffffff;
+  --color-brand-soft: #e2cfea;
+  --color-brand-accent: #a06cd5;
+  --color-brand-primary: #6247aa;
+  --color-brand-ink: #102b3f;
+  --color-brand-deep: #062726;
+}
+
 @layer base {
   html {
-    @apply min-h-full bg-slate-50;
+    @apply min-h-full bg-brand-canvas;
   }
 
   body {
-    @apply min-h-screen text-slate-900 antialiased;
+    @apply min-h-screen text-brand-ink antialiased;
   }
 
   button:not(:disabled) {
