@@ -64,6 +64,10 @@
     @apply mx-auto w-full max-w-6xl px-page-gutter sm:px-page-gutter-wide lg:px-page-gutter-desktop;
   }
 
+  .site-skip-link {
+    @apply fixed top-3 left-3 z-50 -translate-y-20 rounded-lg bg-brand-surface px-4 py-2 text-sm font-bold text-brand-deep shadow-lg transition-transform focus:translate-y-0 focus:outline-2 focus:outline-offset-2 focus:outline-brand-primary;
+  }
+
   .site-header {
     @apply relative z-30 border-b border-brand-deep bg-brand-deep text-white shadow-sm;
   }
@@ -159,6 +163,42 @@
 
   .site-account-logout {
     @apply p-2;
+  }
+
+  .site-main {
+    @apply mx-auto w-full max-w-6xl flex-1 px-page-gutter py-8 outline-none sm:px-page-gutter-wide sm:py-10 lg:px-page-gutter-desktop lg:py-12;
+  }
+
+  .site-footer {
+    @apply border-t border-brand-ink/10 bg-brand-deep py-8 text-sm text-white/75;
+  }
+
+  .site-footer-layout {
+    @apply flex flex-col gap-7 sm:flex-row sm:items-start sm:justify-between;
+  }
+
+  .site-footer-brand {
+    @apply max-w-md space-y-2;
+  }
+
+  .site-footer-brand p {
+    @apply text-white/65;
+  }
+
+  .site-footer-logo {
+    @apply inline-flex rounded-md text-lg font-extrabold tracking-tight text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-soft;
+  }
+
+  .site-footer-navigation {
+    @apply flex flex-wrap gap-x-5 gap-y-2 sm:justify-end;
+  }
+
+  .site-footer-navigation a {
+    @apply rounded text-sm font-semibold text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-soft;
+  }
+
+  .site-footer-meta {
+    @apply mt-7 flex flex-col gap-1 border-t border-white/15 pt-4 text-xs text-white/50 sm:flex-row sm:justify-between;
   }
 
   .page-title {

@@ -38,6 +38,9 @@ public sealed class LoginPageTests
         Assert.Contains("게임 찾기", decodedHtml);
         Assert.Contains("로그인", decodedHtml);
         Assert.Contains("가입하기", decodedHtml);
+        Assert.Contains("href=\"#main-content\"", html);
+        Assert.Contains("aria-label=\"하단 메뉴\"", html);
+        Assert.Contains("인디 게임을 발견하고", decodedHtml);
         Assert.DoesNotContain("data-account-menu", html);
     }
 
