@@ -5,9 +5,16 @@
     ViewData["Title"] = $"{Model.GameTitle} - 받은 피드백";
 }
 
-<h1 class="page-title mb-6">@Model.GameTitle</h1>
+<header class="page-heading">
+    <div class="page-heading-copy">
+        <p class="auth-eyebrow">RECEIVED FEEDBACK</p>
+        <h1 class="page-title mt-2">@Model.GameTitle</h1>
+        <p class="page-description">받은 피드백을 확인하고 유용성을 평가해 리뷰어 신뢰도에 반영하세요.</p>
+    </div>
+    <a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="button-outline">게임 상세</a>
+</header>
 
-<h2 class="subsection-title">받은 피드백</h2>
+<h2 class="section-title">받은 피드백</h2>
 @if (Model.RatingMessage is not null)
 {
     <div class="alert-success" role="status">@Model.RatingMessage</div>
@@ -19,7 +26,7 @@
 }
 else
 {
-    <div class="surface-list mb-4">
+    <div class="space-y-5 mb-6">
         @foreach (var item in Model.Items)
         {
             var useSubmittedValues = Model.PreserveSubmittedRating
@@ -31,16 +38,16 @@ else
                 ? Model.SubmittedReason
                 : item.RatingReason;
 
-            <div class="surface-item">
+            <article class="surface-card">
                 <div class="text-meta">
                     <a asp-page="/Profiles/Detail"
                        asp-route-id="@item.ReviewerId"
                        class="text-link">@item.ReviewerDisplayName</a>
                     · 제출 @item.SubmittedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                 </div>
-                <div class="mt-2 whitespace-pre-wrap leading-7 text-slate-700">@item.Body</div>
+                <div class="feedback-body">@item.Body</div>
 
-                <section class="mt-4 border-t border-slate-200 pt-4"
+                <section class="feedback-rating-panel"
                          aria-labelledby="rating-heading-@item.FeedbackId">
                     <h3 id="rating-heading-@item.FeedbackId" class="font-semibold text-slate-900">
                         피드백 품질 평가
@@ -132,9 +139,9 @@ else
                         <p class="mt-3 text-sm font-medium text-slate-600">평가 기간이 종료되었습니다.</p>
                     }
                 </section>
-            </div>
+            </article>
         }
     </div>
 }
 
-<a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="text-link">게임 상세로 돌아가기</a>
+<a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="text-link">← 게임 상세로 돌아가기</a>

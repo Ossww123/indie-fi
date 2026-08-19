@@ -4,16 +4,21 @@
     ViewData["Title"] = "피드백 쓰기";
 }
 
-<h1 class="page-title mb-6">피드백 쓰기</h1>
+<section class="editor-shell" data-review-submit>
+    <header class="page-heading">
+        <div class="page-heading-copy">
+            <p class="auth-eyebrow">REVIEW ASSIGNMENT</p>
+            <h1 class="page-title mt-2">피드백 쓰기</h1>
+            <p class="page-description">@Model.GameTitle</p>
+        </div>
+        <span class="badge-warning">마감 @Model.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+    </header>
 
-<div class="mb-6">
-    <div class="font-semibold">@Model.GameTitle</div>
-    <div class="text-meta">
-        마감시각 @Model.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+    <div class="alert-neutral">
+        구체적인 플레이 경험과 개선 제안을 함께 적으면 개발자가 피드백을 활용하기 쉽습니다.
     </div>
-</div>
 
-<form method="post" class="form-stack">
+<form method="post" class="editor-card auth-form">
     <div class="field-group">
         <div class="flex items-baseline justify-between gap-3">
             <label asp-for="Body" class="field-label">피드백</label>
@@ -28,3 +33,4 @@
         <a asp-page="Index" class="button-link">목록으로 돌아가기</a>
     </div>
 </form>
+</section>

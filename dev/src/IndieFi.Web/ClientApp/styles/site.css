@@ -377,6 +377,34 @@
     @apply rounded-2xl border border-brand-ink/10 bg-brand-surface p-5 shadow-sm sm:p-7;
   }
 
+  .workflow-action-panel {
+    @apply mb-8 flex flex-col gap-4 rounded-2xl border border-brand-primary/15 bg-brand-soft/30 p-5 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .workflow-card-grid {
+    @apply grid gap-4 md:grid-cols-2;
+  }
+
+  .workflow-card {
+    @apply rounded-2xl border border-brand-ink/10 bg-brand-surface p-5 shadow-sm;
+  }
+
+  .workflow-card-urgent {
+    @apply border-state-warning-border bg-state-warning-surface/55;
+  }
+
+  .workflow-card-footer {
+    @apply mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-brand-ink/10 pt-4;
+  }
+
+  .feedback-body {
+    @apply mt-4 whitespace-pre-wrap rounded-xl bg-brand-canvas p-4 leading-7 text-brand-ink/80;
+  }
+
+  .feedback-rating-panel {
+    @apply mt-5 rounded-xl border border-brand-primary/15 bg-brand-soft/20 p-4 sm:p-5;
+  }
+
   .section-title {
     @apply mb-3 text-section-title font-bold tracking-[-0.015em] text-brand-ink;
   }
