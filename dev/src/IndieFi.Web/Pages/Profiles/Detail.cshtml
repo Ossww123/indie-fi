@@ -83,8 +83,14 @@
 
 <h2 class="subsection-title mt-10">리뷰 활동</h2>
 <div class="surface-item mt-3">
-    <span class="font-semibold">완료한 리뷰</span>
-    <span class="ml-2 text-slate-600">@(Model.Profile.CompletedReviewCount)개</span>
+    <div>
+        <span class="font-semibold">완료한 리뷰</span>
+        <span class="ml-2 text-slate-600">@(Model.Profile.CompletedReviewCount)개</span>
+    </div>
+    <div class="mt-2">
+        <span class="font-semibold">리뷰어 등급</span>
+        <span class="ml-2 text-slate-600" data-reviewer-grade>@Model.ReviewerGradeLabel</span>
+    </div>
 </div>
 
 <h2 class="subsection-title mt-10">등록한 게임</h2>

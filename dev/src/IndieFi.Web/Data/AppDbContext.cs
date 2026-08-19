@@ -1,6 +1,7 @@
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Credits.Domain;
 using IndieFi.Web.Modules.Accounts.Domain;
+using IndieFi.Web.Modules.Feedback.Domain;
 using IndieFi.Web.Modules.Games.Domain;
 using IndieFi.Web.Modules.Media.Domain;
 using IndieFi.Web.Modules.Notifications.Domain;
@@ -75,6 +76,10 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<ReviewAssignment> ReviewAssignments => Set<ReviewAssignment>();
 
     public DbSet<FeedbackSubmission> FeedbackSubmissions => Set<FeedbackSubmission>();
+
+    public DbSet<FeedbackRating> FeedbackRatings => Set<FeedbackRating>();
+
+    public DbSet<ReviewerReputation> ReviewerReputations => Set<ReviewerReputation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1690,6 +1695,165 @@ public class AppDbContext : DbContext, IDataProtectionKeyContext
 
             // A ledger movement can pay for only one feedback submission.
             feedbackSubmission.HasIndex(s => s.EarnEntryId).IsUnique();
+
+            // A rating copies the reviewer identity so its foreign key can reject a rating
+            // attributed to someone other than the reviewer who wrote the submission.
+            feedbackSubmission.HasAlternateKey(s => new { s.Id, s.ReviewerId });
+        });
+
+        modelBuilder.Entity<FeedbackRating>(feedbackRating =>
+        {
+            feedbackRating.ToTable("feedback_ratings", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_feedback_ratings_score",
+                    $"score BETWEEN {FeedbackQualityPolicy.MinimumScore} "
+                    + $"AND {FeedbackQualityPolicy.MaximumScore}");
+                table.HasCheckConstraint(
+                    "CK_feedback_ratings_reason",
+                    "reason IS NULL OR (length(reason) > 0 AND reason = btrim(reason))");
+                table.HasCheckConstraint(
+                    "CK_feedback_ratings_distinct_users",
+                    "rater_id <> reviewer_id");
+                table.HasCheckConstraint(
+                    "CK_feedback_ratings_revision",
+                    "revision > 0");
+                table.HasCheckConstraint(
+                    "CK_feedback_ratings_timestamps",
+                    "updated_at >= created_at");
+            });
+
+            feedbackRating.HasKey(rating => rating.Id);
+            feedbackRating.Property(rating => rating.Id).HasColumnName("id");
+
+            feedbackRating.Property(rating => rating.FeedbackSubmissionId)
+                .HasColumnName("feedback_submission_id")
+                .IsRequired();
+
+            feedbackRating.Property(rating => rating.RaterId)
+                .HasColumnName("rater_id")
+                .IsRequired();
+
+            feedbackRating.Property(rating => rating.ReviewerId)
+                .HasColumnName("reviewer_id")
+                .IsRequired();
+
+            feedbackRating.Property(rating => rating.Score)
+                .HasColumnName("score")
+                .IsRequired();
+
+            feedbackRating.Property(rating => rating.Reason)
+                .HasColumnName("reason")
+                .HasMaxLength(FeedbackQualityPolicy.MaximumReasonLength);
+
+            feedbackRating.Property(rating => rating.Revision)
+                .HasColumnName("revision")
+                .HasDefaultValue(FeedbackQualityPolicy.InitialRevision)
+                .IsConcurrencyToken()
+                .IsRequired();
+
+            feedbackRating.Property(rating => rating.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            feedbackRating.Property(rating => rating.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            feedbackRating.HasOne<FeedbackSubmission>()
+                .WithMany()
+                .HasForeignKey(rating => new
+                {
+                    rating.FeedbackSubmissionId,
+                    rating.ReviewerId,
+                })
+                .HasPrincipalKey(submission => new
+                {
+                    submission.Id,
+                    submission.ReviewerId,
+                })
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_feedback_ratings_feedback_submission_reviewer");
+
+            feedbackRating.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(rating => rating.RaterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            feedbackRating.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(rating => rating.ReviewerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // A rating is updated in place during its 30-day window. Keeping one row per
+            // submission also makes simultaneous first writes converge at the database.
+            feedbackRating.HasIndex(rating => rating.FeedbackSubmissionId)
+                .IsUnique();
+
+            feedbackRating.HasIndex(rating => rating.ReviewerId);
+            feedbackRating.HasIndex(rating => rating.RaterId);
+        });
+
+        modelBuilder.Entity<ReviewerReputation>(reviewerReputation =>
+        {
+            reviewerReputation.ToTable("reviewer_reputations", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_reviewer_reputations_counts",
+                    "completed_review_count >= 0 AND expired_assignment_count >= 0 "
+                    + "AND rating_count >= 0 AND rating_score_sum >= 0");
+                table.HasCheckConstraint(
+                    "CK_reviewer_reputations_rating_aggregate",
+                    "(rating_count = 0 AND rating_score_sum = 0) OR "
+                    + "(rating_count > 0 "
+                    + "AND rating_score_sum::bigint >= rating_count::bigint "
+                    + $"AND rating_score_sum::bigint <= rating_count::bigint * {FeedbackQualityPolicy.MaximumScore})");
+                table.HasCheckConstraint(
+                    "CK_reviewer_reputations_revision",
+                    "revision > 0");
+            });
+
+            reviewerReputation.HasKey(reputation => reputation.ReviewerId);
+            reviewerReputation.Property(reputation => reputation.ReviewerId)
+                .HasColumnName("reviewer_id");
+
+            reviewerReputation.Property(reputation => reputation.CompletedReviewCount)
+                .HasColumnName("completed_review_count")
+                .HasDefaultValue(0)
+                .IsRequired();
+
+            reviewerReputation.Property(reputation => reputation.ExpiredAssignmentCount)
+                .HasColumnName("expired_assignment_count")
+                .HasDefaultValue(0)
+                .IsRequired();
+
+            reviewerReputation.Property(reputation => reputation.RatingCount)
+                .HasColumnName("rating_count")
+                .HasDefaultValue(0)
+                .IsRequired();
+
+            reviewerReputation.Property(reputation => reputation.RatingScoreSum)
+                .HasColumnName("rating_score_sum")
+                .HasDefaultValue(0)
+                .IsRequired();
+
+            reviewerReputation.Property(reputation => reputation.Revision)
+                .HasColumnName("revision")
+                .HasDefaultValue(FeedbackQualityPolicy.InitialRevision)
+                .IsConcurrencyToken()
+                .IsRequired();
+
+            reviewerReputation.Property(reputation => reputation.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasDefaultValueSql("now()")
+                .ValueGeneratedOnAdd();
+
+            reviewerReputation.HasOne<User>()
+                .WithOne()
+                .HasForeignKey<ReviewerReputation>(reputation => reputation.ReviewerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.AddInboxStateEntity(entity =>

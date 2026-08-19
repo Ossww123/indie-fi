@@ -1,8 +1,10 @@
 using IndieFi.Web.Entities;
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Credits.Domain;
+using IndieFi.Web.Modules.Feedback.Domain;
 using IndieFi.Web.Modules.Profiles.Application;
 using IndieFi.Web.Modules.Profiles.Domain;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
@@ -53,11 +55,12 @@ public sealed class PublicUserProfileQueryServiceTests
         Assert.Equal($"user#{userId}", profile.DisplayName);
         Assert.Empty(profile.Biography);
         Assert.Equal(0, profile.CompletedReviewCount);
+        Assert.Equal(ReviewerGrade.Unranked, profile.ReviewerGrade);
         Assert.Empty(profile.Games);
     }
 
     [Fact]
-    public async Task Get_ReturnsNicknameBiographyOrderedGamesAndCompletedReviewCount()
+    public async Task Get_ReturnsNicknameBiographyOrderedGamesAndPublicReviewerReputation()
     {
         long userId;
         long firstGameId;
@@ -98,6 +101,15 @@ public sealed class PublicUserProfileQueryServiceTests
                 arrangeDb,
                 userId,
                 new string('나', 30));
+
+            var reputation = await arrangeDb.ReviewerReputations
+                .SingleAsync(
+                    item => item.ReviewerId == userId,
+                    TestContext.Current.CancellationToken);
+            reputation.CompletedReviewCount = 5;
+            reputation.RatingCount = 3;
+            reputation.RatingScoreSum = 15;
+            await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         await using var db = _fixture.NewDbContext();
@@ -108,7 +120,8 @@ public sealed class PublicUserProfileQueryServiceTests
         Assert.NotNull(profile);
         Assert.Equal("PublicPlayer", profile.DisplayName);
         Assert.Equal("공개 소개", profile.Biography);
-        Assert.Equal(2, profile.CompletedReviewCount);
+        Assert.Equal(5, profile.CompletedReviewCount);
+        Assert.Equal(ReviewerGrade.Gold, profile.ReviewerGrade);
         Assert.Equal([secondGameId, firstGameId], profile.Games.Select(game => game.Id));
         Assert.Equal(["둘째 게임", "첫 게임"], profile.Games.Select(game => game.Description));
     }
