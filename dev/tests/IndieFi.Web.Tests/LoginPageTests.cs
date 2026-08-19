@@ -38,12 +38,20 @@ public sealed class LoginPageTests
         Assert.Contains("게임 찾기", decodedHtml);
         Assert.Contains("로그인", decodedHtml);
         Assert.Contains("가입하기", decodedHtml);
+        Assert.Contains("class=\"site-navigation hidden sm:flex\"", html);
         Assert.Contains("href=\"#main-content\"", html);
         Assert.Contains("aria-label=\"하단 메뉴\"", html);
         Assert.Contains("인디 게임을 발견하고", decodedHtml);
         Assert.Contains("data-confirmation-dialog", html);
         Assert.Contains("/js/dist/layout/confirmation.js", html);
         Assert.DoesNotContain("data-account-menu", html);
+
+        var footerStart = html.IndexOf("data-footer-navigation", StringComparison.Ordinal);
+        var footerEnd = html.IndexOf("</nav>", footerStart, StringComparison.Ordinal);
+        Assert.True(footerStart >= 0 && footerEnd > footerStart);
+        var footerNavigation = html[footerStart..footerEnd];
+        Assert.DoesNotContain("href=\"/Login\"", footerNavigation);
+        Assert.DoesNotContain("href=\"/Signup\"", footerNavigation);
     }
 
     [Fact]

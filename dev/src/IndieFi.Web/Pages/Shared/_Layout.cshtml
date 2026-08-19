@@ -43,7 +43,7 @@
                     </svg>
                 </button>
                 <div id="site-navigation"
-                     class="site-navigation hidden"
+                     class="site-navigation hidden sm:flex"
                      data-navigation-menu>
                     <div class="site-primary-navigation">
                         <a class="site-primary-link @(isDiscoveryPage ? "site-primary-link-active" : null)"
@@ -134,17 +134,12 @@
                 <a class="site-footer-logo" asp-area="" asp-page="/Index">Indie-Fi</a>
                 <p>인디 게임을 발견하고, 플레이 경험을 신뢰할 수 있는 피드백으로 연결합니다.</p>
             </div>
-            <nav class="site-footer-navigation" aria-label="하단 메뉴">
+            <nav class="site-footer-navigation" aria-label="하단 메뉴" data-footer-navigation>
                 <a asp-area="" asp-page="/Index">게임 찾기</a>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <a asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>
                     <a asp-area="" asp-page="/Account/Profile">프로필 설정</a>
-                }
-                else
-                {
-                    <a asp-area="" asp-page="/Login">로그인</a>
-                    <a asp-area="" asp-page="/Signup">가입하기</a>
                 }
             </nav>
         </div>
