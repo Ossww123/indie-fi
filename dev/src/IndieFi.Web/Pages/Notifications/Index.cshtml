@@ -31,7 +31,14 @@
 
 @if (Model.Snapshot.Items.Count == 0)
 {
-    <div class="alert-neutral">표시할 알림이 없습니다.</div>
+    <div class="empty-state" data-empty-state="notifications">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">표시할 알림이 없습니다.</h2>
+        <p class="empty-state-description">게임·리뷰·키 배포 활동에 새 소식이 생기면 이곳에 표시됩니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Account/Notifications" class="button-outline">알림 설정 확인</a>
+        </div>
+    </div>
 }
 else
 {

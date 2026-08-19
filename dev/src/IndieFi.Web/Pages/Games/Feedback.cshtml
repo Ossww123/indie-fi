@@ -22,7 +22,14 @@
 
 @if (Model.Items.Count == 0)
 {
-    <div class="alert-neutral">아직 받은 피드백이 없습니다.</div>
+    <div class="empty-state" data-empty-state="received-feedback">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">아직 받은 피드백이 없습니다.</h2>
+        <p class="empty-state-description">리뷰어가 배정된 작업을 완료하면 피드백과 품질 평가 항목이 이곳에 표시됩니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="button-outline">게임 상세로 돌아가기</a>
+        </div>
+    </div>
 }
 else
 {

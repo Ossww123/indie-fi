@@ -463,6 +463,30 @@
     @apply grid gap-4 sm:grid-cols-2;
   }
 
+  .empty-state {
+    @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
+  }
+
+  .empty-state-compact {
+    @apply py-6;
+  }
+
+  .empty-state-icon {
+    @apply mx-auto mb-4 flex size-11 items-center justify-center rounded-full bg-brand-soft/55 text-lg font-black text-brand-primary;
+  }
+
+  .empty-state-title {
+    @apply text-lg font-bold text-brand-ink;
+  }
+
+  .empty-state-description {
+    @apply mx-auto mt-2 max-w-lg text-sm text-brand-ink/65;
+  }
+
+  .empty-state-actions {
+    @apply mt-5 flex flex-wrap justify-center gap-2;
+  }
+
   .section-title {
     @apply mb-3 text-section-title font-bold tracking-[-0.015em] text-brand-ink;
   }

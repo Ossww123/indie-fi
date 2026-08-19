@@ -163,8 +163,26 @@
 </div>
 @if (Model.Games.Count == 0)
 {
-    <div class="alert-neutral">
-        @(Model.HasFilters ? "조건에 맞는 게임이 없습니다." : "아직 등록된 게임이 없습니다.")
+    <div class="empty-state" data-empty-state="game-discovery">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h3 class="empty-state-title">@(Model.HasFilters ? "조건에 맞는 게임이 없습니다." : "아직 등록된 게임이 없습니다.")</h3>
+        <p class="empty-state-description">
+            @(Model.HasFilters ? "검색어나 상세 필터를 줄여 다시 찾아보세요." : "첫 게임이 등록되면 이곳에서 바로 발견할 수 있습니다.")
+        </p>
+        <div class="empty-state-actions">
+            @if (Model.HasFilters)
+            {
+                <a asp-page="/Index" class="button-outline">검색 조건 지우기</a>
+            }
+            else if (User.Identity?.IsAuthenticated == true)
+            {
+                <a asp-page="/Games/New" class="button-primary">첫 게임 등록하기</a>
+            }
+            else
+            {
+                <a asp-page="/Signup" class="button-primary">가입하고 게임 등록하기</a>
+            }
+        </div>
     </div>
 }
 else

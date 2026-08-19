@@ -98,7 +98,11 @@
 <h2 class="subsection-title mt-10">등록한 게임</h2>
 @if (Model.Profile.Games.Count == 0)
 {
-    <div class="alert-neutral">아직 등록한 게임이 없습니다.</div>
+    <div class="empty-state empty-state-compact" data-empty-state="profile-games">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h3 class="empty-state-title">아직 등록한 게임이 없습니다.</h3>
+        <p class="empty-state-description">공개된 게임이 생기면 이 프로필에서 함께 확인할 수 있습니다.</p>
+    </div>
 }
 else
 {

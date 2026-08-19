@@ -15,7 +15,14 @@
 
 @if (Model.Items.Count == 0)
 {
-    <div class="alert-neutral">아직 관심 게임이 없습니다.</div>
+    <div class="empty-state" data-empty-state="favorite-games">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">아직 관심 게임이 없습니다.</h2>
+        <p class="empty-state-description">게임 상세에서 관심 게임으로 추가하면 이곳에서 다시 찾아볼 수 있습니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Index" class="button-primary">게임 둘러보기</a>
+        </div>
+    </div>
 }
 else
 {

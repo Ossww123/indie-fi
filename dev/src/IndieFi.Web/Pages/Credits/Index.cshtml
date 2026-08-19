@@ -24,7 +24,14 @@
 
 @if (Model.Entries.Count == 0)
 {
-    <div class="alert-neutral">크레딧 내역이 없습니다.</div>
+    <div class="empty-state" data-empty-state="credits">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">크레딧 내역이 없습니다.</h2>
+        <p class="empty-state-description">리뷰를 완료하거나 피드백 요청에 크레딧을 사용하면 내역이 여기에 기록됩니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Reviews/Index" class="button-primary">리뷰 작업 보기</a>
+        </div>
+    </div>
 }
 else
 {
