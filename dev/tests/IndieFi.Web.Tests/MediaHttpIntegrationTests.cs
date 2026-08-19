@@ -423,6 +423,8 @@ public sealed class MediaHttpIntegrationTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertNoStore(response);
         Assert.Contains("data-game-media", html);
+        Assert.Contains("data-media-client-status", html);
+        Assert.Contains("미디어 관리 도구 준비 중", WebUtility.HtmlDecode(html));
         Assert.Contains($"data-game-id=\"{owner.GameId}\"", html);
         Assert.Contains("data-max-screenshots=\"8\"", html);
         Assert.Contains("data-max-file-bytes=\"10485760\"", html);

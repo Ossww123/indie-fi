@@ -10,6 +10,9 @@
         <p class="page-description">
             읽지 않은 알림 <strong data-notification-unread-count>@Model.Snapshot.UnreadCount</strong>개
         </p>
+        <p class="dynamic-status dynamic-status-loading mt-3"
+           data-notification-live-state
+           aria-live="polite">최신 알림 확인 중…</p>
     </div>
     <div class="button-group">
         <a asp-page="/Account/Notifications" class="button-outline">알림 설정</a>

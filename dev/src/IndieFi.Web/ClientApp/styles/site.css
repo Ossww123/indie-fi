@@ -507,6 +507,31 @@
     @apply mt-7 flex flex-wrap justify-center gap-2;
   }
 
+  .dynamic-status {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold;
+  }
+
+  .dynamic-status::before {
+    @apply size-2 shrink-0 rounded-full bg-current;
+    content: "";
+  }
+
+  .dynamic-status-loading {
+    @apply bg-state-neutral-surface text-state-neutral-text;
+  }
+
+  .dynamic-status-loading::before {
+    @apply animate-pulse;
+  }
+
+  .dynamic-status-success {
+    @apply bg-state-success-surface text-state-success-text;
+  }
+
+  .dynamic-status-warning {
+    @apply bg-state-warning-surface text-state-warning-text;
+  }
+
   .section-title {
     @apply mb-3 text-section-title font-bold tracking-[-0.015em] text-brand-ink;
   }
