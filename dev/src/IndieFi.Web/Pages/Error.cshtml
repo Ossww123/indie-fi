@@ -1,28 +1,25 @@
 ﻿@page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = "문제가 발생했습니다";
 }
 
-<section class="max-w-3xl space-y-5">
-<h1 class="page-title text-red-700">Error.</h1>
-<h2 class="text-xl font-semibold text-red-700">An error occurred while processing your request.</h2>
-
-@if (Model.ShowRequestId)
-{
-    <p class="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
-        <strong>Request ID:</strong> <code>@Model.RequestId</code>
+<section class="status-page" data-status-page="500">
+    <p class="status-page-code">ERROR 500</p>
+    <h1 class="status-page-title">요청을 처리하지 못했습니다.</h1>
+    <p class="status-page-description">
+        일시적인 문제일 수 있습니다. 잠시 뒤 다시 시도하거나 홈으로 돌아가 주세요.
     </p>
-}
 
-<h3 class="subsection-title pt-3">Development Mode</h3>
-<p class="leading-7 text-slate-700">
-    Swapping to the <strong>Development</strong> environment displays detailed information about the error that occurred.
-</p>
-<p class="leading-7 text-slate-700">
-    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-    It can result in displaying sensitive information from exceptions to end users.
-    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-    and restarting the app.
-</p>
+    @if (Model.ShowRequestId)
+    {
+        <p class="mt-5 text-xs text-brand-ink/55">
+            문의 시 요청 번호 <code class="font-mono">@Model.RequestId</code>를 알려 주세요.
+        </p>
+    }
+
+    <div class="status-page-actions">
+        <a asp-page="/Index" class="button-primary">홈으로 돌아가기</a>
+        <button type="button" class="button-outline" onclick="window.location.reload()">다시 시도</button>
+    </div>
 </section>

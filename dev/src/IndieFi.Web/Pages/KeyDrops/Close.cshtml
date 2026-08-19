@@ -35,7 +35,7 @@
         이미 발급된 키는 그대로 유지됩니다.
     </div>
     <form method="post" asp-route-id="@Model.Drop.Id" class="form-stack">
-        <div asp-validation-summary="ModelOnly"></div>
+        <div asp-validation-summary="ModelOnly" role="alert"></div>
         <div class="button-group">
             <button type="submit" class="button-danger">조기 마감 확인</button>
             <a asp-page="/KeyDrops/Detail"
@@ -46,7 +46,7 @@
 }
 else
 {
-    <div asp-validation-summary="ModelOnly"></div>
+    <div asp-validation-summary="ModelOnly" role="alert"></div>
     <div class="alert-neutral">
         예정 또는 진행 중인 배포만 조기 마감할 수 있습니다.
     </div>

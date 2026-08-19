@@ -14,14 +14,14 @@
     <div class="auth-card">
         @if (Model.State == EmailConfirmationPageState.Confirmed)
         {
-            <div class="alert-success">이메일 확인이 완료되었습니다. 이제 로그인할 수 있습니다.</div>
+            <div class="alert-success" role="status">이메일 확인이 완료되었습니다. 이제 로그인할 수 있습니다.</div>
             <div class="auth-state-actions">
                 <a asp-page="/Login" class="button-primary w-full">로그인하기</a>
             </div>
         }
         else if (Model.State == EmailConfirmationPageState.Invalid)
         {
-            <div class="alert-warning">유효하지 않거나 만료된 확인 링크입니다.</div>
+            <div class="alert-warning" role="alert">유효하지 않거나 만료된 확인 링크입니다.</div>
         }
         else if (Model.State == EmailConfirmationPageState.ReadyToConfirm)
         {
