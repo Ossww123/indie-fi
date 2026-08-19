@@ -44,11 +44,13 @@
                         </td>
                         <td class="px-4 py-3 text-center">
                             <input asp-for="Preferences[index].WebEnabled"
+                                   class="field-check"
                                    disabled="@(item.IsMandatory ? "disabled" : null)"
                                    aria-label="@NotificationsModel.GetLabel(item.Kind) 웹 알림" />
                         </td>
                         <td class="px-4 py-3 text-center">
                             <input asp-for="Preferences[index].EmailEnabled"
+                                   class="field-check"
                                    disabled="@(item.IsMandatory ? "disabled" : null)"
                                    aria-label="@NotificationsModel.GetLabel(item.Kind) 이메일 알림" />
                         </td>
@@ -65,7 +67,7 @@
         </table>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="button-group">
         <button type="submit" class="button-primary">설정 저장</button>
         <a asp-page="/Notifications/Index" class="button-outline">알림함으로 돌아가기</a>
     </div>

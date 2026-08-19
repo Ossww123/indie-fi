@@ -30,7 +30,7 @@
     </div>
     <form method="post" asp-route-id="@Model.Drop.Id" class="form-stack">
         <div asp-validation-summary="ModelOnly"></div>
-        <div class="flex flex-wrap gap-2">
+        <div class="button-group">
             <button type="submit" class="button-danger">조기 마감 확인</button>
             <a asp-page="/KeyDrops/Detail"
                asp-route-id="@Model.Drop.Id"

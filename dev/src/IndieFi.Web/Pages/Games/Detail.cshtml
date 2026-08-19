@@ -28,22 +28,22 @@
     {
         <a asp-page="/Games/Edit"
            asp-route-id="@Model.Game.Id"
-           class="button-outline px-3 py-1.5">수정</a>
+           class="button-outline button-small">수정</a>
         @if (Model.CanManageMedia)
         {
             <a asp-page="/Games/Media"
                asp-route-id="@Model.Game.Id"
-               class="button-outline px-3 py-1.5">미디어 관리</a>
+               class="button-outline button-small">미디어 관리</a>
         }
         <a asp-page="/KeyDrops/New"
            asp-route-gameId="@Model.Game.Id"
-           class="button-outline px-3 py-1.5">드롭 예약</a>
+           class="button-outline button-small">드롭 예약</a>
         @* Hiding this button is only UX; the handler enforces ownership. *@
         <form method="post"
               asp-page-handler="RequestFeedback"
               asp-route-id="@Model.Game.Id">
             <input type="hidden" name="operationId" value="@Model.RequestOperationId" />
-            <button type="submit" class="button-outline px-3 py-1.5">피드백 요청</button>
+            <button type="submit" class="button-outline button-small">피드백 요청</button>
         </form>
     }
     @if (Model.CanManageFavorite)
@@ -53,7 +53,7 @@
             <form method="post"
                   asp-page-handler="Unfavorite"
                   asp-route-id="@Model.Game.Id">
-                <button type="submit" class="button-outline px-3 py-1.5">관심 게임 제거</button>
+                <button type="submit" class="button-outline button-small">관심 게임 제거</button>
             </form>
         }
         else
@@ -61,7 +61,7 @@
             <form method="post"
                   asp-page-handler="Favorite"
                   asp-route-id="@Model.Game.Id">
-                <button type="submit" class="button-primary px-3 py-1.5">관심 게임 추가</button>
+                <button type="submit" class="button-primary button-small">관심 게임 추가</button>
             </form>
         }
     }
@@ -69,7 +69,7 @@
     {
         <a asp-page="/Login"
            asp-route-returnUrl="@($"/Games/Detail/{Model.Game.Id}")"
-           class="button-outline px-3 py-1.5">로그인 후 관심 게임 추가</a>
+           class="button-outline button-small">로그인 후 관심 게임 추가</a>
     }
 </div>
 <p class="mt-2 text-meta">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</p>
@@ -252,7 +252,7 @@ else
                               asp-page-handler="CancelRequest"
                               asp-route-id="@Model.Game.Id"
                               asp-route-requestId="@request.Id">
-                            <button type="submit" class="button-danger px-3 py-1.5">취소</button>
+                            <button type="submit" class="button-danger button-small">취소</button>
                         </form>
                     }
                 </div>
@@ -307,7 +307,7 @@ else
                             {
                                 <a asp-page="/KeyDrops/Close"
                                    asp-route-id="@drop.Id"
-                                   class="button-danger px-3 py-1.5">조기 마감</a>
+                                   class="button-danger button-small">조기 마감</a>
                             }
                         </span>
                     }

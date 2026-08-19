@@ -41,8 +41,8 @@
             <h1 class="page-title">@Model.Profile.DisplayName</h1>
             @if (Model.IsOwner)
             {
-                <a asp-page="/Account/Profile" class="button-outline px-3 py-1.5">프로필 수정</a>
-                <a asp-page="/Account/Following" class="button-outline px-3 py-1.5">팔로잉 목록</a>
+                <a asp-page="/Account/Profile" class="button-outline button-small">프로필 수정</a>
+                <a asp-page="/Account/Following" class="button-outline button-small">팔로잉 목록</a>
             }
             else if (Model.CanManageFollow)
             {
@@ -51,7 +51,7 @@
                     <form method="post"
                           asp-page-handler="Unfollow"
                           asp-route-id="@Model.Profile.UserId">
-                        <button type="submit" class="button-outline px-3 py-1.5">팔로우 해제</button>
+                        <button type="submit" class="button-outline button-small">팔로우 해제</button>
                     </form>
                 }
                 else
@@ -59,7 +59,7 @@
                     <form method="post"
                           asp-page-handler="Follow"
                           asp-route-id="@Model.Profile.UserId">
-                        <button type="submit" class="button-primary px-3 py-1.5">팔로우</button>
+                        <button type="submit" class="button-primary button-small">팔로우</button>
                     </form>
                 }
             }
@@ -67,7 +67,7 @@
             {
                 <a asp-page="/Login"
                    asp-route-returnUrl="@($"/Profiles/{Model.Profile.UserId}")"
-                   class="button-outline px-3 py-1.5">로그인 후 팔로우</a>
+                   class="button-outline button-small">로그인 후 팔로우</a>
             }
         </div>
         @if (string.IsNullOrEmpty(Model.Profile.Biography))

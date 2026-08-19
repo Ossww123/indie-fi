@@ -237,6 +237,22 @@
     @apply block w-full rounded-lg border border-brand-ink/20 bg-brand-surface px-3 py-2 text-brand-ink shadow-sm placeholder:text-brand-ink/65 focus:border-brand-primary focus:ring-2 focus:ring-brand-soft focus:outline-none;
   }
 
+  .field-input:disabled {
+    @apply cursor-not-allowed bg-state-neutral-surface text-state-neutral-text opacity-75;
+  }
+
+  .field-check {
+    @apply size-4 shrink-0 accent-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .field-choice {
+    @apply inline-flex cursor-pointer items-center gap-2 rounded-full border border-brand-primary/25 bg-brand-surface px-3 py-1.5 text-sm font-semibold text-brand-primary transition-colors hover:bg-brand-soft/35 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-primary;
+  }
+
+  .field-choice:has(.field-check:checked) {
+    @apply border-brand-primary bg-brand-soft/60 text-brand-deep;
+  }
+
   .field-hint {
     @apply text-sm text-brand-ink/65;
   }
@@ -267,7 +283,19 @@
   .button-outline,
   .button-danger,
   .button-link {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .button-small {
+    @apply min-h-0 px-3 py-1.5;
+  }
+
+  .button-large {
+    @apply min-h-12 px-5 py-3 text-base;
+  }
+
+  .button-group {
+    @apply flex flex-wrap items-center gap-2;
   }
 
   .button-primary {
@@ -365,22 +393,22 @@
   .badge-warning,
   .badge-danger,
   .badge-neutral {
-    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap;
   }
 
   .badge-success {
-    @apply bg-state-success-surface text-state-success-text;
+    @apply border-state-success-border bg-state-success-surface text-state-success-text;
   }
 
   .badge-warning {
-    @apply bg-state-warning-surface text-state-warning-text;
+    @apply border-state-warning-border bg-state-warning-surface text-state-warning-text;
   }
 
   .badge-danger {
-    @apply bg-state-danger-surface text-state-danger-text;
+    @apply border-state-danger-border bg-state-danger-surface text-state-danger-text;
   }
 
   .badge-neutral {
-    @apply bg-state-neutral-surface text-state-neutral-text;
+    @apply border-state-neutral-border bg-state-neutral-surface text-state-neutral-text;
   }
 }

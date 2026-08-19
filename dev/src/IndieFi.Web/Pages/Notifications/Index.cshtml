@@ -11,7 +11,7 @@
             읽지 않은 알림 <strong data-notification-unread-count>@Model.Snapshot.UnreadCount</strong>개
         </p>
     </div>
-    <div class="flex flex-wrap gap-2">
+    <div class="button-group">
         <a asp-page="/Account/Notifications" class="button-outline">알림 설정</a>
         @if (Model.Snapshot.UnreadCount > 0)
         {
