@@ -12,6 +12,18 @@
   --color-brand-primary: #6247aa;
   --color-brand-ink: #102b3f;
   --color-brand-deep: #062726;
+  --font-sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  --text-page-title: 2.25rem;
+  --text-page-title--line-height: 1.15;
+  --text-section-title: 1.5rem;
+  --text-section-title--line-height: 1.3;
+  --text-subsection-title: 1.125rem;
+  --text-subsection-title--line-height: 1.4;
+  --spacing-page-gutter: 1rem;
+  --spacing-page-gutter-wide: 1.5rem;
+  --spacing-page-gutter-desktop: 2rem;
+  --spacing-section-gap: 2rem;
+  --spacing-content-stack: 1.25rem;
 }
 
 @layer base {
@@ -20,7 +32,12 @@
   }
 
   body {
-    @apply min-h-screen text-brand-ink antialiased;
+    @apply min-h-screen font-sans text-brand-ink antialiased;
+    line-height: 1.7;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 
   button:not(:disabled) {
@@ -30,7 +47,7 @@
 
 @layer components {
   .site-container {
-    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-6xl px-page-gutter sm:px-page-gutter-wide lg:px-page-gutter-desktop;
   }
 
   .site-nav-link {
@@ -38,15 +55,15 @@
   }
 
   .page-title {
-    @apply text-3xl font-bold tracking-tight text-slate-950;
+    @apply text-page-title font-extrabold tracking-[-0.025em] text-brand-ink;
   }
 
   .section-title {
-    @apply mb-3 text-xl font-semibold tracking-tight text-slate-900;
+    @apply mb-3 text-section-title font-bold tracking-[-0.015em] text-brand-ink;
   }
 
   .subsection-title {
-    @apply mb-3 text-lg font-semibold text-slate-900;
+    @apply mb-3 text-subsection-title font-semibold text-brand-ink;
   }
 
   .text-meta {
@@ -58,7 +75,7 @@
   }
 
   .form-stack {
-    @apply max-w-xl space-y-5;
+    @apply max-w-xl space-y-content-stack;
   }
 
   .field-group {
