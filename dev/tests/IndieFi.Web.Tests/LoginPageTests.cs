@@ -22,6 +22,26 @@ public sealed class LoginPageTests
     }
 
     [Fact]
+    public async Task Get_Layout_ForAnonymous_ShowsPrimaryNavigationAndAuthenticationActions()
+    {
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(
+            "/",
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var decodedHtml = WebUtility.HtmlDecode(html);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("게임 찾기", decodedHtml);
+        Assert.Contains("로그인", decodedHtml);
+        Assert.Contains("가입하기", decodedHtml);
+        Assert.DoesNotContain("data-account-menu", html);
+    }
+
+    [Fact]
     public async Task Post_Login_WithLocalReturnUrl_RedirectsBackToThatPage()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
@@ -119,6 +139,10 @@ public sealed class LoginPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains($"{nickname} 님", WebUtility.HtmlDecode(html));
         Assert.Contains($"href=\"/Profiles/{userId}\"", html);
+        Assert.Contains("data-account-toggle", html);
+        Assert.Contains("data-account-menu", html);
+        Assert.Contains("게임 찾기", WebUtility.HtmlDecode(html));
+        Assert.Contains("리뷰 작업", WebUtility.HtmlDecode(html));
         Assert.DoesNotContain(UserDisplayIdentifier.Format(userId), html);
         Assert.DoesNotContain(email, html);
     }

@@ -64,8 +64,101 @@
     @apply mx-auto w-full max-w-6xl px-page-gutter sm:px-page-gutter-wide lg:px-page-gutter-desktop;
   }
 
-  .site-nav-link {
-    @apply block rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600;
+  .site-header {
+    @apply relative z-30 border-b border-brand-deep bg-brand-deep text-white shadow-sm;
+  }
+
+  .site-header-row {
+    @apply flex min-h-18 flex-wrap items-center justify-between py-3 sm:flex-nowrap sm:py-0;
+  }
+
+  .site-brand {
+    @apply inline-flex items-center gap-2.5 rounded-lg text-xl font-extrabold tracking-[-0.025em] text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-soft;
+  }
+
+  .site-brand-mark {
+    @apply inline-flex size-9 items-center justify-center rounded-xl bg-brand-soft text-sm font-black tracking-tight text-brand-deep shadow-sm;
+  }
+
+  .site-navigation-toggle {
+    @apply inline-flex items-center justify-center rounded-lg border border-white/25 p-2 text-white transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft sm:hidden;
+  }
+
+  .site-navigation {
+    @apply w-full flex-col gap-3 border-t border-white/15 pt-3 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-5 sm:border-0 sm:pt-0;
+  }
+
+  .site-primary-navigation,
+  .site-account-navigation {
+    @apply flex flex-col gap-1 sm:flex-row sm:items-center;
+  }
+
+  .site-account-navigation {
+    @apply border-t border-white/15 pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5;
+  }
+
+  .site-primary-link,
+  .site-login-link,
+  .site-notification-link,
+  .site-account-toggle {
+    @apply flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft;
+  }
+
+  .site-primary-link-active {
+    @apply bg-brand-soft text-brand-deep hover:bg-brand-soft hover:text-brand-deep;
+  }
+
+  .site-notification-link {
+    @apply relative;
+  }
+
+  .site-notification-badge {
+    @apply inline-flex min-w-5 items-center justify-center rounded-full bg-brand-soft px-1.5 py-0.5 text-[0.6875rem] font-bold leading-none text-brand-deep;
+  }
+
+  .site-signup-link {
+    @apply inline-flex items-center justify-center rounded-lg bg-brand-soft px-3.5 py-2 text-sm font-bold text-brand-deep shadow-sm transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft;
+  }
+
+  .site-account-menu {
+    @apply relative;
+  }
+
+  .site-account-toggle {
+    @apply w-full justify-between sm:w-auto;
+  }
+
+  .site-account-chevron {
+    @apply transition-transform;
+  }
+
+  .site-account-toggle[aria-expanded="true"] .site-account-chevron {
+    @apply rotate-180;
+  }
+
+  .site-account-panel {
+    @apply mt-2 overflow-hidden rounded-xl border border-brand-ink/15 bg-brand-surface text-brand-ink shadow-xl sm:absolute sm:right-0 sm:z-40 sm:w-64;
+  }
+
+  .site-account-section {
+    @apply p-2;
+  }
+
+  .site-account-section + .site-account-section,
+  .site-account-logout {
+    @apply border-t border-brand-ink/10;
+  }
+
+  .site-account-section-label {
+    @apply block px-3 pt-1 pb-1.5 text-xs font-bold tracking-wide text-brand-ink/55;
+  }
+
+  .site-account-link {
+    @apply block rounded-lg px-3 py-2 text-sm font-medium text-brand-ink transition-colors hover:bg-brand-soft/45 hover:text-brand-deep focus-visible:bg-brand-soft/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
+  }
+
+  .site-account-logout {
+    @apply p-2;
   }
 
   .page-title {
