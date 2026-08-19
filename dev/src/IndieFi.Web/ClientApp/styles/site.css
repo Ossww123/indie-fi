@@ -405,6 +405,39 @@
     @apply mt-5 rounded-xl border border-brand-primary/15 bg-brand-soft/20 p-4 sm:p-5;
   }
 
+  .drop-overview {
+    @apply mb-6 overflow-hidden rounded-2xl border border-brand-primary/15 p-5 shadow-sm sm:p-7;
+    background: linear-gradient(135deg, #ffffff 10%, #f4edf8 62%, #edf6f5 100%);
+  }
+
+  .drop-metrics {
+    @apply mt-5 grid gap-3 sm:grid-cols-3;
+  }
+
+  .drop-metric {
+    @apply rounded-xl border border-brand-ink/10 bg-brand-surface/85 p-4;
+  }
+
+  .drop-metric-value {
+    @apply mt-1 block font-bold text-brand-deep;
+  }
+
+  .drop-flow-grid {
+    @apply mb-6 grid gap-5 lg:grid-cols-2;
+  }
+
+  .drop-flow-grid > :only-child {
+    @apply lg:col-span-2;
+  }
+
+  .drop-action-panel {
+    @apply flex flex-col gap-4 rounded-2xl border border-brand-primary/20 bg-brand-deep p-5 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-6;
+  }
+
+  .drop-action-panel .text-meta {
+    @apply text-white/65;
+  }
+
   .section-title {
     @apply mb-3 text-section-title font-bold tracking-[-0.015em] text-brand-ink;
   }

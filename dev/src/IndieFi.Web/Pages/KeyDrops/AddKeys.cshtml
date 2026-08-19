@@ -4,12 +4,18 @@
     ViewData["Title"] = "게임 키 추가";
 }
 
-<h1 class="page-title">게임 키 추가</h1>
-<p class="mb-6 mt-1 text-slate-500">
-    <a asp-page="/Games/Detail"
-       asp-route-id="@Model.Drop.GameId"
-       class="text-link">@Model.Drop.GameTitle</a>
-</p>
+<section class="editor-shell" data-drop-editor="inventory">
+<header class="page-heading">
+    <div class="page-heading-copy">
+        <p class="auth-eyebrow">ADD INVENTORY</p>
+        <h1 class="page-title mt-2">게임 키 추가</h1>
+        <p class="page-description">
+            <a asp-page="/Games/Detail"
+               asp-route-id="@Model.Drop.GameId"
+               class="text-link">@Model.Drop.GameTitle</a>
+        </p>
+    </div>
+</header>
 
 <dl class="surface-list mb-6 max-w-2xl">
     <div class="surface-detail-row">
@@ -33,7 +39,7 @@
 
 @if (Model.Drop.CanAddInventory)
 {
-    <form method="post" asp-route-id="@Model.Drop.Id" class="form-stack">
+    <form method="post" asp-route-id="@Model.Drop.Id" class="editor-card auth-form">
         <div asp-validation-summary="ModelOnly"></div>
 
         <div class="field-group">
@@ -65,3 +71,4 @@ else
        asp-route-id="@Model.Drop.Id"
        class="button-link">배포 상세로</a>
 }
+</section>
