@@ -317,12 +317,44 @@
     @apply overflow-hidden rounded-xl border border-brand-ink/15 bg-brand-surface shadow-sm;
   }
 
+  .surface-card {
+    @apply rounded-2xl border border-brand-ink/10 bg-brand-surface p-5 shadow-sm sm:p-6;
+  }
+
+  .surface-panel {
+    @apply rounded-xl border border-brand-ink/15 bg-brand-surface p-5 shadow-sm;
+  }
+
+  .surface-panel-muted {
+    @apply rounded-xl border border-brand-ink/10 bg-brand-soft/20 p-4;
+  }
+
+  .surface-highlight {
+    @apply rounded-xl border border-brand-primary/15 bg-brand-soft/45 p-5 text-brand-deep;
+  }
+
+  .surface-table {
+    @apply overflow-x-auto rounded-xl border border-brand-ink/15 bg-brand-surface shadow-sm;
+  }
+
   .surface-item {
     @apply block p-4;
   }
 
   .surface-item + .surface-item {
     @apply border-t border-brand-ink/15;
+  }
+
+  .surface-detail-row {
+    @apply grid gap-1 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4;
+  }
+
+  .surface-detail-row + .surface-detail-row {
+    @apply border-t border-brand-ink/15;
+  }
+
+  .surface-detail-term {
+    @apply font-medium text-brand-ink/75;
   }
 
   .surface-link {
