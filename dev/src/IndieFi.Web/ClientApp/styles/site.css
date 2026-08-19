@@ -317,6 +317,66 @@
     @apply text-page-title font-extrabold tracking-[-0.025em] text-brand-ink;
   }
 
+  .page-heading {
+    @apply mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between;
+  }
+
+  .page-heading-copy {
+    @apply max-w-3xl;
+  }
+
+  .page-description {
+    @apply mt-2 text-sm text-brand-ink/65 sm:text-base;
+  }
+
+  .game-detail-heading {
+    @apply mb-6 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between;
+  }
+
+  .game-detail-actions {
+    @apply flex flex-wrap items-center gap-2 lg:max-w-md lg:justify-end;
+  }
+
+  .game-detail-hero {
+    @apply grid overflow-hidden rounded-2xl border border-brand-ink/10 bg-brand-surface shadow-sm lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.85fr)];
+  }
+
+  .game-detail-cover {
+    @apply min-h-64 overflow-hidden bg-brand-soft/25 lg:min-h-full;
+  }
+
+  .game-detail-summary {
+    @apply flex flex-col justify-center p-5 sm:p-7;
+  }
+
+  .profile-hero {
+    @apply flex flex-col gap-5 rounded-2xl border border-brand-ink/10 bg-brand-surface p-5 shadow-sm sm:flex-row sm:items-center sm:p-7;
+  }
+
+  .profile-avatar {
+    @apply size-24 shrink-0 rounded-full border-4 border-brand-surface bg-brand-soft/40 object-cover shadow-sm;
+  }
+
+  .profile-stats {
+    @apply mt-6 grid gap-3 sm:grid-cols-2;
+  }
+
+  .profile-stat {
+    @apply rounded-xl border border-brand-ink/10 bg-brand-soft/20 p-4;
+  }
+
+  .profile-stat-value {
+    @apply mt-1 block text-xl font-bold text-brand-deep;
+  }
+
+  .editor-shell {
+    @apply mx-auto max-w-3xl;
+  }
+
+  .editor-card {
+    @apply rounded-2xl border border-brand-ink/10 bg-brand-surface p-5 shadow-sm sm:p-7;
+  }
+
   .section-title {
     @apply mb-3 text-section-title font-bold tracking-[-0.015em] text-brand-ink;
   }
