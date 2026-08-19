@@ -42,6 +42,7 @@ public sealed partial class PublicGameDiscoveryPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("data-discovery-filter", html);
+        Assert.Contains("class=\"field-check\"", html);
         Assert.Contains($"value=\"{token}\"", html);
         Assert.Matches(SelectedGenrePattern(), html);
         Assert.Matches(SelectedTagPattern(), html);

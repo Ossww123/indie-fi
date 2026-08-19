@@ -62,11 +62,12 @@
 
         <fieldset>
             <legend class="field-label">태그 <span class="text-meta">선택한 항목을 모두 포함</span></legend>
-            <div class="flex flex-wrap gap-x-4 gap-y-2">
+            <div class="flex flex-wrap gap-2">
                 @foreach (var tag in Model.Catalog.Tags)
                 {
-                    <label class="inline-flex items-center gap-2 text-sm">
+                    <label class="field-choice">
                         <input type="checkbox"
+                               class="field-check"
                                name="tags"
                                value="@tag.Code"
                                checked="@Model.TagCodes.Contains(tag.Code)" />
@@ -78,11 +79,12 @@
 
         <fieldset>
             <legend class="field-label">지원 플랫폼 <span class="text-meta">하나 이상 일치</span></legend>
-            <div class="flex flex-wrap gap-x-4 gap-y-2">
+            <div class="flex flex-wrap gap-2">
                 @foreach (var platform in Model.Catalog.Platforms)
                 {
-                    <label class="inline-flex items-center gap-2 text-sm">
+                    <label class="field-choice">
                         <input type="checkbox"
+                               class="field-check"
                                name="platforms"
                                value="@platform.Code"
                                checked="@Model.PlatformCodes.Contains(platform.Code)" />

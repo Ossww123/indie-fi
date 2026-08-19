@@ -406,6 +406,10 @@
     @apply border-t border-brand-ink/15;
   }
 
+  .surface-item-emphasis {
+    @apply bg-brand-soft/25;
+  }
+
   .surface-detail-row {
     @apply grid gap-1 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4;
   }
