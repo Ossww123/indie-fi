@@ -10,8 +10,22 @@
   --color-brand-soft: #e2cfea;
   --color-brand-accent: #a06cd5;
   --color-brand-primary: #6247aa;
+  --color-brand-primary-hover: #50398f;
+  --color-brand-primary-active: #402f73;
   --color-brand-ink: #102b3f;
   --color-brand-deep: #062726;
+  --color-state-success-surface: #ecfdf5;
+  --color-state-success-border: #a7f3d0;
+  --color-state-success-text: #065f46;
+  --color-state-warning-surface: #fffbeb;
+  --color-state-warning-border: #fde68a;
+  --color-state-warning-text: #92400e;
+  --color-state-danger-surface: #fef2f2;
+  --color-state-danger-border: #fecaca;
+  --color-state-danger-text: #991b1b;
+  --color-state-neutral-surface: #f1f5f9;
+  --color-state-neutral-border: #cbd5e1;
+  --color-state-neutral-text: #334155;
   --font-sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
   --text-page-title: 2.25rem;
   --text-page-title--line-height: 1.15;
@@ -67,11 +81,11 @@
   }
 
   .text-meta {
-    @apply text-sm text-slate-500;
+    @apply text-sm text-brand-ink/65;
   }
 
   .text-link {
-    @apply font-medium text-indigo-700 underline decoration-indigo-200 underline-offset-4 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600;
+    @apply font-medium text-brand-primary underline decoration-brand-soft underline-offset-4 hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
   }
 
   .form-stack {
@@ -83,23 +97,23 @@
   }
 
   .field-label {
-    @apply block text-sm font-medium text-slate-800;
+    @apply block text-sm font-medium text-brand-ink;
   }
 
   .field-input {
-    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-950 shadow-sm placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none;
+    @apply block w-full rounded-lg border border-brand-ink/20 bg-brand-surface px-3 py-2 text-brand-ink shadow-sm placeholder:text-brand-ink/65 focus:border-brand-primary focus:ring-2 focus:ring-brand-soft focus:outline-none;
   }
 
   .field-hint {
-    @apply text-sm text-slate-500;
+    @apply text-sm text-brand-ink/65;
   }
 
   .field-error {
-    @apply block text-sm text-red-600;
+    @apply block text-sm text-state-danger-text;
   }
 
   .validation-summary-errors {
-    @apply rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800;
+    @apply rounded-lg border border-state-danger-border bg-state-danger-surface px-4 py-3 text-sm text-state-danger-text;
   }
 
   .validation-summary-errors ul {
@@ -112,7 +126,7 @@
   }
 
   .input-validation-error {
-    @apply border-red-500 focus:border-red-500 focus:ring-red-200;
+    @apply border-state-danger-text focus:border-state-danger-text focus:ring-state-danger-border;
   }
 
   .button-primary,
@@ -120,49 +134,54 @@
   .button-outline,
   .button-danger,
   .button-link {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .button-primary {
-    @apply bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus-visible:outline-indigo-600;
+    @apply bg-brand-primary text-white shadow-sm hover:bg-brand-primary-hover active:bg-brand-primary-active;
   }
 
   .button-secondary {
-    @apply bg-slate-700 text-white shadow-sm hover:bg-slate-800 focus-visible:outline-slate-700;
+    @apply bg-brand-deep text-white shadow-sm hover:bg-brand-ink;
   }
 
   .button-outline {
-    @apply border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-indigo-600;
+    @apply border border-brand-primary/35 bg-brand-surface text-brand-primary shadow-sm hover:bg-brand-soft/60;
   }
 
   .button-danger {
-    @apply border border-red-300 bg-white text-red-700 shadow-sm hover:bg-red-50 focus-visible:outline-red-600;
+    @apply border border-state-danger-border bg-brand-surface text-state-danger-text shadow-sm hover:bg-state-danger-surface focus-visible:outline-state-danger-text;
   }
 
   .button-link {
-    @apply px-2 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-900 focus-visible:outline-indigo-600;
+    @apply px-2 text-brand-primary hover:bg-brand-soft/60 hover:text-brand-deep;
   }
 
   .alert-success,
   .alert-warning,
+  .alert-danger,
   .alert-neutral {
     @apply mb-5 rounded-lg border px-4 py-3 text-sm;
   }
 
   .alert-success {
-    @apply border-emerald-200 bg-emerald-50 text-emerald-800;
+    @apply border-state-success-border bg-state-success-surface text-state-success-text;
   }
 
   .alert-warning {
-    @apply border-amber-200 bg-amber-50 text-amber-900;
+    @apply border-state-warning-border bg-state-warning-surface text-state-warning-text;
+  }
+
+  .alert-danger {
+    @apply border-state-danger-border bg-state-danger-surface text-state-danger-text;
   }
 
   .alert-neutral {
-    @apply border-slate-200 bg-slate-100 text-slate-700;
+    @apply border-state-neutral-border bg-state-neutral-surface text-state-neutral-text;
   }
 
   .surface-list {
-    @apply overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm;
+    @apply overflow-hidden rounded-xl border border-brand-ink/15 bg-brand-surface shadow-sm;
   }
 
   .surface-item {
@@ -170,23 +189,33 @@
   }
 
   .surface-item + .surface-item {
-    @apply border-t border-slate-200;
+    @apply border-t border-brand-ink/15;
   }
 
   .surface-link {
-    @apply transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none;
+    @apply transition-colors hover:bg-brand-soft/30 focus-visible:bg-brand-soft/30 focus-visible:outline-none;
   }
 
   .badge-success,
+  .badge-warning,
+  .badge-danger,
   .badge-neutral {
     @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
   }
 
   .badge-success {
-    @apply bg-emerald-100 text-emerald-800;
+    @apply bg-state-success-surface text-state-success-text;
+  }
+
+  .badge-warning {
+    @apply bg-state-warning-surface text-state-warning-text;
+  }
+
+  .badge-danger {
+    @apply bg-state-danger-surface text-state-danger-text;
   }
 
   .badge-neutral {
-    @apply bg-slate-200 text-slate-700;
+    @apply bg-state-neutral-surface text-state-neutral-text;
   }
 }
