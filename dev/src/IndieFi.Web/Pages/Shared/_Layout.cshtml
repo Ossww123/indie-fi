@@ -154,7 +154,31 @@
         </div>
     </footer>
 
+    <dialog class="confirmation-dialog"
+            data-confirmation-dialog
+            aria-labelledby="confirmation-dialog-title"
+            aria-describedby="confirmation-dialog-message">
+        <form method="dialog" class="confirmation-dialog-panel">
+            <div>
+                <h2 id="confirmation-dialog-title"
+                    class="confirmation-dialog-title"
+                    data-confirmation-title>계속할까요?</h2>
+                <p id="confirmation-dialog-message"
+                   class="confirmation-dialog-message"
+                   data-confirmation-message></p>
+            </div>
+            <div class="confirmation-dialog-actions">
+                <button type="submit" value="cancel" class="button-outline">돌아가기</button>
+                <button type="submit"
+                        value="confirm"
+                        class="button-danger"
+                        data-confirmation-submit>확인</button>
+            </div>
+        </form>
+    </dialog>
+
     <script type="module" src="~/js/dist/layout/navigation.js" asp-append-version="true"></script>
+    <script type="module" src="~/js/dist/layout/confirmation.js" asp-append-version="true"></script>
     @if (User.Identity?.IsAuthenticated == true)
     {
         <script type="module" src="~/js/dist/notifications/realtime.js" asp-append-version="true"></script>

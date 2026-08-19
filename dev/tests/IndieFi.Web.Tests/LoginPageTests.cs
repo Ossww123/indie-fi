@@ -41,6 +41,8 @@ public sealed class LoginPageTests
         Assert.Contains("href=\"#main-content\"", html);
         Assert.Contains("aria-label=\"하단 메뉴\"", html);
         Assert.Contains("인디 게임을 발견하고", decodedHtml);
+        Assert.Contains("data-confirmation-dialog", html);
+        Assert.Contains("/js/dist/layout/confirmation.js", html);
         Assert.DoesNotContain("data-account-menu", html);
     }
 

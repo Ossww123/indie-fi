@@ -8,21 +8,21 @@
 
 @if (Model.ClaimMessage is { } claimMessage)
 {
-    <div class="@(claimMessage.IsSuccess ? "alert-success" : "alert-warning")">
+    <div class="@(claimMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">
         @claimMessage.Message
     </div>
 }
 
 @if (Model.SubmitMessage is { } submitMessage)
 {
-    <div class="@(submitMessage.IsSuccess ? "alert-success" : "alert-warning")">
+    <div class="@(submitMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">
         @submitMessage.Message
     </div>
 }
 
 @if (Model.SweepMessage is { } sweepMessage)
 {
-    <div class="@(sweepMessage.IsSuccess ? "alert-success" : "alert-neutral")">
+    <div class="@(sweepMessage.IsSuccess ? "alert-success" : "alert-neutral")" role="status">
         @sweepMessage.Message
     </div>
 }

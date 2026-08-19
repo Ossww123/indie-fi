@@ -8,7 +8,7 @@
 
 @if (Model.StatusMessage is not null)
 {
-    <div class="alert-success mb-6">@Model.StatusMessage</div>
+    <div class="alert-success mb-6" role="status">@Model.StatusMessage</div>
 }
 
 @if (Model.GoogleErrorMessage is not null)

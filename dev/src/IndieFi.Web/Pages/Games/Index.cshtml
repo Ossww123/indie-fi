@@ -11,7 +11,7 @@
 
 @if (TempData["GameMessage"] is string gameMessage)
 {
-    <div class="alert-success">@gameMessage</div>
+    <div class="alert-success" role="status">@gameMessage</div>
 }
 
 @if (Model.Games.Count == 0)

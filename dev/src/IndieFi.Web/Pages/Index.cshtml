@@ -6,7 +6,7 @@
 
 @if (TempData["SignupMessage"] is string signupMessage)
 {
-    <div class="alert-success">@signupMessage</div>
+    <div class="alert-success" role="status">@signupMessage</div>
 }
 
 <div class="mb-10 py-6 text-center">
@@ -102,7 +102,7 @@
 @if (Model.Violations.Count > 0)
 {
     <div class="alert-danger mb-6" role="alert" data-discovery-validation>
-        <p class="font-semibold">검색 조건을 확인해 주세요.</p>
+        <p class="alert-title">검색 조건을 확인해 주세요.</p>
         <ul class="mt-2 list-disc space-y-1 pl-5">
             @foreach (var violation in Model.Violations)
             {

@@ -6,12 +6,12 @@
 
 @if (TempData["GameMessage"] is string gameMessage)
 {
-    <div class="alert-success">@gameMessage</div>
+    <div class="alert-success" role="status">@gameMessage</div>
 }
 
 @if (Model.RequestMessage is { } requestMessage)
 {
-    <div class="@(requestMessage.IsSuccess ? "alert-success" : "alert-warning")">
+    <div class="@(requestMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">
         @requestMessage.Message
     </div>
 }
@@ -251,7 +251,10 @@ else
                         <form method="post"
                               asp-page-handler="CancelRequest"
                               asp-route-id="@Model.Game.Id"
-                              asp-route-requestId="@request.Id">
+                              asp-route-requestId="@request.Id"
+                              data-confirm-title="피드백 요청 취소"
+                              data-confirm-message="이 요청을 취소하면 대기열에서 제거되며 사용한 크레딧은 반환됩니다. 취소할까요?"
+                              data-confirm-label="요청 취소">
                             <button type="submit" class="button-danger button-small">취소</button>
                         </form>
                     }

@@ -322,7 +322,15 @@
   .alert-warning,
   .alert-danger,
   .alert-neutral {
-    @apply mb-5 rounded-lg border px-4 py-3 text-sm;
+    @apply mb-5 rounded-xl border border-l-4 px-4 py-3 text-sm shadow-sm;
+  }
+
+  .alert-title {
+    @apply block font-bold;
+  }
+
+  .alert-actions {
+    @apply mt-3 flex flex-wrap items-center gap-2;
   }
 
   .alert-success {
@@ -339,6 +347,31 @@
 
   .alert-neutral {
     @apply border-state-neutral-border bg-state-neutral-surface text-state-neutral-text;
+  }
+
+  .confirmation-dialog {
+    @apply m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-brand-ink/15 bg-brand-surface p-0 text-brand-ink shadow-2xl;
+  }
+
+  .confirmation-dialog::backdrop {
+    background: rgb(6 39 38 / 72%);
+    backdrop-filter: blur(2px);
+  }
+
+  .confirmation-dialog-panel {
+    @apply space-y-6 p-5 sm:p-6;
+  }
+
+  .confirmation-dialog-title {
+    @apply text-subsection-title font-bold text-brand-ink;
+  }
+
+  .confirmation-dialog-message {
+    @apply mt-2 text-sm text-brand-ink/70;
+  }
+
+  .confirmation-dialog-actions {
+    @apply flex flex-col-reverse gap-2 sm:flex-row sm:justify-end;
   }
 
   .surface-list {
