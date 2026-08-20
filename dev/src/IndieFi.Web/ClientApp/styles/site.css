@@ -85,7 +85,7 @@
   }
 
   .site-navigation-toggle {
-    @apply inline-flex items-center justify-center rounded-lg border border-white/25 p-2 text-white transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft sm:hidden;
+    @apply inline-flex size-11 items-center justify-center rounded-lg border border-white/25 p-2 text-white transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft sm:hidden;
   }
 
   .site-navigation {
@@ -105,7 +105,7 @@
   .site-login-link,
   .site-notification-link,
   .site-account-toggle {
-    @apply flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft;
+    @apply flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft;
   }
 
   .site-primary-link-active {
@@ -121,7 +121,7 @@
   }
 
   .site-signup-link {
-    @apply inline-flex items-center justify-center rounded-lg bg-brand-soft px-3.5 py-2 text-sm font-bold text-brand-deep shadow-sm transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft;
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-soft px-3.5 py-2 text-sm font-bold text-brand-deep shadow-sm transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-soft;
   }
 
   .site-account-menu {
@@ -154,11 +154,11 @@
   }
 
   .site-account-section-label {
-    @apply block px-3 pt-1 pb-1.5 text-xs font-bold tracking-wide text-brand-ink/55;
+    @apply block px-3 pt-1 pb-1.5 text-xs font-bold tracking-wide text-brand-ink/70;
   }
 
   .site-account-link {
-    @apply block rounded-lg px-3 py-2 text-sm font-medium text-brand-ink transition-colors hover:bg-brand-soft/45 hover:text-brand-deep focus-visible:bg-brand-soft/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
+    @apply flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium text-brand-ink transition-colors hover:bg-brand-soft/45 hover:text-brand-deep focus-visible:bg-brand-soft/45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
   }
 
   .site-account-logout {
@@ -194,11 +194,11 @@
   }
 
   .site-footer-navigation a {
-    @apply rounded text-sm font-semibold text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-soft;
+    @apply inline-flex min-h-11 items-center rounded text-sm font-semibold text-white/80 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-soft;
   }
 
   .site-footer-meta {
-    @apply mt-7 flex flex-col gap-1 border-t border-white/15 pt-4 text-xs text-white/50 sm:flex-row sm:justify-between;
+    @apply mt-7 flex flex-col gap-1 border-t border-white/15 pt-4 text-xs text-white/75 sm:flex-row sm:justify-between;
   }
 
   .home-hero {
@@ -290,7 +290,7 @@
   }
 
   .game-card-fallback {
-    @apply flex size-full flex-col items-center justify-center gap-2 bg-brand-soft/30 text-sm font-medium text-brand-ink/55;
+    @apply flex size-full flex-col items-center justify-center gap-2 bg-brand-soft/30 text-sm font-medium text-brand-ink/70;
   }
 
   .game-card-body {
@@ -447,7 +447,7 @@
   }
 
   .account-tool-link {
-    @apply inline-flex shrink-0 items-center rounded-lg px-3 py-2 text-sm font-semibold text-brand-ink/65 transition-colors hover:bg-brand-soft/40 hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
+    @apply inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-sm font-semibold text-brand-ink/70 transition-colors hover:bg-brand-soft/40 hover:text-brand-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
   }
 
   .account-tool-link-active {
@@ -566,7 +566,7 @@
   }
 
   .table-scroll-hint {
-    @apply mb-2 text-xs font-medium text-brand-ink/65;
+    @apply mb-2 text-xs font-medium text-brand-ink/70;
   }
 
   .text-meta {
@@ -610,7 +610,7 @@
   }
 
   .auth-divider {
-    @apply my-6 flex items-center gap-3 text-xs font-medium text-brand-ink/55;
+    @apply my-6 flex items-center gap-3 text-xs font-medium text-brand-ink/70;
   }
 
   .auth-divider::before,
@@ -644,11 +644,11 @@
   }
 
   .field-check {
-    @apply size-4 shrink-0 accent-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
+    @apply size-6 shrink-0 accent-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .field-choice {
-    @apply inline-flex cursor-pointer items-center gap-2 rounded-full border border-brand-primary/25 bg-brand-surface px-3 py-1.5 text-sm font-semibold text-brand-primary transition-colors hover:bg-brand-soft/35 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-primary;
+    @apply inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-brand-primary/25 bg-brand-surface px-3 py-1.5 text-sm font-semibold text-brand-primary transition-colors hover:bg-brand-soft/35 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-primary;
   }
 
   .field-choice:has(.field-check:checked) {
@@ -689,11 +689,11 @@
   .button-outline,
   .button-danger,
   .button-link {
-    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .button-small {
-    @apply min-h-0 px-3 py-1.5;
+    @apply px-3 py-1.5;
   }
 
   .button-large {
@@ -843,7 +843,7 @@
   }
 
   .surface-link {
-    @apply transition-colors hover:bg-brand-soft/30 focus-visible:bg-brand-soft/30 focus-visible:outline-none;
+    @apply transition-colors hover:bg-brand-soft/30 focus-visible:bg-brand-soft/30 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-primary;
   }
 
   .badge-success,
@@ -867,5 +867,37 @@
 
   .badge-neutral {
     @apply border-state-neutral-border bg-state-neutral-surface text-state-neutral-text;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .game-card:hover,
+  .game-card-media img {
+    transform: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .site-primary-link-active,
+  .account-tool-link-active,
+  .dynamic-status,
+  .badge-success,
+  .badge-warning,
+  .badge-danger,
+  .badge-neutral {
+    border: 2px solid currentColor;
+  }
+
+  .surface-link:focus-visible {
+    outline-color: Highlight;
   }
 }
