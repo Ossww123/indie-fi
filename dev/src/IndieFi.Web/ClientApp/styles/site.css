@@ -315,6 +315,7 @@
 
   .page-title {
     @apply text-page-title font-extrabold tracking-[-0.025em] text-brand-ink;
+    overflow-wrap: anywhere;
   }
 
   .page-heading {
@@ -327,6 +328,7 @@
 
   .page-description {
     @apply mt-2 text-sm text-brand-ink/65 sm:text-base;
+    overflow-wrap: anywhere;
   }
 
   .game-detail-heading {
@@ -399,6 +401,7 @@
 
   .feedback-body {
     @apply mt-4 whitespace-pre-wrap rounded-xl bg-brand-canvas p-4 leading-7 text-brand-ink/80;
+    overflow-wrap: anywhere;
   }
 
   .feedback-rating-panel {
@@ -538,6 +541,32 @@
 
   .subsection-title {
     @apply mb-3 text-subsection-title font-semibold text-brand-ink;
+    overflow-wrap: anywhere;
+  }
+
+  .media-upload-form {
+    @apply grid w-full gap-2 sm:w-auto sm:grid-cols-[minmax(16rem,1fr)_auto_auto] sm:items-end;
+  }
+
+  .media-upload-form .field-group {
+    @apply min-w-0;
+  }
+
+  .media-upload-form .button-primary,
+  .media-upload-form .button-outline {
+    @apply w-full sm:w-auto;
+  }
+
+  .media-item-layout {
+    @apply flex flex-col gap-4 sm:flex-row sm:items-center;
+  }
+
+  .media-preview {
+    @apply aspect-video w-full rounded-lg object-cover sm:h-28 sm:w-44 sm:shrink-0;
+  }
+
+  .table-scroll-hint {
+    @apply mb-2 text-xs font-medium text-brand-ink/65;
   }
 
   .text-meta {
@@ -786,6 +815,7 @@
 
   .surface-item {
     @apply block p-4;
+    overflow-wrap: anywhere;
   }
 
   .surface-item + .surface-item {

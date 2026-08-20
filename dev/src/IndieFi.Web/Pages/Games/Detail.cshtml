@@ -233,9 +233,9 @@ else
             <a href="@link.Url"
                target="_blank"
                rel="noopener noreferrer"
-               class="surface-item surface-link flex items-center justify-between gap-4">
+               class="surface-item surface-link flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <span class="font-semibold text-slate-900">@link.DisplayName</span>
-                <span class="flex flex-wrap items-center justify-end gap-2">
+                <span class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
                     <span class="badge-neutral">@link.ProviderText</span>
                     @if (link.TargetPlatformText is { } platform)
                     {

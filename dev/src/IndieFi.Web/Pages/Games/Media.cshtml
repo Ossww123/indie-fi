@@ -48,7 +48,7 @@
             <form data-media-upload-form
                   data-attachment-kind="GameCover"
                   data-media-upload-mode="@(hasCurrentCover ? "replace" : "create")"
-                  class="flex flex-wrap items-end gap-2">
+                  class="media-upload-form">
                 <div class="field-group">
                     <label for="game-cover-file" class="field-label">대표 이미지 파일</label>
                     <input id="game-cover-file"
@@ -84,13 +84,13 @@
                              data-media-id="@item.MediaId"
                              data-media-status="@item.Status"
                              data-attachment-kind="@item.AttachmentKind">
-                        <div class="flex flex-wrap items-center gap-4">
+                        <div class="media-item-layout">
                             @if (item.PreviewUrl is not null)
                             {
                                 <img data-media-preview
                                      src="@item.PreviewUrl"
                                      alt="@Model.Media.GameTitle 대표 이미지 미리보기"
-                                     class="h-28 w-44 rounded-lg object-cover"
+                                     class="media-preview"
                                      width="176"
                                      height="112" />
                             }
@@ -142,7 +142,7 @@
             </div>
             <form data-media-upload-form
                   data-attachment-kind="GameScreenshot"
-                  class="flex flex-wrap items-end gap-2">
+                  class="media-upload-form">
                 <div class="field-group">
                     <label for="game-screenshot-file" class="field-label">스크린샷 파일</label>
                     <input id="game-screenshot-file"
@@ -179,13 +179,13 @@
                              data-media-status="@item.Status"
                              data-media-sort-order="@(item.SortOrder?.ToString() ?? string.Empty)"
                              data-attachment-kind="@item.AttachmentKind">
-                        <div class="flex flex-wrap items-center gap-4">
+                        <div class="media-item-layout">
                             @if (item.PreviewUrl is not null)
                             {
                                 <img data-media-preview
                                      src="@item.PreviewUrl"
                                      alt="@Model.Media.GameTitle 스크린샷 미리보기"
-                                     class="h-28 w-44 rounded-lg object-cover"
+                                     class="media-preview"
                                      width="176"
                                      height="112"
                                      loading="lazy" />

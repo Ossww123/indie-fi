@@ -23,8 +23,9 @@
 <form method="post" class="auth-form">
     <div asp-validation-summary="ModelOnly" role="alert"></div>
 
+    <p class="table-scroll-hint sm:hidden">표를 좌우로 이동하면 모든 설정을 확인할 수 있습니다.</p>
     <div class="surface-table">
-        <table class="min-w-full divide-y divide-slate-200">
+        <table class="min-w-[44rem] divide-y divide-slate-200 sm:min-w-full">
             <thead class="bg-slate-50 text-left text-sm text-slate-700">
                 <tr>
                     <th scope="col" class="px-4 py-3 font-semibold">이벤트</th>
