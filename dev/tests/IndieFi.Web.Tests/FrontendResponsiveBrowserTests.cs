@@ -5,6 +5,7 @@ using Xunit;
 namespace IndieFi.Web.Tests;
 
 [Collection(PostgreSqlCollection.Name)]
+[Trait("Category", "FrontendBrowser")]
 public sealed class FrontendResponsiveBrowserTests : PageTest
 {
     private readonly PostgreSqlFixture _fixture;

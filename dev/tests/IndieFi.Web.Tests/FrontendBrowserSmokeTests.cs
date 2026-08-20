@@ -4,6 +4,7 @@ using Xunit;
 
 namespace IndieFi.Web.Tests;
 
+[Trait("Category", "FrontendBrowser")]
 public sealed class FrontendBrowserSmokeTests : PageTest
 {
     [Fact]
