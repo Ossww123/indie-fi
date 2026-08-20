@@ -50,6 +50,18 @@ internal static class FrontendBrowserTestSupport
         await page.WaitForTimeoutAsync(50);
     }
 
+    public static async Task LoadProductionScriptAsync(
+        IPage page,
+        params string[] segments)
+    {
+        await page.AddScriptTagAsync(new PageAddScriptTagOptions
+        {
+            Path = AssetPath(["wwwroot", "js", "dist", .. segments]),
+            Type = "module",
+        });
+        await page.WaitForTimeoutAsync(50);
+    }
+
     public static async Task AssertNoHorizontalOverflowAsync(
         IPage page,
         string route,
