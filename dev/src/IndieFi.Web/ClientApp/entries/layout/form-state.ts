@@ -9,6 +9,8 @@ type PendingFormState = {
 const pendingForms = new WeakSet<HTMLFormElement>();
 const pendingStates = new Set<PendingFormState>();
 
+focusValidationSummary();
+
 document.addEventListener("submit", (event) => {
   if (!(event.target instanceof HTMLFormElement)) {
     return;
@@ -105,4 +107,17 @@ function reset(state: PendingFormState): void {
   } else {
     state.submitter.value = state.originalContent;
   }
+}
+
+function focusValidationSummary(): void {
+  const summary = document.querySelector<HTMLElement>(
+    ".validation-summary-errors[role='alert']",
+  );
+
+  if (summary === null) {
+    return;
+  }
+
+  summary.tabIndex = -1;
+  window.requestAnimationFrame(() => summary.focus());
 }

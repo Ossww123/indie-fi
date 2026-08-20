@@ -13,6 +13,8 @@
     var isDiscoveryPage = string.Equals(navigationPage, "/Index", StringComparison.Ordinal)
         || string.Equals(navigationPage, "/Games/Detail", StringComparison.Ordinal);
     var isReviewsPage = navigationPage?.StartsWith("/Reviews/", StringComparison.Ordinal) == true;
+    var isNotificationsPage = string.Equals(navigationPage, "/Notifications/Index", StringComparison.Ordinal)
+        || string.Equals(navigationPage, "/Account/Notifications", StringComparison.Ordinal);
 }
 <!DOCTYPE html>
 <html lang="ko">
@@ -64,7 +66,8 @@
                         <a class="site-notification-link"
                            asp-area=""
                            asp-page="/Notifications/Index"
-                           data-notification-link>
+                           data-notification-link
+                           aria-current="@(isNotificationsPage ? "page" : null)">
                             <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M14.9 18a3 3 0 0 1-5.8 0m8.4-2H6.5c1.2-1.3 1.8-3 1.8-4.8V9.7a3.7 3.7 0 1 1 7.4 0v1.5c0 1.8.6 3.5 1.8 4.8Z" />
                             </svg>

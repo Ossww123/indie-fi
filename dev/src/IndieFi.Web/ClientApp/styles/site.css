@@ -667,6 +667,10 @@
     @apply rounded-lg border border-state-danger-border bg-state-danger-surface px-4 py-3 text-sm text-state-danger-text;
   }
 
+  .validation-summary-errors:focus-visible {
+    @apply outline-2 outline-offset-2 outline-state-danger-text;
+  }
+
   .validation-summary-errors ul {
     @apply list-disc space-y-1 pl-5;
   }
@@ -810,7 +814,7 @@
   }
 
   .surface-table {
-    @apply overflow-x-auto rounded-xl border border-brand-ink/15 bg-brand-surface shadow-sm;
+    @apply overflow-x-auto rounded-xl border border-brand-ink/15 bg-brand-surface shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
   }
 
   .surface-item {
