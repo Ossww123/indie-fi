@@ -6,103 +6,141 @@
 
 @if (TempData["SignupMessage"] is string signupMessage)
 {
-    <div class="alert-success">@signupMessage</div>
+    <div class="alert-success" role="status">@signupMessage</div>
 }
 
-<div class="mb-10 py-6 text-center">
-    <h1 class="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Indie-Fi</h1>
-    <p class="mt-2 text-slate-500">인디 게임 피드백 플랫폼</p>
-</div>
+<section class="home-hero" data-home-hero>
+    <div class="home-hero-copy">
+        <p class="home-eyebrow">PLAY · REVIEW · GROW</p>
+        <h1 class="home-title">새로운 게임을 만나고<br class="hidden sm:block" /> 좋은 경험을 나눠보세요.</h1>
+        <p class="home-description">
+            인디 게임을 먼저 플레이하고, 창작자에게 도움이 되는 피드백을 남기는 공간입니다.
+        </p>
+        <div class="button-group mt-6">
+            <a href="#game-discovery-results" class="button-secondary button-large">게임 둘러보기</a>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <a asp-page="/Games/New" class="button-link button-large">내 게임 소개하기</a>
+            }
+            else
+            {
+                <a asp-page="/Signup" class="button-link button-large">무료로 시작하기</a>
+            }
+        </div>
+    </div>
 
-<section class="surface-card mb-8" aria-labelledby="discovery-filter-title">
-    <h2 id="discovery-filter-title" class="section-title">게임 찾기</h2>
-    <form method="get" data-discovery-filter class="space-y-5">
+    <form method="get" data-discovery-filter class="home-search-panel">
         <div>
-            <label for="discovery-query" class="form-label">제목·소개 검색</label>
+            <p class="home-search-kicker">게임 탐색</p>
+            <h2 id="discovery-filter-title" class="home-search-title">어떤 게임을 찾고 있나요?</h2>
+        </div>
+        <div class="home-search-row">
+            <label for="discovery-query" class="sr-only">제목·소개 검색</label>
             <input id="discovery-query"
-                   class="form-input"
+                   class="field-input home-search-input"
                    type="search"
                    name="q"
                    value="@Model.Query"
                    minlength="2"
                    maxlength="100"
-                   placeholder="두 글자 이상 입력" />
+                   placeholder="게임 제목이나 소개 검색" />
+            <button type="submit" class="button-primary button-large">검색</button>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3">
-            <div>
-                <label for="discovery-genre" class="form-label">장르</label>
-                <select id="discovery-genre" class="form-input" name="genre">
-                    <option value="">전체 장르</option>
-                    @foreach (var genre in Model.Catalog.Genres)
+        <details class="discovery-filter-details"
+                 open="@((Model.HasAdvancedFilters || Model.Violations.Count > 0) ? "open" : null)"
+                 data-discovery-advanced>
+            <summary class="discovery-filter-summary">
+                <span>
+                    <strong>상세 필터</strong>
+                    <span class="text-meta ml-2">장르·태그·플랫폼·등록일</span>
+                </span>
+                <svg class="discovery-filter-chevron size-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.2 7.2a.75.75 0 0 1 1.1 0L10 10.9l3.7-3.7a.75.75 0 1 1 1.1 1.1l-4.2 4.2a.75.75 0 0 1-1.1 0L5.2 8.3a.75.75 0 0 1 0-1.1Z" clip-rule="evenodd" />
+                </svg>
+            </summary>
+            <div class="discovery-filter-content">
+                <div class="grid gap-4 md:grid-cols-3">
+                    <div class="field-group">
+                        <label for="discovery-genre" class="field-label">장르</label>
+                        <select id="discovery-genre" class="field-input" name="genre">
+                            <option value="">전체 장르</option>
+                            @foreach (var genre in Model.Catalog.Genres)
+                            {
+                                <option value="@genre.Code" selected="@(Model.GenreCode == genre.Code)">@genre.DisplayName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label for="discovery-created-from" class="field-label">등록 시작 시각</label>
+                        <input id="discovery-created-from"
+                               class="field-input"
+                               type="text"
+                               name="createdFrom"
+                               value="@Model.CreatedFrom"
+                               placeholder="2026-08-01T00:00:00+09:00" />
+                    </div>
+                    <div class="field-group">
+                        <label for="discovery-created-before" class="field-label">등록 종료 시각</label>
+                        <input id="discovery-created-before"
+                               class="field-input"
+                               type="text"
+                               name="createdBefore"
+                               value="@Model.CreatedBefore"
+                               placeholder="2026-09-01T00:00:00+09:00" />
+                    </div>
+                </div>
+
+                <fieldset class="field-group">
+                    <legend class="field-label">태그 <span class="text-meta">선택한 항목을 모두 포함</span></legend>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach (var tag in Model.Catalog.Tags)
+                        {
+                            <label class="field-choice">
+                                <input type="checkbox"
+                                       class="field-check"
+                                       name="tags"
+                                       value="@tag.Code"
+                                       checked="@Model.TagCodes.Contains(tag.Code)" />
+                                <span>@tag.DisplayName</span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+
+                <fieldset class="field-group">
+                    <legend class="field-label">지원 플랫폼 <span class="text-meta">하나 이상 일치</span></legend>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach (var platform in Model.Catalog.Platforms)
+                        {
+                            <label class="field-choice">
+                                <input type="checkbox"
+                                       class="field-check"
+                                       name="platforms"
+                                       value="@platform.Code"
+                                       checked="@Model.PlatformCodes.Contains(platform.Code)" />
+                                <span>@platform.DisplayName</span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+
+                <div class="button-group">
+                    <button type="submit" class="button-primary">필터 적용</button>
+                    @if (Model.HasFilters)
                     {
-                        <option value="@genre.Code" selected="@(Model.GenreCode == genre.Code)">@genre.DisplayName</option>
+                        <a asp-page="/Index" class="button-outline">조건 초기화</a>
                     }
-                </select>
+                </div>
             </div>
-            <div>
-                <label for="discovery-created-from" class="form-label">등록 시작 시각</label>
-                <input id="discovery-created-from"
-                       class="form-input"
-                       type="text"
-                       name="createdFrom"
-                       value="@Model.CreatedFrom"
-                       placeholder="2026-08-01T00:00:00+09:00" />
-            </div>
-            <div>
-                <label for="discovery-created-before" class="form-label">등록 종료 시각</label>
-                <input id="discovery-created-before"
-                       class="form-input"
-                       type="text"
-                       name="createdBefore"
-                       value="@Model.CreatedBefore"
-                       placeholder="2026-09-01T00:00:00+09:00" />
-            </div>
-        </div>
-
-        <fieldset>
-            <legend class="form-label">태그 <span class="text-meta">선택한 항목을 모두 포함</span></legend>
-            <div class="flex flex-wrap gap-x-4 gap-y-2">
-                @foreach (var tag in Model.Catalog.Tags)
-                {
-                    <label class="inline-flex items-center gap-2 text-sm">
-                        <input type="checkbox"
-                               name="tags"
-                               value="@tag.Code"
-                               checked="@Model.TagCodes.Contains(tag.Code)" />
-                        <span>@tag.DisplayName</span>
-                    </label>
-                }
-            </div>
-        </fieldset>
-
-        <fieldset>
-            <legend class="form-label">지원 플랫폼 <span class="text-meta">하나 이상 일치</span></legend>
-            <div class="flex flex-wrap gap-x-4 gap-y-2">
-                @foreach (var platform in Model.Catalog.Platforms)
-                {
-                    <label class="inline-flex items-center gap-2 text-sm">
-                        <input type="checkbox"
-                               name="platforms"
-                               value="@platform.Code"
-                               checked="@Model.PlatformCodes.Contains(platform.Code)" />
-                        <span>@platform.DisplayName</span>
-                    </label>
-                }
-            </div>
-        </fieldset>
-
-        <div class="flex flex-wrap gap-3">
-            <button type="submit" class="btn-primary">검색</button>
-            <a asp-page="/Index" class="btn-secondary">조건 초기화</a>
-        </div>
+        </details>
     </form>
 </section>
 
 @if (Model.Violations.Count > 0)
 {
     <div class="alert-danger mb-6" role="alert" data-discovery-validation>
-        <p class="font-semibold">검색 조건을 확인해 주세요.</p>
+        <p class="alert-title">검색 조건을 확인해 주세요.</p>
         <ul class="mt-2 list-disc space-y-1 pl-5">
             @foreach (var violation in Model.Violations)
             {
@@ -112,56 +150,81 @@
     </div>
 }
 
-<h2 class="section-title">게임 둘러보기</h2>
+<section id="game-discovery-results" aria-labelledby="game-discovery-title">
+<div class="discovery-results-heading">
+    <div>
+        <p class="home-eyebrow">DISCOVER</p>
+        <h2 id="game-discovery-title" class="section-title mb-0">@(Model.HasFilters ? "검색 결과" : "새로 등록된 게임")</h2>
+    </div>
+    @if (Model.HasFilters)
+    {
+        <a asp-page="/Index" class="text-link">전체 게임 보기</a>
+    }
+</div>
 @if (Model.Games.Count == 0)
 {
-    <div class="alert-neutral">
-        @(Model.HasFilters ? "조건에 맞는 게임이 없습니다." : "아직 등록된 게임이 없습니다.")
+    <div class="empty-state" data-empty-state="game-discovery">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h3 class="empty-state-title">@(Model.HasFilters ? "조건에 맞는 게임이 없습니다." : "아직 등록된 게임이 없습니다.")</h3>
+        <p class="empty-state-description">
+            @(Model.HasFilters ? "검색어나 상세 필터를 줄여 다시 찾아보세요." : "첫 게임이 등록되면 이곳에서 바로 발견할 수 있습니다.")
+        </p>
+        <div class="empty-state-actions">
+            @if (Model.HasFilters)
+            {
+                <a asp-page="/Index" class="button-outline">검색 조건 지우기</a>
+            }
+            else if (User.Identity?.IsAuthenticated == true)
+            {
+                <a asp-page="/Games/New" class="button-primary">첫 게임 등록하기</a>
+            }
+            else
+            {
+                <a asp-page="/Signup" class="button-primary">가입하고 게임 등록하기</a>
+            }
+        </div>
     </div>
 }
 else
 {
-    <div class="surface-list">
+    <div class="game-card-grid">
         @foreach (var game in Model.Games)
         {
             <a asp-page="/Games/Detail"
                asp-route-id="@game.Id"
-               class="surface-item surface-link"
+               class="game-card group"
                data-discovery-result>
-                <div class="flex items-start gap-4">
+                <div class="game-card-media">
                     @if (Model.Covers.TryGetValue(game.Id, out var cover))
                     {
                         <img data-game-list-cover
                              data-media-id="@cover.MediaId"
                              src="@cover.Url"
                              alt="@game.Title 대표 이미지"
-                             class="h-28 w-44 shrink-0 rounded-lg object-cover"
-                             width="176"
-                             height="112"
+                             class="size-full object-cover"
+                             width="640"
+                             height="360"
                              loading="lazy"
                              decoding="async"
                              referrerpolicy="no-referrer" />
                     }
                     else
                     {
-                        <div class="flex h-28 w-44 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-meta"
+                        <div class="game-card-fallback"
                              data-game-list-cover-fallback
-                             aria-hidden="true">이미지 없음</div>
-                    }
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center justify-between gap-4">
-                            <span class="font-semibold">@game.Title</span>
-                            <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                             aria-hidden="true">
+                            <svg class="size-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.5 10.5h-3m1.5-1.5v3m9.5-1.5h.01m1.99 2h.01M8.7 6h6.6a5.2 5.2 0 0 1 5 6.7l-1.1 3.7a2.1 2.1 0 0 1-3.6.8l-1.2-1.4a3.2 3.2 0 0 0-4.8 0l-1.2 1.4a2.1 2.1 0 0 1-3.6-.8l-1.1-3.7A5.2 5.2 0 0 1 8.7 6Z" />
+                            </svg>
+                            <span>대표 이미지 준비 중</span>
                         </div>
-                        @if (game.Description is not null)
-                        {
-                            <div class="mt-2">@game.Description</div>
-                        }
-                        else
-                        {
-                            <div class="mt-2 text-slate-500">(소개 없음)</div>
-                        }
-                    </div>
+                    }
+                </div>
+                <div class="game-card-body">
+                    <time class="text-meta" datetime="@game.CreatedAt.ToString("O")">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</time>
+                    <h3 class="game-card-title">@game.Title</h3>
+                    <p class="game-card-description">@(game.Description ?? "아직 게임 소개가 없습니다.")</p>
+                    <span class="game-card-action">게임 보기 <span aria-hidden="true">→</span></span>
                 </div>
             </a>
         }
@@ -171,6 +234,7 @@ else
 @if (Model.NextPageUrl is not null)
 {
     <div class="mt-6 flex justify-center">
-        <a data-discovery-next href="@Model.NextPageUrl" class="btn-secondary">다음 게임 보기</a>
+        <a data-discovery-next href="@Model.NextPageUrl" class="button-outline">다음 게임 보기</a>
     </div>
 }
+</section>

@@ -4,36 +4,47 @@
     ViewData["Title"] = "팔로잉 목록";
 }
 
-<h1 class="page-title mb-2">팔로잉 목록</h1>
-<p class="mb-6 text-sm text-slate-600">내가 팔로우한 사용자만 볼 수 있는 목록입니다.</p>
+<header class="page-heading">
+    <div class="page-heading-copy">
+        <h1 class="page-title">팔로잉 목록</h1>
+        <p class="page-description">관심 있는 개발자와 리뷰어의 공개 프로필을 모아 봅니다.</p>
+    </div>
+</header>
+
+<partial name="_AccountTools" />
 
 @if (Model.Items.Count == 0)
 {
-    <div class="alert-neutral">아직 팔로우한 사용자가 없습니다.</div>
+    <div class="empty-state" data-empty-state="following">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">아직 팔로우한 사용자가 없습니다.</h2>
+        <p class="empty-state-description">게임 상세의 개발자나 리뷰어 공개 프로필에서 팔로우를 시작할 수 있습니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Index" class="button-primary">게임에서 개발자 찾기</a>
+        </div>
+    </div>
 }
 else
 {
-    <div class="surface-list">
+    <div class="account-card-grid">
         @foreach (var item in Model.Items)
         {
             <a asp-page="/Profiles/Detail"
                asp-route-id="@item.UserId"
-               class="surface-item surface-link">
+               class="surface-card surface-link">
                 <div class="flex items-center justify-between gap-4">
                     <span class="font-semibold">@item.DisplayName</span>
                     <span class="text-meta">@item.FollowedAt.ToLocalTime().ToString("yyyy-MM-dd")부터 팔로우</span>
                 </div>
                 @if (string.IsNullOrEmpty(item.Biography))
                 {
-                    <div class="text-slate-500">(소개 없음)</div>
+                    <div class="mt-3 text-meta">아직 등록된 소개가 없습니다.</div>
                 }
                 else
                 {
-                    <div class="whitespace-pre-line">@item.Biography</div>
+                    <div class="mt-3 whitespace-pre-line text-sm text-brand-ink/70">@item.Biography</div>
                 }
             </a>
         }
     </div>
 }
-
-<a asp-page="/Account/Profile" class="text-link mt-6 inline-block">← 내 프로필 설정으로</a>

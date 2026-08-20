@@ -55,6 +55,9 @@ public sealed class NotificationInboxPageTests
         Assert.DoesNotContain("<script>alert", html, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("href=\"/Reviews\"", html);
         Assert.Contains("data-notification-badge", html);
+        Assert.Contains("data-notification-live-state", html);
+        Assert.Contains("최신 알림 확인 중", WebUtility.HtmlDecode(html));
+        Assert.Contains("surface-item-emphasis", html);
         Assert.Contains("읽지 않은 알림 1개", WebUtility.HtmlDecode(html));
     }
 

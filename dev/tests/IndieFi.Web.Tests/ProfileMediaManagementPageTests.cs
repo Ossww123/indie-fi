@@ -47,6 +47,8 @@ public sealed class ProfileMediaManagementPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("no-store", response.Headers.CacheControl?.ToString());
         Assert.Contains("data-profile-media", html);
+        Assert.Contains("data-media-client-status", html);
+        Assert.Contains("이미지 업로더 준비 중", html);
         Assert.Contains($"data-profile-user-id=\"{account.UserId}\"", html);
         Assert.Contains("data-max-file-bytes=\"5242880\"", html);
         Assert.Contains("data-attachment-kind=\"ProfileImage\"", html);

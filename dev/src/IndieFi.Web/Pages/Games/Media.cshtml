@@ -16,7 +16,7 @@
             <h1 class="page-title">@Model.Media.GameTitle 미디어 관리</h1>
             <p class="mt-2 text-meta">대표 이미지와 공개 스크린샷을 관리합니다.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="button-group">
             <a asp-page="/Games/Edit"
                asp-route-id="@Model.Media.GameId"
                class="button-outline">게임 정보 수정</a>
@@ -31,6 +31,9 @@
         대표 이미지는 1개, 스크린샷은 최대 @Model.MaximumScreenshotCount 개까지 공개됩니다.
     </div>
 
+    <p class="dynamic-status dynamic-status-loading mb-4"
+       data-media-client-status
+       aria-live="polite">미디어 관리 도구 준비 중…</p>
     <div class="alert-neutral mb-6 hidden"
          data-media-notice
          role="status"
@@ -45,7 +48,7 @@
             <form data-media-upload-form
                   data-attachment-kind="GameCover"
                   data-media-upload-mode="@(hasCurrentCover ? "replace" : "create")"
-                  class="flex flex-wrap items-end gap-2">
+                  class="media-upload-form">
                 <div class="field-group">
                     <label for="game-cover-file" class="field-label">대표 이미지 파일</label>
                     <input id="game-cover-file"
@@ -81,13 +84,13 @@
                              data-media-id="@item.MediaId"
                              data-media-status="@item.Status"
                              data-attachment-kind="@item.AttachmentKind">
-                        <div class="flex flex-wrap items-center gap-4">
+                        <div class="media-item-layout">
                             @if (item.PreviewUrl is not null)
                             {
                                 <img data-media-preview
                                      src="@item.PreviewUrl"
                                      alt="@Model.Media.GameTitle 대표 이미지 미리보기"
-                                     class="h-28 w-44 rounded-lg object-cover"
+                                     class="media-preview"
                                      width="176"
                                      height="112" />
                             }
@@ -116,7 +119,7 @@
                                     <div class="mt-3" data-media-actions>
                                         <button type="button"
                                                 data-media-action="remove"
-                                                class="button-danger px-3 py-1.5"
+                                                class="button-danger button-small"
                                                 aria-label="대표 이미지 제거"
                                                 disabled>제거</button>
                                     </div>
@@ -139,7 +142,7 @@
             </div>
             <form data-media-upload-form
                   data-attachment-kind="GameScreenshot"
-                  class="flex flex-wrap items-end gap-2">
+                  class="media-upload-form">
                 <div class="field-group">
                     <label for="game-screenshot-file" class="field-label">스크린샷 파일</label>
                     <input id="game-screenshot-file"
@@ -176,13 +179,13 @@
                              data-media-status="@item.Status"
                              data-media-sort-order="@(item.SortOrder?.ToString() ?? string.Empty)"
                              data-attachment-kind="@item.AttachmentKind">
-                        <div class="flex flex-wrap items-center gap-4">
+                        <div class="media-item-layout">
                             @if (item.PreviewUrl is not null)
                             {
                                 <img data-media-preview
                                      src="@item.PreviewUrl"
                                      alt="@Model.Media.GameTitle 스크린샷 미리보기"
-                                     class="h-28 w-44 rounded-lg object-cover"
+                                     class="media-preview"
                                      width="176"
                                      height="112"
                                      loading="lazy" />
@@ -212,20 +215,20 @@
                                 }
                                 @if (item.Status == MediaStatus.Ready && item.IsCurrent)
                                 {
-                                    <div class="mt-3 flex flex-wrap gap-2" data-media-actions>
+                                    <div class="button-group mt-3" data-media-actions>
                                         <button type="button"
                                                 data-media-action="up"
-                                                class="button-outline px-3 py-1.5"
+                                                class="button-outline button-small"
                                                 aria-label="스크린샷 위로 이동"
                                                 disabled>위로</button>
                                         <button type="button"
                                                 data-media-action="down"
-                                                class="button-outline px-3 py-1.5"
+                                                class="button-outline button-small"
                                                 aria-label="스크린샷 아래로 이동"
                                                 disabled>아래로</button>
                                         <button type="button"
                                                 data-media-action="remove"
-                                                class="button-danger px-3 py-1.5"
+                                                class="button-danger button-small"
                                                 aria-label="스크린샷 제거"
                                                 disabled>제거</button>
                                     </div>
@@ -235,7 +238,7 @@
                                     <div class="mt-3" data-media-actions>
                                         <button type="button"
                                                 data-media-action="remove"
-                                                class="button-danger px-3 py-1.5"
+                                                class="button-danger button-small"
                                                 aria-label="스크린샷 제거"
                                                 disabled>제거</button>
                                     </div>

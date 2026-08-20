@@ -4,22 +4,35 @@
     ViewData["Title"] = "가입";
 }
 
-<h1 class="page-title mb-6">가입</h1>
+<section class="auth-shell" data-auth-page="signup">
+    <header class="auth-header">
+        <p class="auth-eyebrow">JOIN INDIEFI</p>
+        <h1 class="auth-title">가입</h1>
+        <p class="auth-description">인디 게임을 발견하고, 플레이 경험을 개발자와 나눠 보세요.</p>
+    </header>
 
-<form method="post" class="form-stack">
-    <div asp-validation-summary="ModelOnly"></div>
+    <div class="auth-card">
+        <form method="post" class="auth-form">
+            <div asp-validation-summary="ModelOnly" role="alert"></div>
 
-    <div class="field-group">
-        <label asp-for="Email" class="field-label">이메일</label>
-        <input asp-for="Email" class="field-input" autocomplete="email" />
-        <span asp-validation-for="Email" class="field-error"></span>
+            <div class="field-group">
+                <label asp-for="Email" class="field-label">이메일</label>
+                <input asp-for="Email" class="field-input" autocomplete="email" />
+                <span asp-validation-for="Email" class="field-error"></span>
+            </div>
+
+            <div class="field-group">
+                <label asp-for="Password" class="field-label">비밀번호</label>
+                <input asp-for="Password" class="field-input" autocomplete="new-password" />
+                <span asp-validation-for="Password" class="field-error"></span>
+            </div>
+
+            <button type="submit" class="button-primary w-full">가입하기</button>
+        </form>
+
+        <nav class="auth-links" aria-label="가입 도움말">
+            <a asp-page="/Login" class="text-link">이미 계정이 있나요? 로그인</a>
+            <a asp-page="/ResendConfirmationEmail" class="text-link">확인 메일 다시 받기</a>
+        </nav>
     </div>
-
-    <div class="field-group">
-        <label asp-for="Password" class="field-label">비밀번호</label>
-        <input asp-for="Password" class="field-input" autocomplete="new-password" />
-        <span asp-validation-for="Password" class="field-error"></span>
-    </div>
-
-    <button type="submit" class="button-primary">가입하기</button>
-</form>
+</section>

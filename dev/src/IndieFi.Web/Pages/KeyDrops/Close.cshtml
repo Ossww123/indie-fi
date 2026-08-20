@@ -4,20 +4,26 @@
     ViewData["Title"] = "배포 조기 마감";
 }
 
-<h1 class="page-title">배포 조기 마감</h1>
-<p class="mb-6 mt-1 text-slate-500">
-    <a asp-page="/Games/Detail"
-       asp-route-id="@Model.Drop.GameId"
-       class="text-link">@Model.Drop.GameTitle</a>
-</p>
+<section class="editor-shell" data-drop-editor="close">
+<header class="page-heading">
+    <div class="page-heading-copy">
+        <p class="auth-eyebrow">CLOSE DROP</p>
+        <h1 class="page-title mt-2">배포 조기 마감</h1>
+        <p class="page-description">
+            <a asp-page="/Games/Detail"
+               asp-route-id="@Model.Drop.GameId"
+               class="text-link">@Model.Drop.GameTitle</a>
+        </p>
+    </div>
+</header>
 
-<dl class="mb-6 max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-    <div class="grid gap-1 border-b border-slate-200 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
-        <dt class="font-medium text-slate-700">현재 재고</dt>
+<dl class="surface-list mb-6 max-w-2xl">
+    <div class="surface-detail-row">
+        <dt class="surface-detail-term">현재 재고</dt>
         <dd>총 @(Model.Drop.TotalKeys)개 중 @(Model.Drop.RemainingKeys)개 남음</dd>
     </div>
-    <div class="grid gap-1 p-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
-        <dt class="font-medium text-slate-700">상태</dt>
+    <div class="surface-detail-row">
+        <dt class="surface-detail-term">상태</dt>
         <dd><span class="badge-neutral">@Model.Drop.StatusText</span></dd>
     </div>
 </dl>
@@ -29,8 +35,8 @@
         이미 발급된 키는 그대로 유지됩니다.
     </div>
     <form method="post" asp-route-id="@Model.Drop.Id" class="form-stack">
-        <div asp-validation-summary="ModelOnly"></div>
-        <div class="flex flex-wrap gap-2">
+        <div asp-validation-summary="ModelOnly" role="alert"></div>
+        <div class="button-group">
             <button type="submit" class="button-danger">조기 마감 확인</button>
             <a asp-page="/KeyDrops/Detail"
                asp-route-id="@Model.Drop.Id"
@@ -40,7 +46,7 @@
 }
 else
 {
-    <div asp-validation-summary="ModelOnly"></div>
+    <div asp-validation-summary="ModelOnly" role="alert"></div>
     <div class="alert-neutral">
         예정 또는 진행 중인 배포만 조기 마감할 수 있습니다.
     </div>
@@ -48,3 +54,4 @@ else
        asp-route-id="@Model.Drop.Id"
        class="button-link">배포 상세로</a>
 }
+</section>

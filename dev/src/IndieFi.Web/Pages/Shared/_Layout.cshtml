@@ -9,6 +9,12 @@
     var navigationUnreadText = navigationUnreadCount > 99
         ? "99+"
         : navigationUnreadCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    var navigationPage = ViewContext.RouteData.Values["page"]?.ToString();
+    var isDiscoveryPage = string.Equals(navigationPage, "/Index", StringComparison.Ordinal)
+        || string.Equals(navigationPage, "/Games/Detail", StringComparison.Ordinal);
+    var isReviewsPage = navigationPage?.StartsWith("/Reviews/", StringComparison.Ordinal) == true;
+    var isNotificationsPage = string.Equals(navigationPage, "/Notifications/Index", StringComparison.Ordinal)
+        || string.Equals(navigationPage, "/Account/Notifications", StringComparison.Ordinal);
 }
 <!DOCTYPE html>
 <html lang="ko">
@@ -20,12 +26,16 @@
     <link rel="stylesheet" href="~/css/dist/site.css" asp-append-version="true" />
 </head>
 <body class="flex min-h-screen flex-col">
-    <header class="border-b border-slate-200 bg-white shadow-sm">
+    <a class="site-skip-link" href="#main-content">본문 바로가기</a>
+    <header class="site-header">
         <nav class="site-container" aria-label="주 메뉴">
-            <div class="flex min-h-16 flex-wrap items-center justify-between py-3 sm:flex-nowrap sm:py-0">
-                <a class="text-xl font-bold tracking-tight text-slate-950" asp-area="" asp-page="/Index">Indie-Fi</a>
+            <div class="site-header-row" data-navigation-container>
+                <a class="site-brand" asp-area="" asp-page="/Index" aria-label="Indie-Fi 홈">
+                    <span class="site-brand-mark" aria-hidden="true">IF</span>
+                    <span>Indie-Fi</span>
+                </a>
                 <button type="button"
-                        class="inline-flex items-center justify-center rounded-lg border border-slate-300 p-2 text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:hidden"
+                        class="site-navigation-toggle"
                         data-navigation-toggle
                         aria-controls="site-navigation"
                         aria-expanded="false">
@@ -35,57 +45,140 @@
                     </svg>
                 </button>
                 <div id="site-navigation"
-                     class="hidden w-full flex-col gap-1 border-t border-slate-200 pt-3 sm:flex sm:w-auto sm:flex-row sm:items-center sm:border-0 sm:pt-0"
+                     class="site-navigation hidden sm:flex"
                      data-navigation-menu>
-                    <a class="site-nav-link" asp-area="" asp-page="/Index">홈</a>
+                    <div class="site-primary-navigation">
+                        <a class="site-primary-link @(isDiscoveryPage ? "site-primary-link-active" : null)"
+                           asp-area=""
+                           asp-page="/Index"
+                           aria-current="@(isDiscoveryPage ? "page" : null)">게임 찾기</a>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <a class="site-primary-link @(isReviewsPage ? "site-primary-link-active" : null)"
+                               asp-area=""
+                               asp-page="/Reviews/Index"
+                               aria-current="@(isReviewsPage ? "page" : null)">리뷰 작업</a>
+                        }
+                    </div>
+                    <div class="site-account-navigation">
                     @if (User.Identity?.IsAuthenticated == true)
                     {
-                        <a class="site-nav-link" asp-area="" asp-page="/Games/Index">내 게임</a>
-                        <a class="site-nav-link" asp-area="" asp-page="/Games/New">게임 등록</a>
-                        <a class="site-nav-link" asp-area="" asp-page="/Credits/Index">내 크레딧</a>
-                        <a class="site-nav-link" asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>
-                        <a class="site-nav-link inline-flex items-center gap-1.5"
+                        <a class="site-notification-link"
                            asp-area=""
                            asp-page="/Notifications/Index"
-                           data-notification-link>
-                            알림
-                            <span class="badge-success px-2 py-0.5 @(navigationUnreadCount == 0 ? "hidden" : null)"
+                           data-notification-link
+                           aria-current="@(isNotificationsPage ? "page" : null)">
+                            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.9 18a3 3 0 0 1-5.8 0m8.4-2H6.5c1.2-1.3 1.8-3 1.8-4.8V9.7a3.7 3.7 0 1 1 7.4 0v1.5c0 1.8.6 3.5 1.8 4.8Z" />
+                            </svg>
+                            <span class="sm:sr-only">알림</span>
+                            <span class="site-notification-badge @(navigationUnreadCount == 0 ? "hidden" : null)"
                                   data-notification-badge
                                   aria-label="읽지 않은 알림 @(navigationUnreadCount)개">@navigationUnreadText</span>
                         </a>
-                        <a class="site-nav-link" asp-area="" asp-page="/Account/Profile">내 프로필</a>
-                        <a class="site-nav-link" asp-area="" asp-page="/Account/Password">비밀번호 변경</a>
                         @if (CurrentUser.UserId is long currentUserId)
                         {
-                            <a asp-page="/Profiles/Detail"
-                               asp-route-id="@currentUserId"
-                               class="site-nav-link">@User.Identity.Name 님</a>
+                            <div class="site-account-menu" data-account-container>
+                                <button type="button"
+                                        class="site-account-toggle"
+                                        data-account-toggle
+                                        aria-controls="site-account-menu"
+                                        aria-expanded="false">
+                                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.8 7.8a3.8 3.8 0 1 1-7.6 0 3.8 3.8 0 0 1 7.6 0ZM5 20a7 7 0 0 1 14 0" />
+                                    </svg>
+                                    <span>@User.Identity.Name 님</span>
+                                    <svg class="site-account-chevron size-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M5.2 7.2a.75.75 0 0 1 1.1 0L10 10.9l3.7-3.7a.75.75 0 1 1 1.1 1.1l-4.2 4.2a.75.75 0 0 1-1.1 0L5.2 8.3a.75.75 0 0 1 0-1.1Z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                                <div id="site-account-menu"
+                                     class="site-account-panel hidden"
+                                     data-account-menu>
+                                    <div class="site-account-section">
+                                        <span class="site-account-section-label">내 활동</span>
+                                        <a class="site-account-link" asp-area="" asp-page="/Games/Index">내 게임</a>
+                                        <a class="site-account-link" asp-area="" asp-page="/Games/New">게임 등록</a>
+                                        <a class="site-account-link" asp-area="" asp-page="/Credits/Index">내 크레딧</a>
+                                    </div>
+                                    <div class="site-account-section">
+                                        <span class="site-account-section-label">계정</span>
+                                        <a class="site-account-link"
+                                           asp-page="/Profiles/Detail"
+                                           asp-route-id="@currentUserId">공개 프로필</a>
+                                        <a class="site-account-link" asp-area="" asp-page="/Account/Profile">프로필 설정</a>
+                                        <a class="site-account-link" asp-area="" asp-page="/Account/Notifications">알림 설정</a>
+                                        <a class="site-account-link" asp-area="" asp-page="/Account/Password">비밀번호 변경</a>
+                                    </div>
+                                    <form method="post" asp-page="/Logout" class="site-account-logout">
+                                        <button type="submit" class="site-account-link w-full text-left">로그아웃</button>
+                                    </form>
+                                </div>
+                            </div>
                         }
-                        <form method="post" asp-page="/Logout">
-                            <button type="submit" class="site-nav-link w-full text-left">로그아웃</button>
-                        </form>
                     }
                     else
                     {
-                        <a class="site-nav-link" asp-area="" asp-page="/Login">로그인</a>
-                        <a class="site-nav-link" asp-area="" asp-page="/Signup">가입</a>
+                        <a class="site-login-link" asp-area="" asp-page="/Login">로그인</a>
+                        <a class="site-signup-link" asp-area="" asp-page="/Signup">가입하기</a>
                     }
+                    </div>
                 </div>
             </div>
         </nav>
     </header>
-    <main role="main" class="site-container flex-1 py-8 sm:py-10">
+    <main id="main-content" role="main" class="site-main" tabindex="-1">
         @RenderBody()
     </main>
 
-    <footer class="border-t border-slate-200 bg-white py-5 text-sm text-slate-500">
-        <div class="site-container flex flex-col justify-between gap-2 sm:flex-row">
-            <span>&copy; 2026 - Indie-Fi</span>
+    <footer class="site-footer">
+        <div class="site-container site-footer-layout">
+            <div class="site-footer-brand">
+                <a class="site-footer-logo" asp-area="" asp-page="/Index">Indie-Fi</a>
+                <p>인디 게임을 발견하고, 플레이 경험을 신뢰할 수 있는 피드백으로 연결합니다.</p>
+            </div>
+            <nav class="site-footer-navigation" aria-label="하단 메뉴" data-footer-navigation>
+                <a asp-area="" asp-page="/Index">게임 찾기</a>
+                <a asp-area="" asp-page="/BrowserSupport">브라우저 지원</a>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>
+                    <a asp-area="" asp-page="/Account/Profile">프로필 설정</a>
+                }
+            </nav>
+        </div>
+        <div class="site-container site-footer-meta">
+            <span>&copy; 2026 Indie-Fi</span>
             <span>build @BuildInfo.Revision</span>
         </div>
     </footer>
 
+    <dialog class="confirmation-dialog"
+            data-confirmation-dialog
+            aria-labelledby="confirmation-dialog-title"
+            aria-describedby="confirmation-dialog-message">
+        <form method="dialog" class="confirmation-dialog-panel">
+            <div>
+                <h2 id="confirmation-dialog-title"
+                    class="confirmation-dialog-title"
+                    data-confirmation-title>계속할까요?</h2>
+                <p id="confirmation-dialog-message"
+                   class="confirmation-dialog-message"
+                   data-confirmation-message></p>
+            </div>
+            <div class="confirmation-dialog-actions">
+                <button type="submit" value="cancel" class="button-outline">돌아가기</button>
+                <button type="submit"
+                        value="confirm"
+                        class="button-danger"
+                        data-confirmation-submit>확인</button>
+            </div>
+        </form>
+    </dialog>
+
     <script type="module" src="~/js/dist/layout/navigation.js" asp-append-version="true"></script>
+    <script type="module" src="~/js/dist/layout/confirmation.js" asp-append-version="true"></script>
+    <script type="module" src="~/js/dist/layout/form-state.js" asp-append-version="true"></script>
     @if (User.Identity?.IsAuthenticated == true)
     {
         <script type="module" src="~/js/dist/notifications/realtime.js" asp-append-version="true"></script>

@@ -100,6 +100,8 @@ public sealed class GameDetailPageTests
             out var requestOperationId));
         Assert.NotEqual(Guid.Empty, requestOperationId);
         Assert.Contains($"requestId={queuedRequestId}", html);
+        Assert.Contains("data-confirm-title=\"피드백 요청 취소\"", html);
+        Assert.Contains("data-confirm-label=\"요청 취소\"", html);
         Assert.DoesNotContain($"requestId={cancelledRequestId}", html);
         Assert.Equal(1, CountOccurrences(html, ">취소</button>"));
 

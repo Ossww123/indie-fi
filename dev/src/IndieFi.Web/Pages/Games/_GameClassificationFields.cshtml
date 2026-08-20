@@ -20,8 +20,9 @@
         @foreach (var option in Model.ClassificationCatalog.Tags)
         {
             var isChecked = Model.TagCodes.Contains(option.Code, StringComparer.Ordinal);
-            <label class="button-outline cursor-pointer px-3 py-1.5">
+            <label class="field-choice">
                 <input type="checkbox"
+                       class="field-check"
                        name="TagCodes"
                        value="@option.Code"
                        checked="@isChecked" />
@@ -38,8 +39,9 @@
         @foreach (var option in Model.ClassificationCatalog.Platforms)
         {
             var isChecked = Model.PlatformCodes.Contains(option.Code, StringComparer.Ordinal);
-            <label class="button-outline cursor-pointer px-3 py-1.5">
+            <label class="field-choice">
                 <input type="checkbox"
+                       class="field-check"
                        name="PlatformCodes"
                        value="@option.Code"
                        checked="@isChecked" />

@@ -9,21 +9,21 @@
     <div class="alert-success mb-6" role="status">@Model.FollowMessage</div>
 }
 
-<div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+<section class="profile-hero" data-public-profile>
     @if (Model.ProfileImage is { } profileImage)
     {
         <img data-profile-image
              data-media-id="@profileImage.MediaId"
              src="@profileImage.Url"
              alt="@Model.Profile.DisplayName 프로필 이미지"
-             class="size-24 shrink-0 rounded-full bg-slate-100 object-cover"
+             class="profile-avatar"
              width="96"
              height="96"
              referrerpolicy="no-referrer" />
     }
     else
     {
-        <div class="flex size-24 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700"
+        <div class="profile-avatar flex items-center justify-center text-brand-primary"
              data-default-profile-image>
             <svg class="size-12"
                  viewBox="0 0 24 24"
@@ -36,13 +36,13 @@
             </svg>
         </div>
     }
-    <div>
+    <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-3">
             <h1 class="page-title">@Model.Profile.DisplayName</h1>
             @if (Model.IsOwner)
             {
-                <a asp-page="/Account/Profile" class="button-outline px-3 py-1.5">프로필 수정</a>
-                <a asp-page="/Account/Following" class="button-outline px-3 py-1.5">팔로잉 목록</a>
+                <a asp-page="/Account/Profile" class="button-outline button-small">프로필 수정</a>
+                <a asp-page="/Account/Following" class="button-outline button-small">팔로잉 목록</a>
             }
             else if (Model.CanManageFollow)
             {
@@ -51,7 +51,7 @@
                     <form method="post"
                           asp-page-handler="Unfollow"
                           asp-route-id="@Model.Profile.UserId">
-                        <button type="submit" class="button-outline px-3 py-1.5">팔로우 해제</button>
+                        <button type="submit" class="button-outline button-small">팔로우 해제</button>
                     </form>
                 }
                 else
@@ -59,7 +59,7 @@
                     <form method="post"
                           asp-page-handler="Follow"
                           asp-route-id="@Model.Profile.UserId">
-                        <button type="submit" class="button-primary px-3 py-1.5">팔로우</button>
+                        <button type="submit" class="button-primary button-small">팔로우</button>
                     </form>
                 }
             }
@@ -67,7 +67,7 @@
             {
                 <a asp-page="/Login"
                    asp-route-returnUrl="@($"/Profiles/{Model.Profile.UserId}")"
-                   class="button-outline px-3 py-1.5">로그인 후 팔로우</a>
+                   class="button-outline button-small">로그인 후 팔로우</a>
             }
         </div>
         @if (string.IsNullOrEmpty(Model.Profile.Biography))
@@ -79,44 +79,50 @@
             <p class="mt-3 max-w-3xl whitespace-pre-line leading-7 text-slate-700">@Model.Profile.Biography</p>
         }
     </div>
-</div>
+</section>
 
-<h2 class="subsection-title mt-10">리뷰 활동</h2>
-<div class="surface-item mt-3">
-    <div>
-        <span class="font-semibold">완료한 리뷰</span>
-        <span class="ml-2 text-slate-600">@(Model.Profile.CompletedReviewCount)개</span>
+<section class="mt-10" aria-labelledby="profile-review-heading">
+    <h2 id="profile-review-heading" class="subsection-title">리뷰 활동</h2>
+    <div class="profile-stats max-w-2xl">
+        <div class="profile-stat">
+            <span class="text-meta">완료한 리뷰</span>
+            <strong class="profile-stat-value">@(Model.Profile.CompletedReviewCount)개</strong>
+        </div>
+        <div class="profile-stat">
+            <span class="text-meta">리뷰어 등급</span>
+            <strong class="profile-stat-value" data-reviewer-grade>@Model.ReviewerGradeLabel</strong>
+        </div>
     </div>
-    <div class="mt-2">
-        <span class="font-semibold">리뷰어 등급</span>
-        <span class="ml-2 text-slate-600" data-reviewer-grade>@Model.ReviewerGradeLabel</span>
-    </div>
-</div>
+</section>
 
 <h2 class="subsection-title mt-10">등록한 게임</h2>
 @if (Model.Profile.Games.Count == 0)
 {
-    <div class="alert-neutral">아직 등록한 게임이 없습니다.</div>
+    <div class="empty-state empty-state-compact" data-empty-state="profile-games">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h3 class="empty-state-title">아직 등록한 게임이 없습니다.</h3>
+        <p class="empty-state-description">공개된 게임이 생기면 이 프로필에서 함께 확인할 수 있습니다.</p>
+    </div>
 }
 else
 {
-    <div class="surface-list">
+    <div class="grid gap-4 sm:grid-cols-2">
         @foreach (var game in Model.Profile.Games)
         {
             <a asp-page="/Games/Detail"
                asp-route-id="@game.Id"
-               class="surface-item surface-link">
+               class="surface-card surface-link">
                 <div class="flex items-center justify-between gap-4">
-                    <span class="font-semibold">@game.Title</span>
+                    <span class="font-bold text-brand-ink">@game.Title</span>
                     <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
                 </div>
                 @if (game.Description is not null)
                 {
-                    <div>@game.Description</div>
+                    <div class="mt-3 text-sm text-brand-ink/70">@game.Description</div>
                 }
                 else
                 {
-                    <div class="text-slate-500">(소개 없음)</div>
+                    <div class="mt-3 text-meta">아직 등록된 소개가 없습니다.</div>
                 }
             </a>
         }

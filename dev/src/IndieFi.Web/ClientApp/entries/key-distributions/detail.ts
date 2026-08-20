@@ -56,11 +56,15 @@ let authenticationLost = false;
 connection.on("WaitingRoomDropChanged", handleChanged);
 connection.on("WaitingRoomUserChanged", handleChanged);
 connection.onreconnecting(() => {
-  root.dataset.clientState = "reconnecting";
+  setClientState(
+    "reconnecting",
+    "실시간 연결을 복구하고 있습니다. 그동안 주기적으로 상태를 확인합니다.",
+    "warning",
+  );
   startPolling();
 });
 connection.onreconnected(async () => {
-  root.dataset.clientState = "connected";
+  setClientState("connected", "연결되었습니다. 최신 상태 확인 중…", "loading");
   stopPolling();
   await subscribeAndRefresh();
 });
@@ -69,7 +73,11 @@ connection.onclose(() => {
     return;
   }
 
-  root.dataset.clientState = "polling";
+  setClientState(
+    "polling",
+    "실시간 연결이 끊겨 주기적으로 상태를 확인하고 있습니다.",
+    "warning",
+  );
   startPolling();
   scheduleConnectionStart();
 });
@@ -91,11 +99,15 @@ async function startConnection(): Promise<void> {
 
   try {
     await connection.start();
-    root.dataset.clientState = "connected";
+    setClientState("connected", "연결되었습니다. 최신 상태 확인 중…", "loading");
     stopPolling();
     await subscribeAndRefresh();
   } catch {
-    root.dataset.clientState = "polling";
+    setClientState(
+      "polling",
+      "실시간 연결을 기다리며 주기적으로 상태를 확인하고 있습니다.",
+      "warning",
+    );
     startPolling();
     scheduleConnectionStart();
   }
@@ -105,7 +117,11 @@ async function subscribeAndRefresh(): Promise<void> {
   try {
     await connection.invoke("Subscribe", dropId);
   } catch {
-    root.dataset.clientState = "polling";
+    setClientState(
+      "polling",
+      "실시간 구독을 복구하는 동안 주기적으로 상태를 확인합니다.",
+      "warning",
+    );
     startPolling();
   } finally {
     await refreshSnapshot();
@@ -154,7 +170,11 @@ function scheduleRefresh(): void {
 function refreshSnapshot(): Promise<void> {
   refreshInFlight ??= fetchSnapshot()
     .catch(() => {
-      root.dataset.clientState = "polling";
+      setClientState(
+        "polling",
+        "최신 상태를 불러오지 못했습니다. 자동으로 다시 시도합니다.",
+        "warning",
+      );
       startPolling();
     })
     .finally(() => {
@@ -172,13 +192,21 @@ async function fetchSnapshot(): Promise<void> {
   if (response.status === 401) {
     authenticationLost = true;
     stopPolling();
-    root.dataset.clientState = "unauthorized";
+    setClientState(
+      "unauthorized",
+      "로그인 상태가 만료되었습니다. 페이지를 새로고침해 주세요.",
+      "warning",
+    );
     await connection.stop();
     return;
   }
 
   if (!response.ok) {
-    root.dataset.clientState = "polling";
+    setClientState(
+      "polling",
+      "최신 상태를 불러오지 못했습니다. 자동으로 다시 시도합니다.",
+      "warning",
+    );
     startPolling();
     return;
   }
@@ -194,8 +222,11 @@ async function fetchSnapshot(): Promise<void> {
 }
 
 function renderSnapshot(snapshot: WaitingRoomSnapshot): void {
-  stateElement.hidden = false;
-  stateElement.textContent = stateText(snapshot);
+  setClientState(
+    root.dataset.clientState ?? "connected",
+    stateText(snapshot),
+    "success",
+  );
 
   const hasPosition = snapshot.position !== null && snapshot.aheadCount !== null;
   positionElement.hidden = !hasPosition;
@@ -214,6 +245,22 @@ function renderSnapshot(snapshot: WaitingRoomSnapshot): void {
   }
 
   updateAdmissionCountdown();
+}
+
+function setClientState(
+  state: string,
+  message: string,
+  kind: "loading" | "success" | "warning",
+): void {
+  root.dataset.clientState = state;
+  stateElement.hidden = false;
+  stateElement.textContent = message;
+  stateElement.classList.remove(
+    "dynamic-status-loading",
+    "dynamic-status-success",
+    "dynamic-status-warning",
+  );
+  stateElement.classList.add(`dynamic-status-${kind}`);
 }
 
 function stateText(snapshot: WaitingRoomSnapshot): string {

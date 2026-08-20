@@ -1,0 +1,34 @@
+@{
+    var currentPage = ViewContext.RouteData.Values["page"]?.ToString();
+    var isGamesPage = currentPage == "/Games/Index";
+    var isFavoritesPage = currentPage == "/Account/FavoriteGames";
+    var isFollowingPage = currentPage == "/Account/Following";
+    var isNotificationsPage = currentPage is "/Notifications/Index" or "/Account/Notifications";
+    var isCreditsPage = currentPage == "/Credits/Index";
+    var isProfilePage = currentPage == "/Account/Profile";
+    var isPasswordPage = currentPage == "/Account/Password";
+}
+
+<nav class="account-tools" aria-label="내 활동과 계정 도구">
+    <a asp-page="/Games/Index"
+       class="account-tool-link @(isGamesPage ? "account-tool-link-active" : null)"
+       aria-current="@(isGamesPage ? "page" : null)">내 게임</a>
+    <a asp-page="/Account/FavoriteGames"
+       class="account-tool-link @(isFavoritesPage ? "account-tool-link-active" : null)"
+       aria-current="@(isFavoritesPage ? "page" : null)">관심 게임</a>
+    <a asp-page="/Account/Following"
+       class="account-tool-link @(isFollowingPage ? "account-tool-link-active" : null)"
+       aria-current="@(isFollowingPage ? "page" : null)">팔로잉</a>
+    <a asp-page="/Notifications/Index"
+       class="account-tool-link @(isNotificationsPage ? "account-tool-link-active" : null)"
+       aria-current="@(isNotificationsPage ? "page" : null)">알림</a>
+    <a asp-page="/Credits/Index"
+       class="account-tool-link @(isCreditsPage ? "account-tool-link-active" : null)"
+       aria-current="@(isCreditsPage ? "page" : null)">크레딧</a>
+    <a asp-page="/Account/Profile"
+       class="account-tool-link @(isProfilePage ? "account-tool-link-active" : null)"
+       aria-current="@(isProfilePage ? "page" : null)">프로필 설정</a>
+    <a asp-page="/Account/Password"
+       class="account-tool-link @(isPasswordPage ? "account-tool-link-active" : null)"
+       aria-current="@(isPasswordPage ? "page" : null)">비밀번호</a>
+</nav>

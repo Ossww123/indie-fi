@@ -16,7 +16,7 @@
     <div class="space-y-4" data-play-link-list>
         @for (var index = 0; index < Model.Links.Count; index++)
         {
-            <article class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4"
+            <article class="surface-panel-muted space-y-4"
                      data-play-link-row>
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <h3 class="font-semibold text-slate-900" data-play-link-heading>
@@ -30,7 +30,7 @@
                                 class="button-link"
                                 data-play-link-action="down">아래로</button>
                         <button type="button"
-                                class="button-danger px-2 py-1"
+                                class="button-danger button-small"
                                 data-play-link-action="remove">삭제</button>
                     </div>
                 </div>
@@ -92,7 +92,7 @@
             data-play-link-add>링크 추가</button>
 
     <template data-play-link-template>
-        <article class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4"
+        <article class="surface-panel-muted space-y-4"
                  data-play-link-row>
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <h3 class="font-semibold text-slate-900" data-play-link-heading>새 링크</h3>
@@ -104,7 +104,7 @@
                             class="button-link"
                             data-play-link-action="down">아래로</button>
                     <button type="button"
-                            class="button-danger px-2 py-1"
+                            class="button-danger button-small"
                             data-play-link-action="remove">삭제</button>
                 </div>
             </div>

@@ -42,6 +42,7 @@ public sealed class WaitingRoomPageTests
         Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
         Assert.Contains("가상 대기실", detailHtml);
         Assert.Contains("대기실 진입은 게임 키 예약이나 지급을 보장하지 않습니다.", detailHtml);
+        Assert.Contains("최신 대기실 상태 확인 중", detailHtml);
         Assert.Contains("대기실 입장", detailHtml);
 
         using var joinForm = new FormUrlEncodedContent(new Dictionary<string, string>

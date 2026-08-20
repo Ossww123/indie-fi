@@ -42,12 +42,17 @@ public sealed partial class PublicGameDiscoveryPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("data-discovery-filter", html);
+        Assert.Contains("data-home-hero", html);
+        Assert.Contains("data-discovery-advanced", html);
+        Assert.Matches("<details[^>]*\\sopen(?:=|\\s|>)", html);
+        Assert.Contains("class=\"field-check\"", html);
         Assert.Contains($"value=\"{token}\"", html);
         Assert.Matches(SelectedGenrePattern(), html);
         Assert.Matches(SelectedTagPattern(), html);
         Assert.Matches(SelectedPlatformPattern(), html);
         Assert.DoesNotContain("value=\"unspecified\"", html);
         Assert.Equal(1, CountOccurrences(html, "data-discovery-result"));
+        Assert.Equal(1, CountOccurrences(html, "class=\"game-card group\""));
         Assert.Contains($"{token} item 00", html);
     }
 

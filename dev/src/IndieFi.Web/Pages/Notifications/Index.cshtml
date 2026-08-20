@@ -4,14 +4,17 @@
     ViewData["Title"] = "알림";
 }
 
-<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
-    <div>
+<header class="page-heading">
+    <div class="page-heading-copy">
         <h1 class="page-title">알림</h1>
-        <p class="mt-2 text-sm text-slate-600">
+        <p class="page-description">
             읽지 않은 알림 <strong data-notification-unread-count>@Model.Snapshot.UnreadCount</strong>개
         </p>
+        <p class="dynamic-status dynamic-status-loading mt-3"
+           data-notification-live-state
+           aria-live="polite">최신 알림 확인 중…</p>
     </div>
-    <div class="flex flex-wrap gap-2">
+    <div class="button-group">
         <a asp-page="/Account/Notifications" class="button-outline">알림 설정</a>
         @if (Model.Snapshot.UnreadCount > 0)
         {
@@ -20,7 +23,9 @@
             </form>
         }
     </div>
-</div>
+</header>
+
+<partial name="_AccountTools" />
 
 @if (Model.Notice is not null)
 {
@@ -29,20 +34,27 @@
 
 @if (Model.Snapshot.Items.Count == 0)
 {
-    <div class="alert-neutral">표시할 알림이 없습니다.</div>
+    <div class="empty-state" data-empty-state="notifications">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">표시할 알림이 없습니다.</h2>
+        <p class="empty-state-description">게임·리뷰·키 배포 활동에 새 소식이 생기면 이곳에 표시됩니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Account/Notifications" class="button-outline">알림 설정 확인</a>
+        </div>
+    </div>
 }
 else
 {
-    <div class="surface-list" data-notification-list>
+    <div class="space-y-3" data-notification-list>
         @foreach (var item in Model.Snapshot.Items)
         {
-            <article class="surface-item @(item.ReadAt is null ? "bg-indigo-50/40" : null)"
+            <article class="surface-card @(item.ReadAt is null ? "surface-item-emphasis border-brand-primary/25 bg-brand-soft/20" : null)"
                      data-notification-id="@item.Id"
                      data-notification-read="@(item.ReadAt is not null ? "true" : "false")">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
-                        <h2 class="font-semibold text-slate-950">@item.Title</h2>
-                        <p class="mt-1 whitespace-pre-line text-sm text-slate-700">@item.Body</p>
+                        <h2 class="font-semibold text-brand-ink">@item.Title</h2>
+                        <p class="mt-1 whitespace-pre-line text-sm text-brand-ink/75">@item.Body</p>
                         <time class="mt-2 block text-meta"
                               datetime="@item.CreatedAt.ToString("O")">
                             @item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")

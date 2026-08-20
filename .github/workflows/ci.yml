@@ -33,6 +33,12 @@ jobs:
       - name: Build
         run: dotnet build dev/IndieFi.slnx
 
+      # The browser contracts render the real production CSS and client bundles in
+      # headless Chromium. Playwright versions and their browser binaries move as a
+      # pair, so install through the script produced by the just-built test project.
+      - name: Install the frontend test browser
+        run: pwsh dev/tests/IndieFi.Web.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
       # The tests start a throwaway PostgreSQL through Testcontainers, so this needs
       # Docker. ubuntu-latest runners already have it. The first run also pulls the
       # postgres:18 image, so expect it to take far longer than the 2s it takes locally.

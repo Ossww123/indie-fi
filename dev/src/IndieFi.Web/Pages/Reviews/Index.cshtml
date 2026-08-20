@@ -4,25 +4,30 @@
     ViewData["Title"] = "리뷰 작업";
 }
 
-<h1 class="page-title mb-6">리뷰 작업</h1>
+<header class="page-heading">
+    <div class="page-heading-copy">
+        <h1 class="page-title">리뷰 작업</h1>
+        <p class="page-description">배정받은 작업의 마감을 확인하고, 다른 개발자에게 도움이 되는 피드백을 남겨 보세요.</p>
+    </div>
+</header>
 
 @if (Model.ClaimMessage is { } claimMessage)
 {
-    <div class="@(claimMessage.IsSuccess ? "alert-success" : "alert-warning")">
+    <div class="@(claimMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">
         @claimMessage.Message
     </div>
 }
 
 @if (Model.SubmitMessage is { } submitMessage)
 {
-    <div class="@(submitMessage.IsSuccess ? "alert-success" : "alert-warning")">
+    <div class="@(submitMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">
         @submitMessage.Message
     </div>
 }
 
 @if (Model.SweepMessage is { } sweepMessage)
 {
-    <div class="@(sweepMessage.IsSuccess ? "alert-success" : "alert-neutral")">
+    <div class="@(sweepMessage.IsSuccess ? "alert-success" : "alert-neutral")" role="status">
         @sweepMessage.Message
     </div>
 }
@@ -31,38 +36,62 @@
 {
     <section class="mb-8">
         <h2 class="section-title">내가 받은 작업 @(Model.MyAssignments.Count)개</h2>
-        <div class="surface-list">
+        <div class="workflow-card-grid">
             @foreach (var assignment in Model.MyAssignments)
             {
-                <div class="surface-item">
-                    <div class="font-semibold">@assignment.GameTitle</div>
-                    <div class="text-meta">
-                        배정 @assignment.AssignedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                        · 마감 @assignment.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                var isOverdue = assignment.LeasedUntil <= DateTimeOffset.UtcNow;
+                <article class="workflow-card @(isOverdue ? "workflow-card-urgent" : null)">
+                    <div class="flex items-start justify-between gap-4">
+                        <h3 class="text-lg font-bold text-brand-ink">@assignment.GameTitle</h3>
+                        <span class="@(isOverdue ? "badge-warning" : "badge-success")">
+                            @(isOverdue ? "마감 지남" : "진행 중")
+                        </span>
                     </div>
-                    @if (assignment.LeasedUntil <= DateTimeOffset.UtcNow)
+                    <div class="mt-3 text-meta">
+                        배정 @assignment.AssignedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                        <span class="mt-1 block font-medium">마감 @assignment.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    </div>
+                    @if (!isOverdue)
                     {
-                        <div class="mt-2 text-sm font-medium text-amber-700">마감 지남</div>
-                    }
-                    else
-                    {
-                        <div>
+                        <div class="workflow-card-footer">
+                            <span class="text-meta">제출 전까지 내용을 수정할 수 있습니다.</span>
                             <a asp-page="Submit"
                                asp-route-assignmentId="@assignment.AssignmentId"
-                               class="text-link mt-2 inline-block">피드백 쓰기</a>
+                               class="button-primary button-small">피드백 쓰기</a>
                         </div>
                     }
-                </div>
+                </article>
             }
         </div>
     </section>
 }
 
+<section class="workflow-action-panel" aria-labelledby="review-claim-heading">
+    <div>
+        <h2 id="review-claim-heading" class="subsection-title">새 리뷰 시작하기</h2>
+        <p class="text-meta">대기 중인 요청에서 조건에 맞는 작업 하나를 배정받습니다.</p>
+    </div>
+    <div class="button-group">
+        <form method="post" asp-page-handler="Claim">
+            <input type="hidden" name="operationId" value="@Model.ClaimOperationId" />
+            <button type="submit" class="button-primary">리뷰 작업 받기</button>
+        </form>
+
+        <form method="post" asp-page-handler="Sweep">
+            <button type="submit" class="button-secondary">마감 지난 작업 정리</button>
+        </form>
+    </div>
+</section>
+
 <section class="mb-8">
     <h2 class="section-title">내 작업 이력 @(Model.AssignmentHistory.Count)개</h2>
     @if (Model.AssignmentHistory.Count == 0)
     {
-        <div class="alert-neutral">완료하거나 만료된 작업이 없습니다.</div>
+        <div class="empty-state empty-state-compact" data-empty-state="review-history">
+            <div class="empty-state-icon" aria-hidden="true">◇</div>
+            <h3 class="empty-state-title">완료하거나 만료된 작업이 없습니다.</h3>
+            <p class="empty-state-description">작업을 제출하거나 마감이 지나면 이력에서 상태를 확인할 수 있습니다.</p>
+        </div>
     }
     else
     {
@@ -86,23 +115,16 @@
     }
 </section>
 
-<div class="mb-8 flex flex-wrap gap-2">
-    <form method="post" asp-page-handler="Claim">
-        <input type="hidden" name="operationId" value="@Model.ClaimOperationId" />
-        <button type="submit" class="button-primary">리뷰 작업 받기</button>
-    </form>
-
-    <form method="post" asp-page-handler="Sweep">
-        <button type="submit" class="button-secondary">마감 지난 작업 정리</button>
-    </form>
-</div>
-
 <section>
     <h2 class="section-title">피드백을 기다리는 게임 @(Model.Items.Count)개</h2>
 
     @if (Model.Items.Count == 0)
     {
-        <div class="alert-neutral">지금은 기다리는 요청이 없습니다.</div>
+        <div class="empty-state empty-state-compact" data-empty-state="review-queue">
+            <div class="empty-state-icon" aria-hidden="true">◇</div>
+            <h3 class="empty-state-title">지금은 기다리는 요청이 없습니다.</h3>
+            <p class="empty-state-description">새 피드백 요청이 등록되면 작업 받기 대상에 포함됩니다.</p>
+        </div>
     }
     else
     {

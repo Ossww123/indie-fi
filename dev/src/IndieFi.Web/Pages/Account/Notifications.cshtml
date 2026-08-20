@@ -4,23 +4,31 @@
     ViewData["Title"] = "알림 설정";
 }
 
-<div class="mb-6">
-    <h1 class="page-title">알림 설정</h1>
-    <p class="mt-2 text-sm text-slate-600">
-        이벤트별 웹 알림과 이메일 수신 여부를 선택할 수 있습니다. 변경한 값은 이후 생성되는 알림부터 적용됩니다.
-    </p>
-</div>
+<header class="page-heading">
+    <div class="page-heading-copy">
+        <h1 class="page-title">알림 설정</h1>
+        <p class="page-description">
+            이벤트별 웹 알림과 이메일 수신 여부를 선택할 수 있습니다. 변경한 값은 이후 생성되는 알림부터 적용됩니다.
+        </p>
+    </div>
+</header>
+
+<partial name="_AccountTools" />
 
 @if (Model.StatusMessage is not null)
 {
     <div class="alert-success mb-6" role="status">@Model.StatusMessage</div>
 }
 
-<form method="post" class="form-stack">
-    <div asp-validation-summary="ModelOnly"></div>
+<form method="post" class="auth-form">
+    <div asp-validation-summary="ModelOnly" role="alert"></div>
 
-    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <table class="min-w-full divide-y divide-slate-200">
+    <p class="table-scroll-hint sm:hidden">표를 좌우로 이동하면 모든 설정을 확인할 수 있습니다.</p>
+    <div class="surface-table"
+         role="region"
+         aria-label="알림 설정 표"
+         tabindex="0">
+        <table class="min-w-[44rem] divide-y divide-slate-200 sm:min-w-full">
             <thead class="bg-slate-50 text-left text-sm text-slate-700">
                 <tr>
                     <th scope="col" class="px-4 py-3 font-semibold">이벤트</th>
@@ -44,11 +52,13 @@
                         </td>
                         <td class="px-4 py-3 text-center">
                             <input asp-for="Preferences[index].WebEnabled"
+                                   class="field-check"
                                    disabled="@(item.IsMandatory ? "disabled" : null)"
                                    aria-label="@NotificationsModel.GetLabel(item.Kind) 웹 알림" />
                         </td>
                         <td class="px-4 py-3 text-center">
                             <input asp-for="Preferences[index].EmailEnabled"
+                                   class="field-check"
                                    disabled="@(item.IsMandatory ? "disabled" : null)"
                                    aria-label="@NotificationsModel.GetLabel(item.Kind) 이메일 알림" />
                         </td>
@@ -65,7 +75,7 @@
         </table>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="button-group">
         <button type="submit" class="button-primary">설정 저장</button>
         <a asp-page="/Notifications/Index" class="button-outline">알림함으로 돌아가기</a>
     </div>

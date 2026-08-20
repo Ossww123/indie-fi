@@ -1,0 +1,19 @@
+@page "/Status/{code:int}"
+@model StatusModel
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<section class="status-page" data-status-page="@Model.DisplayStatusCode">
+    <p class="status-page-code">STATUS @Model.DisplayStatusCode</p>
+    <h1 class="status-page-title">@Model.Title</h1>
+    <p class="status-page-description">@Model.Description</p>
+
+    <div class="status-page-actions">
+        @if (Model.DisplayStatusCode == StatusCodes.Status401Unauthorized)
+        {
+            <a asp-page="/Login" asp-route-returnUrl="@Model.ReturnUrl" class="button-primary">로그인하기</a>
+        }
+        <a asp-page="/Index" class="button-outline">홈으로 돌아가기</a>
+    </div>
+</section>

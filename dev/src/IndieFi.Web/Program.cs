@@ -203,6 +203,14 @@ if (app.Environment.IsProduction())
     app.UseHttpsRedirection();
 }
 
+// Browser pages get a useful, generic status screen. Machine-facing endpoints keep
+// their original empty or structured responses so clients never receive HTML errors.
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api")
+        && !context.Request.Path.StartsWithSegments("/hubs")
+        && !context.Request.Path.StartsWithSegments("/health"),
+    branch => branch.UseStatusCodePagesWithReExecute("/Status/{0}"));
+
 app.UseRouting();
 
 // Order matters: work out who the caller is, then decide what they may do.

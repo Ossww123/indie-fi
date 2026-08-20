@@ -4,10 +4,16 @@
     ViewData["Title"] = "게임 등록";
 }
 
-<h1 class="page-title mb-6">게임 등록</h1>
+<section class="editor-shell" data-game-editor="new">
+    <header class="page-heading">
+        <div class="page-heading-copy">
+            <h1 class="page-title">게임 등록</h1>
+            <p class="page-description">플레이어가 게임을 이해하는 데 필요한 기본 정보와 플레이 경로를 등록하세요.</p>
+        </div>
+    </header>
 
-<form method="post" class="form-stack">
-    <div asp-validation-summary="ModelOnly"></div>
+    <form method="post" class="editor-card auth-form">
+        <div asp-validation-summary="ModelOnly" role="alert"></div>
 
     <div class="field-group">
         <label asp-for="Title" class="field-label">게임 제목</label>
@@ -25,8 +31,12 @@
 
     <partial name="_GamePlayLinkFields" model="Model" />
 
-    <button type="submit" class="button-primary">게임 등록</button>
-</form>
+        <div class="button-group border-t border-brand-ink/10 pt-5">
+            <button type="submit" class="button-primary">게임 등록</button>
+            <a asp-page="/Games/Index" class="button-link">취소</a>
+        </div>
+    </form>
+</section>
 
 @section Scripts {
     <script type="module"

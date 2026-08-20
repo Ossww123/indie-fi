@@ -60,6 +60,7 @@ const pollTimeoutMilliseconds = 120_000;
 
 export class DirectMediaManager {
   private readonly notice: HTMLElement;
+  private readonly clientStatus: HTMLElement | null;
   private readonly apiBase: string;
   private antiforgeryPromise: Promise<MediaAntiforgeryResponse> | null = null;
   private managementActionBusy = false;
@@ -68,6 +69,9 @@ export class DirectMediaManager {
     this.notice = getRequiredElement<HTMLElement>(
       "[data-media-notice]",
       options.root,
+    );
+    this.clientStatus = options.root.querySelector<HTMLElement>(
+      "[data-media-client-status]",
     );
     this.apiBase = requireDataset(
       options.root.dataset.mediaApiBase,
@@ -87,6 +91,9 @@ export class DirectMediaManager {
     });
     this.refreshManagementButtons();
     this.options.root.dataset.clientReady = "true";
+    if (this.clientStatus !== null) {
+      this.clientStatus.hidden = true;
+    }
   }
 
   public async getAntiforgery(): Promise<MediaAntiforgeryResponse> {
@@ -457,6 +464,7 @@ export class DirectMediaManager {
     }
 
     this.setManagementActionBusy(true);
+    this.showNotice("이미지 제거 요청을 처리하고 있습니다.", "neutral");
     try {
       const antiforgery = await this.getAntiforgery();
       await this.sendJson<unknown>(

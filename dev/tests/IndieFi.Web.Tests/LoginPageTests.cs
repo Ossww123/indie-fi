@@ -22,6 +22,61 @@ public sealed class LoginPageTests
     }
 
     [Fact]
+    public async Task Get_Layout_ForAnonymous_ShowsPrimaryNavigationAndAuthenticationActions()
+    {
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(
+            "/",
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var decodedHtml = WebUtility.HtmlDecode(html);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("게임 찾기", decodedHtml);
+        Assert.Contains("로그인", decodedHtml);
+        Assert.Contains("가입하기", decodedHtml);
+        Assert.Contains("class=\"site-navigation hidden sm:flex\"", html);
+        Assert.Contains("href=\"#main-content\"", html);
+        Assert.Contains("aria-label=\"하단 메뉴\"", html);
+        Assert.Contains("href=\"/BrowserSupport\"", html);
+        Assert.Contains("인디 게임을 발견하고", decodedHtml);
+        Assert.Contains("data-confirmation-dialog", html);
+        Assert.Contains("/js/dist/layout/confirmation.js", html);
+        Assert.Contains("/js/dist/layout/form-state.js", html);
+        Assert.DoesNotContain("data-account-menu", html);
+
+        var footerStart = html.IndexOf("data-footer-navigation", StringComparison.Ordinal);
+        var footerEnd = html.IndexOf("</nav>", footerStart, StringComparison.Ordinal);
+        Assert.True(footerStart >= 0 && footerEnd > footerStart);
+        var footerNavigation = html[footerStart..footerEnd];
+        Assert.DoesNotContain("href=\"/Login\"", footerNavigation);
+        Assert.DoesNotContain("href=\"/Signup\"", footerNavigation);
+    }
+
+    [Fact]
+    public async Task Get_BrowserSupport_Anonymously_ShowsSupportPolicyAndRequiredSettings()
+    {
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(
+            "/BrowserSupport",
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var decodedHtml = WebUtility.HtmlDecode(html);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("최근 2개 주요 버전", decodedHtml);
+        Assert.Contains("Chrome, Edge, Firefox, Safari", decodedHtml);
+        Assert.Contains("쿠키를 허용", decodedHtml);
+        Assert.Contains("JavaScript가 필요", decodedHtml);
+    }
+
+    [Fact]
     public async Task Post_Login_WithLocalReturnUrl_RedirectsBackToThatPage()
     {
         var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
@@ -119,6 +174,10 @@ public sealed class LoginPageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains($"{nickname} 님", WebUtility.HtmlDecode(html));
         Assert.Contains($"href=\"/Profiles/{userId}\"", html);
+        Assert.Contains("data-account-toggle", html);
+        Assert.Contains("data-account-menu", html);
+        Assert.Contains("게임 찾기", WebUtility.HtmlDecode(html));
+        Assert.Contains("리뷰 작업", WebUtility.HtmlDecode(html));
         Assert.DoesNotContain(UserDisplayIdentifier.Format(userId), html);
         Assert.DoesNotContain(email, html);
     }
