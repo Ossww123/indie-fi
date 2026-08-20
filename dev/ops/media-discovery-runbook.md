@@ -201,8 +201,8 @@ SELECT count(*) AS cleanup_backlog
 dotnet format IndieFi.slnx --no-restore --include <changed-csharp-files> --verify-no-changes
 dotnet build IndieFi.slnx --no-restore
 dotnet test IndieFi.slnx --no-build --no-restore
-dotnet publish src/IndieFi.Web/IndieFi.Web.csproj -c Release -r linux-arm64 --self-contained false
-dotnet publish src/IndieFi.Worker/IndieFi.Worker.csproj -c Release -r linux-arm64 --self-contained false
+dotnet publish src/IndieFi.Web/IndieFi.Web.csproj -c Release -r linux-x64 --self-contained false
+dotnet publish src/IndieFi.Worker/IndieFi.Worker.csproj -c Release -r linux-x64 --self-contained false
 ```
 
 운영 경계만 다시 확인할 때는 다음 필터를 사용한다.
@@ -211,4 +211,4 @@ dotnet publish src/IndieFi.Worker/IndieFi.Worker.csproj -c Release -r linux-arm6
 dotnet test tests/IndieFi.Web.Tests/IndieFi.Web.Tests.csproj --no-build --filter "FullyQualifiedName~MediaModuleRegistrationTests|FullyQualifiedName~MediaMultiWebIntegrationTests|FullyQualifiedName~MediaWorkerIntegrationTests|FullyQualifiedName~MediaCleanupServiceTests|FullyQualifiedName~MediaHttpIntegrationTests|FullyQualifiedName~PublicGameDiscoveryIntegrationTests"
 ```
 
-릴리스 증거에는 시각, commit, 전체 테스트·실패·건너뜀 수, PostgreSQL·Redis·RabbitMQ·MinIO 테스트 이미지 버전과 Web·Worker 배포 artifact 식별자를 남긴다. R2의 최종 백업·보존·복구 훈련과 출시 용량 기준은 로드맵 12단계에서 확정한다.
+릴리스 증거에는 시각, commit, 전체 테스트·실패·건너뜀 수, PostgreSQL·Redis·RabbitMQ·MinIO 테스트 이미지 버전과 Web·Worker 배포 artifact 식별자를 남긴다. R2의 최종 백업·보존·복구 훈련과 운영 용량 기준은 로드맵 13단계에서 확정한다.
