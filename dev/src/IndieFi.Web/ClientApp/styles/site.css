@@ -772,6 +772,10 @@
     @apply m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-brand-ink/15 bg-brand-surface p-0 text-brand-ink shadow-2xl;
   }
 
+  .confirmation-dialog:not([open]) {
+    display: none;
+  }
+
   .confirmation-dialog::backdrop {
     background: rgb(6 39 38 / 72%);
     backdrop-filter: blur(2px);

@@ -13,13 +13,13 @@
 
     @if (Model.ShowRequestId)
     {
-        <p class="mt-5 text-xs text-brand-ink/55">
+        <p class="mt-5 text-xs text-brand-ink/70">
             문의 시 요청 번호 <code class="font-mono">@Model.RequestId</code>를 알려 주세요.
         </p>
     }
 
     <div class="status-page-actions">
         <a asp-page="/Index" class="button-primary">홈으로 돌아가기</a>
-        <button type="button" class="button-outline" onclick="window.location.reload()">다시 시도</button>
+        <a href="" class="button-outline">다시 시도</a>
     </div>
 </section>

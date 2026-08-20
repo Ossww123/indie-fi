@@ -139,6 +139,7 @@
             </div>
             <nav class="site-footer-navigation" aria-label="하단 메뉴" data-footer-navigation>
                 <a asp-area="" asp-page="/Index">게임 찾기</a>
+                <a asp-area="" asp-page="/BrowserSupport">브라우저 지원</a>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <a asp-area="" asp-page="/Reviews/Index">리뷰 작업</a>

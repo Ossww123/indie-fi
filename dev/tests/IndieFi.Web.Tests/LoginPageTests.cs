@@ -41,6 +41,7 @@ public sealed class LoginPageTests
         Assert.Contains("class=\"site-navigation hidden sm:flex\"", html);
         Assert.Contains("href=\"#main-content\"", html);
         Assert.Contains("aria-label=\"하단 메뉴\"", html);
+        Assert.Contains("href=\"/BrowserSupport\"", html);
         Assert.Contains("인디 게임을 발견하고", decodedHtml);
         Assert.Contains("data-confirmation-dialog", html);
         Assert.Contains("/js/dist/layout/confirmation.js", html);
@@ -53,6 +54,26 @@ public sealed class LoginPageTests
         var footerNavigation = html[footerStart..footerEnd];
         Assert.DoesNotContain("href=\"/Login\"", footerNavigation);
         Assert.DoesNotContain("href=\"/Signup\"", footerNavigation);
+    }
+
+    [Fact]
+    public async Task Get_BrowserSupport_Anonymously_ShowsSupportPolicyAndRequiredSettings()
+    {
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(
+            "/BrowserSupport",
+            TestContext.Current.CancellationToken);
+        var html = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var decodedHtml = WebUtility.HtmlDecode(html);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("최근 2개 주요 버전", decodedHtml);
+        Assert.Contains("Chrome, Edge, Firefox, Safari", decodedHtml);
+        Assert.Contains("쿠키를 허용", decodedHtml);
+        Assert.Contains("JavaScript가 필요", decodedHtml);
     }
 
     [Fact]

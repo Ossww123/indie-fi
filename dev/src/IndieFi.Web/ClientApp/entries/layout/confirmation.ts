@@ -17,7 +17,15 @@ document.addEventListener("submit", (event) => {
   const form = event.target;
   const confirmationMessage = form.dataset.confirmMessage;
 
-  if (!confirmationMessage || confirmedForms.has(form) || typeof dialog.showModal !== "function") {
+  if (!confirmationMessage || confirmedForms.has(form)) {
+    return;
+  }
+
+  if (typeof dialog.showModal !== "function") {
+    if (!window.confirm(confirmationMessage)) {
+      event.preventDefault();
+    }
+
     return;
   }
 
