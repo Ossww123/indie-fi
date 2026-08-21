@@ -44,7 +44,7 @@ public sealed class GoogleLoginUiTests
     }
 
     [Fact]
-    public async Task DevelopmentWithoutGoogleCredentials_HidesEntryAndChallengeFallsBackToEmailLogin()
+    public async Task GoogleDisabled_HidesEntryAndChallengeFallsBackToEmailLogin()
     {
         await using var factory = new WebAppFactory(
             _fixture.ConnectionString,
@@ -71,6 +71,9 @@ public sealed class GoogleLoginUiTests
             TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain("Google로 계속하기", loginHtml);
+        Assert.Contains("name=\"Email\"", loginHtml);
+        Assert.Contains("name=\"Password\"", loginHtml);
+        Assert.Contains(">로그인</button>", loginHtml);
         Assert.Equal(HttpStatusCode.Redirect, challengeResponse.StatusCode);
         Assert.Equal("/Login", challengeResponse.Headers.Location?.OriginalString);
         Assert.DoesNotContain(

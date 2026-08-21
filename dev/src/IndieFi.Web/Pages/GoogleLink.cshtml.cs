@@ -5,6 +5,7 @@ using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages;
 
@@ -15,13 +16,16 @@ public sealed class GoogleLinkModel : PageModel
 
     private readonly GoogleAccountService _googleAccounts;
     private readonly AccountSignInService _accountSignIn;
+    private readonly bool _googleLoginAvailable;
 
     public GoogleLinkModel(
         GoogleAccountService googleAccounts,
-        AccountSignInService accountSignIn)
+        AccountSignInService accountSignIn,
+        IOptions<GoogleAuthenticationSettings> googleAuthentication)
     {
         _googleAccounts = googleAccounts;
         _accountSignIn = accountSignIn;
+        _googleLoginAvailable = googleAuthentication.Value.IsAvailable;
     }
 
     [BindProperty]
@@ -39,6 +43,11 @@ public sealed class GoogleLinkModel : PageModel
     {
         SetPrivateResponseHeaders();
         ReturnUrl = GetSafeReturnUrl(ReturnUrl);
+        if (!_googleLoginAvailable)
+        {
+            return await FailAsync();
+        }
+
         var identity = await ReadExternalIdentityAsync();
         if (identity is null)
         {
@@ -58,6 +67,11 @@ public sealed class GoogleLinkModel : PageModel
     {
         SetPrivateResponseHeaders();
         ReturnUrl = GetSafeReturnUrl(ReturnUrl);
+        if (!_googleLoginAvailable)
+        {
+            return await FailAsync();
+        }
+
         var identity = await ReadExternalIdentityAsync();
         if (identity is null)
         {

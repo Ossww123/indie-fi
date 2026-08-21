@@ -27,7 +27,7 @@ public sealed class GoogleLoginModel : PageModel
     {
         _googleAccounts = googleAccounts;
         _accountSignIn = accountSignIn;
-        _googleLoginAvailable = googleAuthentication.Value.IsConfigured;
+        _googleLoginAvailable = googleAuthentication.Value.IsAvailable;
     }
 
     [TempData]
@@ -69,6 +69,13 @@ public sealed class GoogleLoginModel : PageModel
     public async Task<IActionResult> OnGetCallbackAsync(string? returnUrl)
     {
         SetPrivateResponseHeaders();
+        if (!_googleLoginAvailable)
+        {
+            return await FailAsync(
+                returnUrl,
+                "Google 로그인이 비활성화되어 있습니다. 이메일 로그인을 이용해 주세요.");
+        }
+
         var externalAuthentication = await HttpContext.AuthenticateAsync(
             ExternalAuthenticationDefaults.TemporaryScheme);
 

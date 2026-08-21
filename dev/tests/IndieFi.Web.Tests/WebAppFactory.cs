@@ -39,6 +39,7 @@ public sealed class WebAppFactory : WebApplicationFactory<Program>
         builder.UseSetting("Media:ObjectStorage:Enabled", "false");
         if (_configureGoogle)
         {
+            builder.UseSetting("Authentication:Google:Enabled", "true");
             builder.UseSetting(
                 "Authentication:Google:ClientId",
                 "google-test-client-id");

@@ -119,6 +119,8 @@ builder.Services.AddMediaModule(builder.Configuration, MediaHostRole.Web);
 
 var googleAuthenticationSection = builder.Configuration.GetSection(
     GoogleAuthenticationSettings.SectionName);
+var googleAuthenticationEnabled = googleAuthenticationSection.GetValue<bool>(
+    nameof(GoogleAuthenticationSettings.Enabled));
 var googleClientId = googleAuthenticationSection[
     nameof(GoogleAuthenticationSettings.ClientId)] ?? string.Empty;
 var googleClientSecret = googleAuthenticationSection[
@@ -149,7 +151,8 @@ var authenticationBuilder = builder.Services
         options.SlidingExpiration = false;
     });
 
-if (!string.IsNullOrWhiteSpace(googleClientId)
+if (googleAuthenticationEnabled
+    && !string.IsNullOrWhiteSpace(googleClientId)
     && !string.IsNullOrWhiteSpace(googleClientSecret))
 {
     authenticationBuilder.AddGoogle(ExternalLoginPolicy.GoogleProvider, options =>

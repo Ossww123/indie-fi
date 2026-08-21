@@ -19,7 +19,7 @@ public class LoginModel : PageModel
     {
         _accountAuthenticationService = accountAuthenticationService;
         _accountSignInService = accountSignInService;
-        GoogleLoginAvailable = googleAuthentication.Value.IsConfigured;
+        GoogleLoginAvailable = googleAuthentication.Value.IsAvailable;
     }
 
     [BindProperty]
