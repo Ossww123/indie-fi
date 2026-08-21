@@ -61,9 +61,17 @@ builder.Services.AddSingleton<
     IValidateOptions<GoogleAuthenticationSettings>,
     GoogleAuthenticationSettingsValidator>();
 
+var databaseConnectionString =
+    builder.Configuration.GetConnectionString("Database");
+if (string.IsNullOrWhiteSpace(databaseConnectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:Database is required for the web application.");
+}
+
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Database"));
+    options.UseNpgsql(databaseConnectionString);
     options.EnableSensitiveDataLogging(false);
     if (!builder.Environment.IsDevelopment())
     {

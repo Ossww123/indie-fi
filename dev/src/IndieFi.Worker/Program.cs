@@ -32,6 +32,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 builder.Services.AddIndieFiRealtime(builder.Configuration);
 builder.Services.AddAccountProtectionServices();
+builder.Services.AddAuthenticationEmailDelivery();
 builder.Services.AddMediaModule(builder.Configuration, MediaHostRole.Worker);
 builder.Services.AddNotificationsModule(
     builder.Configuration,
