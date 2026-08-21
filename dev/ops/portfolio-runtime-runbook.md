@@ -143,6 +143,49 @@ journalctl -u indiefi-worker -n 100 --no-pager
 
 `systemctl enable --now`은 데이터 서비스, migration, 실제 환경 파일과 배포 산출물이 모두 준비되는 13-0-4-9에서만 실행한다.
 
+### 5.2. Web·Worker 동시 배포
+
+배포는 `.github/workflows/ci.yml`의 수동 `workflow_dispatch`로만 시작한다. 같은 배포 그룹에는 실행 하나만 들어갈 수 있어 두 runner가 동시에 migration이나 `current` 전환을 수행하지 않는다. EC2가 중지된 평상시 push·pull request는 테스트만 실행하고 배포 실패로 기록하지 않는다.
+
+한 번의 수동 배포는 다음 순서를 따른다.
+
+1. 전체 빌드와 테스트를 먼저 통과한다.
+2. 같은 `GITHUB_SHA`에서 Web과 Worker를 framework-dependent `linux-x64` 폴더로 각각 게시한다.
+3. 같은 migration의 `efbundle`, 해당 commit의 `ops` 파일과 파일별 SHA-256 manifest를 하나의 archive로 묶는다.
+4. GitHub OIDC로 받은 임시 AWS 권한으로 현재 runner의 `/32`에만 SSH를 열고 archive를 `ubuntu` 계정 영역에 전송한다.
+5. 서버에서 archive와 개별 파일 hash, .NET 10 runtime, 환경 파일과 systemd unit을 확인한 뒤 immutable release 디렉터리에 설치한다.
+6. Worker를 먼저 멈춰 백그라운드 DB 쓰기를 차단하고 Web을 멈춘 뒤 migration을 적용한다.
+7. `/opt/indiefi/current` symlink를 새 release로 원자적으로 바꾸고 Web을 시작한다.
+8. loopback에서 실제 `AllowedHosts`와 HTTPS forwarded header로 `/health/ready`를 통과한 뒤 Worker를 시작해 10초 동안 active 상태를 확인한다.
+9. 성공한 upload archive를 지우고, 성공·실패와 관계없이 runner의 임시 SSH 보안 그룹 규칙을 제거한다.
+
+release 구조는 다음과 같다.
+
+```text
+/opt/indiefi/releases/<40자-commit>/
+  ├─ web/             # IndieFi.Web 게시물
+  ├─ worker/          # IndieFi.Worker 게시물
+  ├─ ops/             # 같은 commit의 운영 템플릿·검증기
+  ├─ efbundle         # linux-x64 migration bundle
+  ├─ release.sha      # 기대하는 전체 Git commit
+  └─ SHA256SUMS       # 위 파일들의 무결성 manifest
+
+/opt/indiefi/current -> /opt/indiefi/releases/<현재-commit>
+```
+
+workflow는 `AWS_ROLE_ARN`, `AWS_SG_ID`, `SSH_PRIVATE_KEY`, 현재 공인 IP를 가진 `SSH_HOST` GitHub secret을 사용한다. 실제 앱 비밀은 GitHub로 전달하지 않고 `/etc/indiefi/*.env`에서 root 권한의 원격 배포 스크립트만 읽는다. DB 연결 문자열은 migration bundle의 환경에 직접 주입하며 명령행 인자나 workflow 로그로 출력하지 않는다.
+
+첫 분리 배포 전에 예전 단일 `indiefi.service`를 중지·비활성화해야 한다. workflow는 이를 자동으로 바꾸지 않고 active 상태면 중단한다. 또한 EC2 시작, 데이터 서비스 초기화, 실제 비밀과 인증서 생성은 CD가 수행하지 않으며 각각 13-0-4-7~9의 수동 준비가 선행되어야 한다.
+
+배포 실패를 자동 rollback하지 않는다. migration 전 실패면 `current`는 그대로고, migration 또는 서비스 시작 실패면 journal과 이전 release 경로를 남긴다. 스키마가 이미 바뀌었을 수 있으므로 다음 명령으로 상태를 확인한 뒤 호환성을 판단하지 않고 이전 symlink로 되돌려서는 안 된다.
+
+```bash
+readlink -f /opt/indiefi/current
+systemctl status indiefi-web indiefi-worker
+journalctl -u indiefi-web -n 100 --no-pager
+journalctl -u indiefi-worker -n 100 --no-pager
+```
+
 ## 6. 공인 IP와 인증서 생명주기
 
 Let’s Encrypt IP 인증서는 공개 CA가 현재 공인 IP의 제어권을 HTTP-01로 확인한 뒤 발급하는 6일 수명 TLS 인증서다. Certbot 5.4 이상이 IP 주소와 webroot 발급을 지원하며, Nginx는 발급된 certificate chain과 private key를 읽는다.
@@ -234,6 +277,9 @@ Google 로그인의 실제 배포 검증은 소유하고 검증할 수 있는 �
 - 인증서 전 HTTP 부트스트랩과 발급 후 HTTPS 설정이 분리되고 ACME 경로는 redirect에서 제외된다.
 - Nginx가 forwarded headers와 SignalR WebSocket을 loopback Web에 전달하고 readiness의 외부 접근을 막는다.
 - Web·Worker unit이 서로 다른 서비스 계정·환경 파일을 사용하고 실패 재시작·journal 로그 경계를 가진다.
+- 수동 CD가 같은 commit의 Web·Worker·migration·ops를 hash 검증된 immutable release 하나로 전달한다.
+- 동시 배포를 막고 환경 검증, Worker→Web 중지, migration, 원자적 symlink 전환, Web readiness→Worker active 순서를 지킨다.
+- 성공·실패 뒤 runner 전용 SSH 규칙을 제거하고 배포 실패를 자동 rollback으로 숨기지 않는다.
 - EC2를 시작하거나 유료 리소스를 추가하지 않는다.
 
 ## 9. 공식 확인 자료
@@ -241,4 +287,6 @@ Google 로그인의 실제 배포 검증은 소유하고 검증할 수 있는 �
 - Let’s Encrypt IP 인증서와 Certbot 5.4 이상 webroot 발급: <https://letsencrypt.org/2026/03/11/shorter-certs-certbot/>
 - Certbot 5.7 명령행 옵션과 webroot·deploy hook 계약: <https://eff-certbot.readthedocs.io/en/stable/man/certbot.html>
 - Nginx WebSocket reverse proxy의 Upgrade·Connection 전달: <https://nginx.org/en/docs/http/websocket.html>
+- GitHub Actions가 제공하는 `GITHUB_SHA` 등 기본 변수: <https://docs.github.com/en/actions/reference/workflows-and-actions/variables>
+- .NET의 RID 지정 framework-dependent 게시 방식: <https://learn.microsoft.com/en-us/dotnet/core/deploying/>
 - Google OAuth redirect URI의 원시 IP 제한: <https://support.google.com/cloud/answer/15549257>
