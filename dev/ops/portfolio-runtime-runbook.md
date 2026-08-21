@@ -48,7 +48,40 @@ Nginx가 TLS를 종료한다는 것은 인터넷 HTTPS 연결의 인증서와 �
 
 AWS 보안 그룹에는 80·443과 필요한 동안의 제한된 22만 둔다. Docker의 데이터 서비스 포트는 loopback에만 게시하고 보안 그룹에는 추가하지 않는다. Worker와 Kestrel 5000도 인터넷에 직접 열지 않는다.
 
-## 4. 공인 IP와 인증서 생명주기
+## 4. 데이터 서비스 실행 경계
+
+운영 데이터 서비스는 `ops/portfolio-data-compose.yml` 하나로 PostgreSQL 18, Redis와 RabbitMQ만 실행한다. Mailpit은 로컬 SMTP 확인 도구이고 MinIO는 R2의 로컬 대체재이므로 이 구성에 포함하지 않는다. RabbitMQ 이미지는 진단 도구를 포함하지만 관리 UI 포트 15672는 호스트에 게시하지 않는다.
+
+세 서비스 포트는 `127.0.0.1`에만 게시한다. 따라서 같은 EC2의 Web·Worker는 접근할 수 있지만 인터넷이나 다른 사설망 호스트에서는 접근할 수 없다. 서비스별 named volume에는 다음 데이터가 남으며, 단순 컨테이너 재생성이나 EC2 재부팅으로 삭제되지 않는다.
+
+| named volume | 보존 데이터 |
+|---|---|
+| `indiefi-portfolio-postgres-data` | PostgreSQL 데이터베이스 |
+| `indiefi-portfolio-redis-data` | Redis AOF 대기실·공유 상태 |
+| `indiefi-portfolio-rabbitmq-data` | durable queue와 broker 상태 |
+
+실제 비밀번호 파일은 저장소에 넣지 않는다. `ops/portfolio-data.env.example`의 세 값을 각각 다른 난수로 채운 비공개 파일을 사용하며, 최종 EC2 설치 위치와 권한은 13-0-4-4에서 고정한다. `docker compose config --quiet`는 파일 문법과 필수 비밀번호 존재 여부만 검사하고 컨테이너를 만들지 않는다.
+
+```bash
+docker compose \
+  --env-file ops/portfolio-data.env \
+  -f ops/portfolio-data-compose.yml \
+  config --quiet
+
+docker compose \
+  --env-file ops/portfolio-data.env \
+  -f ops/portfolio-data-compose.yml \
+  up -d --wait
+
+docker compose \
+  --env-file ops/portfolio-data.env \
+  -f ops/portfolio-data-compose.yml \
+  ps
+```
+
+일반 중지는 `docker compose ... down`까지만 사용한다. `down -v`는 세 named volume을 함께 삭제하는 초기화 명령이므로, 보존하지 않기로 확정한 예전 DB를 정리하는 13-0-4-8 외에는 사용하지 않는다.
+
+## 5. 공인 IP와 인증서 생명주기
 
 Let’s Encrypt IP 인증서는 공개 CA가 현재 공인 IP의 제어권을 HTTP-01로 확인한 뒤 발급하는 6일 수명 TLS 인증서다. Certbot 5.4 이상이 IP 주소와 webroot 발급을 지원하며, Nginx는 발급된 certificate chain과 private key를 읽는다.
 
@@ -65,21 +98,23 @@ EC2 중지 뒤 자동 할당 공인 IP는 해제된다. 다음 시작에서 IP�
 
 인증서 private key와 R2·DB·SMTP 비밀은 저장소, GitHub Actions 로그, worklog와 일반 애플리케이션 로그에 남기지 않는다.
 
-## 5. 인증 기능 범위
+## 6. 인증 기능 범위
 
 제품은 Google 로그인 기능을 유지한다. 다만 Google 웹 OAuth는 localhost 외 원시 IP를 redirect URI host로 허용하지 않으므로 이 환경에서는 Google 공급자를 명시적으로 비활성화한다. 로그인 화면은 Google 진입점을 숨기고 이메일·비밀번호 가입·확인·로그인·재설정을 HTTPS와 운영 SMTP에서 검증한다.
 
 Google 로그인의 실제 배포 검증은 소유하고 검증할 수 있는 도메인을 연결한 별도 환경의 완료 조건이다. 공인 IP 인증서만으로 Google의 redirect URI 도메인 요구를 충족했다고 간주하지 않는다.
 
-## 6. 이 단계의 완료 조건
+## 7. 이 단계의 완료 조건
 
 - 공개 80·443, 조건부 22와 내부 전용 포트가 문서에서 한 가지 연결로 수렴한다.
 - Nginx TLS 종료와 Web의 forwarded headers 책임이 분리된다.
 - 공인 IP 변경 시 인증서, R2 CORS와 배포 주소를 함께 갱신하는 순서가 명시된다.
 - 원시 IP 환경의 Google 로그인 제외가 제품 기능 삭제와 구분된다.
+- PostgreSQL·Redis·RabbitMQ만 별도 운영 Compose에 있고 모든 게시 포트가 loopback으로 제한된다.
+- 세 서비스의 비밀번호 누락은 구성 검사에서 실패하고 health check와 named volume이 선언된다.
 - EC2를 시작하거나 유료 리소스를 추가하지 않는다.
 
-## 7. 공식 확인 자료
+## 8. 공식 확인 자료
 
 - Let’s Encrypt IP 인증서와 Certbot 5.4 이상 webroot 발급: <https://letsencrypt.org/2026/03/11/shorter-certs-certbot/>
 - Google OAuth redirect URI의 원시 IP 제한: <https://support.google.com/cloud/answer/15549257>
