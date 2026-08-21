@@ -1,0 +1,20 @@
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
+    server_name __PUBLIC_IP__;
+
+    # Certbot writes the HTTP-01 token below this webroot. This location must
+    # remain reachable over plain HTTP before and after HTTPS is enabled.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    # The application is not public until the trusted IP certificate is loaded.
+    location / {
+        add_header Retry-After 60 always;
+        return 503;
+    }
+}

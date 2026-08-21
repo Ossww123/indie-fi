@@ -112,7 +112,36 @@ sudo dev/ops/verify-portfolio-environment.sh \
 - Worker에 Data Protection private key를 주거나 Web에 SMTP 비밀을 넣은 역할 교차
 - 누락·상대 경로·과도한 권한의 암호화 키 파일
 
-비밀번호나 키를 `systemctl status`, 명령행 인자 또는 작업 기록에 복사하지 않는다. 최종 systemd `EnvironmentFile` 연결과 서비스 사용자 생성은 13-0-4-5에서 수행한다.
+비밀번호나 키를 `systemctl status`, 명령행 인자 또는 작업 기록에 복사하지 않는다. `ops/install-portfolio-service-files.sh`가 서비스 사용자와 보호된 빈 환경 파일, systemd `EnvironmentFile` 연결을 설치한다. 실제 값은 이후 `sudoedit`으로 입력한다.
+
+### 5.1. systemd 서비스 설치 경계
+
+다음 명령은 서비스 계정과 디렉터리, 검증 도구와 unit 파일만 설치한다. 서비스를 활성화하거나 시작하지 않는다.
+
+```bash
+sudo dev/ops/install-portfolio-service-files.sh
+
+systemctl cat indiefi-web
+systemctl cat indiefi-worker
+```
+
+서비스 계정은 로그인이 불가능한 `indiefi-web`, `indiefi-worker`로 분리한다. 두 계정은 `/etc/indiefi/keys/account-protection.json`만 읽기 위한 `indiefi-secrets` 보조 그룹을 공유한다. Web 전용 Data Protection private key는 `indiefi-web:indiefi-web`, `0600`으로 설치해 Worker가 읽지 못하게 한다.
+
+두 unit은 다음 고정 경계를 사용한다.
+
+| 서비스 | 현재 배포 경로 | 환경 파일 | 공개 포트 |
+|---|---|---|---|
+| `indiefi-web.service` | `/opt/indiefi/current/web/IndieFi.Web.dll` | `/etc/indiefi/web.env` | 없음, `127.0.0.1:5000`만 수신 |
+| `indiefi-worker.service` | `/opt/indiefi/current/worker/IndieFi.Worker.dll` | `/etc/indiefi/worker.env` | 없음 |
+
+`current`는 같은 commit으로 게시한 Web·Worker를 담은 `/opt/indiefi/releases/<commit>`을 가리키는 symlink다. 각 서비스는 시작 전에 세 환경 파일의 역할·공유 값과 현재 DLL을 검사하고, 실패하면 잘못된 설정으로 프로세스를 열지 않는다. `Restart=on-failure`는 실행 중 비정상 종료만 재시도하고 로그는 journal에 남긴다.
+
+```bash
+journalctl -u indiefi-web -n 100 --no-pager
+journalctl -u indiefi-worker -n 100 --no-pager
+```
+
+`systemctl enable --now`은 데이터 서비스, migration, 실제 환경 파일과 배포 산출물이 모두 준비되는 13-0-4-9에서만 실행한다.
 
 ## 6. 공인 IP와 인증서 생명주기
 
@@ -122,7 +151,7 @@ Let’s Encrypt IP 인증서는 공개 CA가 현재 공인 IP의 제어권을 HT
 
 1. 비용·리전·인스턴스 종류·Standard CPU 크레딧을 확인하고 EC2를 시작한다.
 2. 새 공인 IPv4를 기록하고 배포 대상 주소를 갱신한다.
-3. 80의 ACME 경로가 외부에서 도달하는 상태에서 staging 인증서로 절차를 확인한다.
+3. 80의 ACME 경로가 외부에서 도달하는 상태에서 staging CA를 쓰는 dry run으로 절차를 확인한다.
 4. 같은 IP의 production 인증서를 발급하고 Nginx 443에 연결한다.
 5. `https://<현재-공인-IP>`의 인증서 검증과 Web 응답을 확인한다.
 6. 같은 HTTPS Origin을 R2 CORS에 추가한다.
@@ -130,6 +159,61 @@ Let’s Encrypt IP 인증서는 공개 CA가 현재 공인 IP의 제어권을 HT
 EC2 중지 뒤 자동 할당 공인 IP는 해제된다. 다음 시작에서 IP가 달라지면 이전 인증서는 새 IP를 증명하지 못하므로 새로 발급하고 Nginx, R2 CORS와 GitHub 배포 대상 주소를 함께 갱신한다. 6일 안에 같은 IP로 계속 실행하는 동안에만 자동 갱신이 의미가 있다.
 
 인증서 private key와 R2·DB·SMTP 비밀은 저장소, GitHub Actions 로그, worklog와 일반 애플리케이션 로그에 남기지 않는다.
+
+### 6.1. HTTP 부트스트랩과 HTTPS 전환
+
+인증서가 생기기 전에 HTTPS 설정부터 설치하면 Nginx가 존재하지 않는 인증서 파일 때문에 시작하지 못한다. 먼저 HTTP 부트스트랩 템플릿을 설치하고, 발급 뒤 HTTPS 템플릿으로 같은 파일을 교체한다.
+
+```bash
+INDIEFI_PUBLIC_IP=203.0.113.10
+INDIEFI_OPS_DIR=/path/to/repository/dev/ops
+
+"$INDIEFI_OPS_DIR/render-portfolio-nginx.sh" \
+  http "$INDIEFI_PUBLIC_IP" \
+  | sudo tee /etc/nginx/sites-available/indiefi >/dev/null
+
+sudo ln -sfn /etc/nginx/sites-available/indiefi /etc/nginx/sites-enabled/indiefi
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+예시 IP `203.0.113.10`은 실제 EC2 공인 IPv4로 바꾼다. 기존 Nginx default site나 예전 IndieFi site가 같은 80·443의 `default_server`를 점유하면 먼저 목록을 확인하고 해당 symlink만 비활성화한다. ACME 확인 파일은 `/var/www/letsencrypt/.well-known/acme-challenge/` 아래에 두며, 반드시 EC2 바깥의 브라우저나 터미널에서 HTTP 200을 확인한다.
+
+Certbot은 5.4 이상이어야 한다. `--dry-run`은 staging CA로 HTTP-01 경로를 시험하되 인증서를 저장하지 않으므로 production 인증서 이름과 충돌하지 않는다.
+
+```bash
+certbot --version
+
+sudo certbot certonly --dry-run \
+  --preferred-profile shortlived \
+  --webroot \
+  --webroot-path /var/www/letsencrypt \
+  --ip-address "$INDIEFI_PUBLIC_IP" \
+  --cert-name "$INDIEFI_PUBLIC_IP"
+
+sudo certbot certonly \
+  --preferred-profile shortlived \
+  --webroot \
+  --webroot-path /var/www/letsencrypt \
+  --ip-address "$INDIEFI_PUBLIC_IP" \
+  --cert-name "$INDIEFI_PUBLIC_IP" \
+  --deploy-hook /usr/local/lib/indiefi/reload-nginx-after-certificate.sh
+```
+
+production 인증서가 `/etc/letsencrypt/live/<공인-IP>/`에 생긴 뒤 HTTPS 설정을 렌더링한다. 80의 ACME 경로는 그대로 유지하고 그 밖의 요청만 HTTPS로 308 이동한다. 443은 TLS를 종료한 뒤 일반 HTTP와 SignalR WebSocket 요청을 `127.0.0.1:5000`으로 전달하며, `/health/ready`는 같은 서버의 loopback 요청에만 공개한다.
+
+```bash
+"$INDIEFI_OPS_DIR/render-portfolio-nginx.sh" \
+  https "$INDIEFI_PUBLIC_IP" \
+  | sudo tee /etc/nginx/sites-available/indiefi >/dev/null
+
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot certificates
+sudo certbot renew --dry-run --run-deploy-hooks
+```
+
+`nginx -t`가 실패하면 reload하지 않는다. 갱신 성공 때만 deploy hook이 먼저 Nginx 문법을 검사하고 설정을 reload하므로, 새 인증서가 디스크에 생겼는데 실행 중 Nginx는 예전 인증서를 계속 제공하는 상태를 피한다.
 
 ## 7. 인증 기능 범위
 
@@ -147,9 +231,14 @@ Google 로그인의 실제 배포 검증은 소유하고 검증할 수 있는 �
 - 세 서비스의 비밀번호 누락은 구성 검사에서 실패하고 health check와 named volume이 선언된다.
 - 인프라·Web·Worker 비밀 파일이 분리되고 공유 값·역할 활성화·키 파일 권한이 시작 전에 검증된다.
 - Web에는 SMTP 비밀이나 발송 Worker가 없고 Worker만 인증·알림 메일과 미디어 후처리를 실행한다.
+- 인증서 전 HTTP 부트스트랩과 발급 후 HTTPS 설정이 분리되고 ACME 경로는 redirect에서 제외된다.
+- Nginx가 forwarded headers와 SignalR WebSocket을 loopback Web에 전달하고 readiness의 외부 접근을 막는다.
+- Web·Worker unit이 서로 다른 서비스 계정·환경 파일을 사용하고 실패 재시작·journal 로그 경계를 가진다.
 - EC2를 시작하거나 유료 리소스를 추가하지 않는다.
 
 ## 9. 공식 확인 자료
 
 - Let’s Encrypt IP 인증서와 Certbot 5.4 이상 webroot 발급: <https://letsencrypt.org/2026/03/11/shorter-certs-certbot/>
+- Certbot 5.7 명령행 옵션과 webroot·deploy hook 계약: <https://eff-certbot.readthedocs.io/en/stable/man/certbot.html>
+- Nginx WebSocket reverse proxy의 Upgrade·Connection 전달: <https://nginx.org/en/docs/http/websocket.html>
 - Google OAuth redirect URI의 원시 IP 제한: <https://support.google.com/cloud/answer/15549257>
