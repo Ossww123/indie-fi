@@ -15,6 +15,7 @@ AWS Budget과 비용 알림은 사용량을 즉시 차단하는 한도가 아니
 | CPU 크레딧 | `standard` — Unlimited 잉여 크레딧 추가 요금 금지 |
 | EBS | 기존 gp3 16GiB 우선, 사용률 75% 이상이 지속될 때만 25~30GiB로 확장 |
 | 공인 IP | 실행 중 자동 할당 IPv4 1개, Elastic IP는 만들지 않음 |
+| 공개 HTTPS | Nginx 80·443, Let’s Encrypt 6일 공인 IP 인증서, IP 변경 시 재발급 |
 | 데이터 서비스 | 같은 EC2의 PostgreSQL·Redis·RabbitMQ |
 | 객체 저장소 | Cloudflare R2 Standard 비공개 버킷 1개 |
 | 만들지 않는 것 | NAT Gateway, Load Balancer, RDS, Auto Scaling, 유료 AMI, Savings Plan·Reserved Instance, 상세 모니터링 |
@@ -27,6 +28,7 @@ AWS Budget과 비용 알림은 사용량을 즉시 차단하는 한도가 아니
 - [ ] 이번 달 누적 비용을 확인하고, 이번 실험에서 허용할 추가 비용을 미화 5달러로 잡는다면 월 예산을 `현재 누적 비용 + 5달러`로 맞춘 뒤 실제 비용 80%·100%와 예측 비용 100% 알림을 둔다.
 - [ ] EC2와 EBS에 `Project=IndieFi`, `Environment=portfolio`, `ExpiresOn=<종료 예정일>` 태그가 있는지 확인한다.
 - [ ] 일반 Ubuntu Server이며 Ubuntu Pro 또는 유료 Marketplace AMI가 아닌지 확인한다.
+- [ ] 이전 세션의 공인 IP 인증서와 R2 CORS Origin을 새 IP에 재사용하지 않는지 확인한다.
 - [ ] PostgreSQL `pg_dump`를 로컬 PC에 내려받고 빈 로컬 DB에 시험 복원한다.
 - [ ] Elastic IP, NAT Gateway, Load Balancer, RDS, 불필요한 EBS 볼륨과 스냅숏이 없는지 확인한다.
 - [ ] 부하 도구는 EC2 안에서 실행하지 않고 로컬 PC 또는 별도 통제 환경에서 실행한다.
@@ -48,6 +50,7 @@ aws ec2 describe-instance-credit-specifications \
 - [ ] `CPUCreditBalance`, CPU, 메모리, 스왑과 디스크 사용률을 기록한다.
 - [ ] EBS는 75% 사용을 넘었다는 측정 없이 미리 확장하지 않는다. EBS는 확장 후 다시 줄일 수 없다는 전제로 판단한다.
 - [ ] SSH 22번은 관리자 현재 IP 또는 배포 중인 GitHub Actions 러너 `/32`에만 잠시 연다.
+- [ ] 인터넷에는 Nginx 80·443만 열고, 80은 ACME HTTP-01 검증과 HTTPS 이동에만 사용한다.
 - [ ] PostgreSQL 5432, Redis 6379, RabbitMQ 5672·15672는 공인 인터페이스와 보안 그룹에 열지 않는다.
 - [ ] AWS Cost Explorer와 Billing 화면은 반영이 늦을 수 있으므로 알림만 믿고 인스턴스를 계속 켜두지 않는다.
 
@@ -66,6 +69,7 @@ aws ec2 describe-instance-credit-specifications \
 
 - [ ] EC2를 `stop`하고 콘솔에서 상태가 `stopped`가 될 때까지 확인한다.
 - [ ] 자동 할당 공인 IPv4가 해제됐고 별도 Elastic IP가 없는지 확인한다.
+- [ ] 해제된 IP의 인증서·R2 CORS Origin·배포 대상 주소를 다음 세션에 재사용하지 않도록 기록한다.
 - [ ] GitHub Actions가 추가한 임시 SSH 보안 그룹 규칙이 남지 않았는지 확인한다.
 - [ ] 추가 EBS, 스냅숏, NAT Gateway, Load Balancer, RDS와 Auto Scaling 리소스가 없는지 확인한다.
 - [ ] R2 객체·버킷·토큰을 계속 보존할지 삭제할지 기록하고 대시보드 사용량을 확인한다.
@@ -80,3 +84,4 @@ EC2를 중지해도 EBS와 남겨 둔 스냅숏·외부 저장소는 계속 과�
 - 공인 IPv4 시간당 과금: <https://aws.amazon.com/vpc/pricing/>
 - AWS Budget 운영 주의사항: <https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-best-practices.html>
 - Cloudflare R2 요금과 무료 사용량: <https://developers.cloudflare.com/r2/pricing/>
+- Let’s Encrypt 6일 IP 인증서와 Certbot: <https://letsencrypt.org/2026/03/11/shorter-certs-certbot/>
