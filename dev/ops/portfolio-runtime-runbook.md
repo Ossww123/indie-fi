@@ -81,6 +81,30 @@ docker compose \
 
 일반 중지는 `docker compose ... down`까지만 사용한다. `down -v`는 세 named volume을 함께 삭제하는 초기화 명령이므로, 보존하지 않기로 확정한 예전 DB를 정리하는 13-0-4-8 외에는 사용하지 않는다.
 
+### 4.1. migration owner와 애플리케이션 역할 분리
+
+EF migration은 테이블·인덱스·DB 권한을 바꾸므로 PostgreSQL owner인 `indiefi`로 실행한다. 반대로 Web과 Worker는 migration이 만든 최소 권한 역할 `indiefi_app`으로만 접속한다. 앱이 침해되더라도 임의 테이블 생성이나 스키마 변경까지 이어지지 않게 하는 경계다.
+
+빈 DB의 첫 준비 순서는 다음과 같다.
+
+1. `ops/migrate-portfolio-database.sh`가 `/etc/indiefi/infra.env`의 owner 비밀번호를 root 프로세스 안에서만 읽어 현재 `efbundle`을 실행한다.
+2. migration이 비밀번호 없는 `indiefi_app` 역할과 필요한 테이블·시퀀스·함수 권한을 만든다.
+3. `ops/portfolio-database-bootstrap.env.example`을 기준으로 일회성 `/etc/indiefi/database-bootstrap.env`를 `root:root`, `0600`으로 만든다. 값은 `openssl rand -base64 32`로 새로 생성하며 owner 비밀번호와 달라야 한다.
+4. `ops/configure-portfolio-database-role.sh`가 이 비밀번호를 역할에 설정하고 로그인, migration history 읽기, DDL 거부를 직접 검사한다.
+5. 같은 애플리케이션 비밀번호를 Web·Worker의 `ConnectionStrings__Database`에 넣는다. 첫 동시 배포가 성공한 뒤에만 일회성 파일을 삭제한다.
+
+```bash
+sudo install -o root -g root -m 0600 /dev/null \
+  /etc/indiefi/database-bootstrap.env
+sudoedit /etc/indiefi/database-bootstrap.env
+
+sudo <release>/ops/migrate-portfolio-database.sh \
+  <release>/efbundle
+sudo <release>/ops/configure-portfolio-database-role.sh
+```
+
+두 스크립트는 비밀번호를 명령행 인자나 성공 로그에 출력하지 않는다. `database-bootstrap.env`는 장기 운영 설정이 아니라 최초 역할 설정과 첫 배포 사이를 연결하는 임시 파일이다.
+
 ## 5. Web·Worker 환경과 비밀 파일
 
 .NET 설정의 `:` 계층은 운영체제 환경 변수에서 `__`로 표현한다. 예를 들어 `Media:ObjectStorage:Enabled`는 `Media__ObjectStorage__Enabled=true`가 된다. 이 규칙 덕분에 저장소의 `appsettings.json`을 수정하지 않고 같은 게시물을 Web과 Worker의 서로 다른 역할로 실행할 수 있다.
@@ -88,10 +112,11 @@ docker compose \
 | 설치 파일 | 권한 기준 | 포함하는 값 | 포함하지 않는 값 |
 |---|---|---|---|
 | `/etc/indiefi/infra.env` | `root:root`, `0600` | PostgreSQL owner, Redis, RabbitMQ 컨테이너 비밀번호 | 애플리케이션 DB 역할·R2·SMTP 비밀 |
+| `/etc/indiefi/database-bootstrap.env` | `root:root`, `0600` | 최초 `indiefi_app` 비밀번호 한 개 | owner·Redis·RabbitMQ·R2·SMTP 비밀 |
 | `/etc/indiefi/web.env` | `root:indiefi-web`, `0640` | Web DB·Redis·RabbitMQ·R2, 계정 보호 키 경로, Data Protection 경로 | 데이터베이스 owner 비밀번호·SMTP 비밀·Worker 활성화 |
 | `/etc/indiefi/worker.env` | `root:indiefi-worker`, `0640` | Worker DB·Redis·RabbitMQ·R2, 계정 보호 키 경로, 인증·알림 SMTP 비밀 | 데이터베이스 owner 비밀번호·Data Protection private key·공개 수신 주소 |
 
-실제 파일은 각각 `ops/portfolio-infra.env.example`, `ops/portfolio-web.env.example`, `ops/portfolio-worker.env.example`을 기준으로 만들되 저장소에 커밋하지 않는다. Web과 Worker는 같은 최소 권한 DB 연결, Redis 연결, RabbitMQ 값, R2 자격 증명과 `/etc/indiefi/keys/account-protection.json`을 사용한다. 검증 스크립트가 이 값들이 서로 다르게 입력되는 드리프트를 시작 전에 거부한다.
+실제 파일은 각각 `ops/portfolio-infra.env.example`, `ops/portfolio-database-bootstrap.env.example`, `ops/portfolio-web.env.example`, `ops/portfolio-worker.env.example`을 기준으로 만들되 저장소에 커밋하지 않는다. Web과 Worker는 같은 최소 권한 DB 연결, Redis 연결, RabbitMQ 값, R2 자격 증명과 `/etc/indiefi/keys/account-protection.json`을 사용한다. 검증 스크립트가 이 값들이 서로 다르게 입력되는 드리프트를 시작 전에 거부한다.
 
 Web은 이메일 Outbox를 기록하지만 SMTP 비밀과 발송 Worker를 갖지 않는다. `IndieFi.Worker`만 인증 이메일·일반 알림 이메일과 미디어 후처리를 활성화한다. Web만 브라우저 세션용 Data Protection 인증서·private key를 읽고 Worker에는 주입하지 않는다.
 
@@ -154,7 +179,7 @@ journalctl -u indiefi-worker -n 100 --no-pager
 3. 같은 migration의 `efbundle`, 해당 commit의 `ops` 파일과 파일별 SHA-256 manifest를 하나의 archive로 묶는다.
 4. GitHub OIDC로 받은 임시 AWS 권한으로 현재 runner의 `/32`에만 SSH를 열고 archive를 `ubuntu` 계정 영역에 전송한다.
 5. 서버에서 archive와 개별 파일 hash, .NET 10 runtime, 환경 파일과 systemd unit을 확인한 뒤 immutable release 디렉터리에 설치한다.
-6. Worker를 먼저 멈춰 백그라운드 DB 쓰기를 차단하고 Web을 멈춘 뒤 migration을 적용한다.
+6. Worker를 먼저 멈춰 백그라운드 DB 쓰기를 차단하고 Web을 멈춘 뒤, `/etc/indiefi/infra.env`의 PostgreSQL owner로 migration을 적용한다.
 7. `/opt/indiefi/current` symlink를 새 release로 원자적으로 바꾸고 Web을 시작한다.
 8. loopback에서 실제 `AllowedHosts`와 HTTPS forwarded header로 `/health/ready`를 통과한 뒤 Worker를 시작해 10초 동안 active 상태를 확인한다.
 9. 성공한 upload archive를 지우고, 성공·실패와 관계없이 runner의 임시 SSH 보안 그룹 규칙을 제거한다.
@@ -173,7 +198,7 @@ release 구조는 다음과 같다.
 /opt/indiefi/current -> /opt/indiefi/releases/<현재-commit>
 ```
 
-workflow는 `AWS_ROLE_ARN`, `AWS_SG_ID`, `SSH_PRIVATE_KEY`, 현재 공인 IP를 가진 `SSH_HOST` GitHub secret을 사용한다. 실제 앱 비밀은 GitHub로 전달하지 않고 `/etc/indiefi/*.env`에서 root 권한의 원격 배포 스크립트만 읽는다. DB 연결 문자열은 migration bundle의 환경에 직접 주입하며 명령행 인자나 workflow 로그로 출력하지 않는다.
+workflow는 `AWS_ROLE_ARN`, `AWS_SG_ID`, `SSH_PRIVATE_KEY`, 현재 공인 IP를 가진 `SSH_HOST` GitHub secret을 사용한다. 실제 앱 비밀은 GitHub로 전달하지 않고 `/etc/indiefi/*.env`에서 root 권한의 원격 배포 스크립트만 읽는다. migration bundle에는 `infra.env`에서 읽은 owner 연결만 주입하고, Web·Worker는 계속 별도 `indiefi_app` 연결을 사용한다. 두 비밀번호는 명령행 인자나 workflow 로그로 출력하지 않는다.
 
 첫 분리 배포 전에 예전 단일 `indiefi.service`를 중지·비활성화해야 한다. workflow는 이를 자동으로 바꾸지 않고 active 상태면 중단한다. 또한 EC2 시작, 데이터 서비스 초기화, 실제 비밀과 인증서 생성은 CD가 수행하지 않으며 각각 13-0-4-7~9의 수동 준비가 선행되어야 한다.
 
@@ -272,6 +297,7 @@ Google 로그인의 실제 배포 검증은 소유하고 검증할 수 있는 �
 - 원시 IP 환경의 Google 로그인 제외가 제품 기능 삭제와 구분된다.
 - PostgreSQL·Redis·RabbitMQ만 별도 운영 Compose에 있고 모든 게시 포트가 loopback으로 제한된다.
 - 세 서비스의 비밀번호 누락은 구성 검사에서 실패하고 health check와 named volume이 선언된다.
+- migration은 PostgreSQL owner로만 실행하고 Web·Worker는 DDL이 거부되는 `indiefi_app` 역할만 사용한다.
 - 인프라·Web·Worker 비밀 파일이 분리되고 공유 값·역할 활성화·키 파일 권한이 시작 전에 검증된다.
 - Web에는 SMTP 비밀이나 발송 Worker가 없고 Worker만 인증·알림 메일과 미디어 후처리를 실행한다.
 - 인증서 전 HTTP 부트스트랩과 발급 후 HTTPS 설정이 분리되고 ACME 경로는 redirect에서 제외된다.

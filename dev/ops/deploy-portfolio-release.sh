@@ -152,6 +152,8 @@ fi
   || fail "the Worker artifact is missing."
 [[ -x "$target_release/ops/install-portfolio-service-files.sh" ]] \
   || fail "the host service installer is missing or is not executable."
+[[ -x "$target_release/ops/migrate-portfolio-database.sh" ]] \
+  || fail "the owner-only database migration helper is missing or is not executable."
 
 installed_runtimes="$(dotnet --list-runtimes)"
 grep -q '^Microsoft.NETCore.App 10\.' <<< "$installed_runtimes" \
@@ -185,26 +187,10 @@ deployment_start="$(date +%s)"
 sudo -n systemctl stop indiefi-worker.service
 sudo -n systemctl stop indiefi-web.service
 
-# Read the connection string inside the privileged shell. It is exported directly
-# to the bundle and never appears as a command argument or workflow log line.
-sudo -n /bin/bash -s -- "$target_release/efbundle" <<'MIGRATION'
-set -Eeuo pipefail
-database_connection="$(
-  awk -v prefix='ConnectionStrings__Database=' '
-    { sub(/\r$/, "") }
-    index($0, prefix) == 1 {
-      print substr($0, length(prefix) + 1)
-      exit
-    }
-  ' /etc/indiefi/web.env
-)"
-[[ -n "$database_connection" ]] || {
-  echo "The Web database connection is missing." >&2
-  exit 1
-}
-export ConnectionStrings__Database="$database_connection"
-exec "$1"
-MIGRATION
+# Migrations run as the PostgreSQL owner. The helper reads the owner password only
+# inside the privileged process; Web and Worker retain their minimum-privilege role.
+sudo -n "$target_release/ops/migrate-portfolio-database.sh" \
+  "$target_release/efbundle"
 
 next_link="/opt/indiefi/.current-next-$release_id"
 sudo -n ln -sfnT "$target_release" "$next_link"
