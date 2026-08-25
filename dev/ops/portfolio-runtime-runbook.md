@@ -105,6 +105,24 @@ sudo <release>/ops/configure-portfolio-database-role.sh
 
 두 스크립트는 비밀번호를 명령행 인자나 성공 로그에 출력하지 않는다. `database-bootstrap.env`는 장기 운영 설정이 아니라 최초 역할 설정과 첫 배포 사이를 연결하는 임시 파일이다.
 
+### 4.2. 최초 운영 키 생성
+
+서비스 계정과 `/etc/indiefi/keys` 경계를 설치한 뒤 최초 한 번만 다음 스크립트를 root로 실행한다.
+
+```bash
+sudo ops/generate-portfolio-key-material.sh
+```
+
+스크립트는 여섯 보호 목적마다 서로 다른 32바이트 난수를 생성하고 당월 key ID를 가진 `account-protection.json`을 만든다. 별도로 Web의 Data Protection 키 링을 보호할 3072-bit RSA 자체 서명 인증서와 개인키를 생성한다. 기존 파일이 하나라도 있으면 덮어쓰지 않고 실패한다.
+
+| 파일 | 소유자·권한 | 읽는 프로세스 |
+|---|---|---|
+| `/etc/indiefi/keys/account-protection.json` | `root:indiefi-secrets`, `0640` | Web·Worker |
+| `/etc/indiefi/keys/data-protection.crt` | `indiefi-web:indiefi-web`, `0640` | Web |
+| `/etc/indiefi/keys/data-protection.key` | `indiefi-web:indiefi-web`, `0600` | Web |
+
+자체 서명 인증서는 공개 HTTPS 인증서가 아니다. 브라우저와 Nginx는 Let’s Encrypt IP 인증서를 사용하고, 이 RSA 쌍은 DB에 저장하는 ASP.NET Core Data Protection key XML만 암호화한다. 세 파일을 잃으면 암호화 이메일·게임 키 또는 기존 로그인 쿠키를 복구하지 못할 수 있으므로 첫 사용자 데이터를 만들기 전에 EC2 밖의 비밀 보관 위치에 복구 사본을 둔다.
+
 ## 5. Web·Worker 환경과 비밀 파일
 
 .NET 설정의 `:` 계층은 운영체제 환경 변수에서 `__`로 표현한다. 예를 들어 `Media:ObjectStorage:Enabled`는 `Media__ObjectStorage__Enabled=true`가 된다. 이 규칙 덕분에 저장소의 `appsettings.json`을 수정하지 않고 같은 게시물을 Web과 Worker의 서로 다른 역할로 실행할 수 있다.

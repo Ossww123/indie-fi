@@ -136,6 +136,7 @@ jobs:
           test -x release/ops/deploy-portfolio-release.sh
           test -x release/ops/migrate-portfolio-database.sh
           test -x release/ops/configure-portfolio-database-role.sh
+          test -x release/ops/generate-portfolio-key-material.sh
 
           if find release -type l -print -quit | grep -q .; then
             echo "Release packages may not contain symlinks." >&2
