@@ -151,7 +151,7 @@ public sealed class MediaCleanupServiceTests
                     new MutableTimeProvider(now),
                     NullLogger<MediaCleanupService>.Instance)
                 .RunBatchAsync(
-                    batchSize: 10,
+                    batchSize: 5,
                     TestContext.Current.CancellationToken);
         }
 
@@ -208,7 +208,7 @@ public sealed class MediaCleanupServiceTests
         await using (var db = _fixture.NewDbContext())
         {
             result = await NewCleanupService(db, storage, now).RunBatchAsync(
-                batchSize: 10,
+                batchSize: 1,
                 TestContext.Current.CancellationToken);
         }
 
@@ -272,7 +272,7 @@ public sealed class MediaCleanupServiceTests
     {
         await using var db = _fixture.NewDbContext();
         return await NewCleanupService(db, storage, now).RunBatchAsync(
-            batchSize: 10,
+            batchSize: 1,
             TestContext.Current.CancellationToken);
     }
 

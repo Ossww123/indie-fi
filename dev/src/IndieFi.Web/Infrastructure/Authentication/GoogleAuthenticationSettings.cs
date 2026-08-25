@@ -6,6 +6,7 @@ public sealed class GoogleAuthenticationSettings
 {
     public const string SectionName = "Authentication:Google";
 
+    public bool Enabled { get; set; }
     public string ClientId { get; set; } = string.Empty;
     public string ClientSecret { get; set; } = string.Empty;
 
@@ -13,9 +14,9 @@ public sealed class GoogleAuthenticationSettings
         !string.IsNullOrWhiteSpace(ClientId)
         && !string.IsNullOrWhiteSpace(ClientSecret);
 
-    public static ValidateOptionsResult Validate(
-        GoogleAuthenticationSettings options,
-        bool requireCredentials)
+    public bool IsAvailable => Enabled && IsConfigured;
+
+    public static ValidateOptionsResult Validate(GoogleAuthenticationSettings options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -23,12 +24,12 @@ public sealed class GoogleAuthenticationSettings
         var hasClientId = !string.IsNullOrWhiteSpace(options.ClientId);
         var hasClientSecret = !string.IsNullOrWhiteSpace(options.ClientSecret);
 
-        if (!hasClientId && (requireCredentials || hasClientSecret))
+        if (!hasClientId && (options.Enabled || hasClientSecret))
         {
             failures.Add("Authentication:Google:ClientId is required.");
         }
 
-        if (!hasClientSecret && (requireCredentials || hasClientId))
+        if (!hasClientSecret && (options.Enabled || hasClientId))
         {
             failures.Add("Authentication:Google:ClientSecret is required.");
         }
@@ -42,17 +43,8 @@ public sealed class GoogleAuthenticationSettings
 public sealed class GoogleAuthenticationSettingsValidator
     : IValidateOptions<GoogleAuthenticationSettings>
 {
-    private readonly IHostEnvironment _environment;
-
-    public GoogleAuthenticationSettingsValidator(IHostEnvironment environment)
-    {
-        _environment = environment;
-    }
-
     public ValidateOptionsResult Validate(
         string? name,
         GoogleAuthenticationSettings options) =>
-        GoogleAuthenticationSettings.Validate(
-            options,
-            requireCredentials: !_environment.IsDevelopment());
+        GoogleAuthenticationSettings.Validate(options);
 }

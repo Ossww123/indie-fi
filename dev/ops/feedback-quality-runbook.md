@@ -199,8 +199,8 @@ SELECT format(
 dotnet format IndieFi.slnx --no-restore --include <changed-csharp-files> --verify-no-changes
 dotnet build IndieFi.slnx --no-restore
 dotnet test tests/IndieFi.Web.Tests/IndieFi.Web.Tests.csproj --no-build --no-restore
-dotnet publish src/IndieFi.Web/IndieFi.Web.csproj -c Release -r linux-arm64 --self-contained false
-dotnet publish src/IndieFi.Worker/IndieFi.Worker.csproj -c Release -r linux-arm64 --self-contained false
+dotnet publish src/IndieFi.Web/IndieFi.Web.csproj -c Release -r linux-x64 --self-contained false
+dotnet publish src/IndieFi.Worker/IndieFi.Worker.csproj -c Release -r linux-x64 --self-contained false
 ```
 
-릴리스 증거에는 시각, commit, 전체 테스트·실패·건너뜀 수, PostgreSQL 테스트 이미지, Web·Worker artifact 식별자와 불일치 조회 결과를 남긴다. 장기 메트릭 보존, 정기 대사 주기와 경보 임계값은 로드맵 12단계의 실제 운영 기준선에서 확정한다.
+릴리스 증거에는 시각, commit, 전체 테스트·실패·건너뜀 수, PostgreSQL 테스트 이미지, Web·Worker artifact 식별자와 불일치 조회 결과를 남긴다. 장기 메트릭 보존, 정기 대사 주기와 경보 임계값은 로드맵 13단계의 실제 운영 기준선에서 확정한다.

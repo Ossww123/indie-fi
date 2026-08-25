@@ -2,6 +2,7 @@ using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.Accounts.Infrastructure;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Modules.Accounts;
@@ -22,9 +23,20 @@ public static class AccountsModule
         services.AddScoped<PasswordResetCompletionService>();
         services.AddScoped<EmailConfirmationResendService>();
         services.AddScoped<AuthenticationEmailOutboxService>();
-        services.AddScoped<AuthenticationEmailOutboxProcessor>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         services.AddAccountProtectionServices();
+
+        // Used on its own, without the rest of ASP.NET Core Identity.
+        services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddAuthenticationEmailDelivery(
+        this IServiceCollection services)
+    {
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddScoped<AuthenticationEmailOutboxProcessor>();
         services.AddOptions<AuthenticationEmailDeliveryOptions>()
             .BindConfiguration(AuthenticationEmailDeliveryOptions.SectionName)
             .ValidateOnStart();
@@ -48,9 +60,6 @@ public static class AccountsModule
                 options.WorkerInterval,
                 options.BatchSize);
         });
-
-        // Used on its own, without the rest of ASP.NET Core Identity.
-        services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
         return services;
     }

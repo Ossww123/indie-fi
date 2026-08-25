@@ -115,11 +115,10 @@ public sealed class ExternalAuthenticationConfigurationTests
     }
 
     [Fact]
-    public void ProductionConfiguration_RequiresBothGoogleCredentials()
+    public void EnabledGoogle_RequiresBothCredentials()
     {
         var result = GoogleAuthenticationSettings.Validate(
-            new GoogleAuthenticationSettings(),
-            requireCredentials: true);
+            new GoogleAuthenticationSettings { Enabled = true });
 
         Assert.True(result.Failed);
         Assert.Contains(
@@ -131,7 +130,22 @@ public sealed class ExternalAuthenticationConfigurationTests
     }
 
     [Fact]
-    public void ProductionStartup_WithoutGoogleCredentials_FailsValidation()
+    public void DisabledGoogle_AllowsMissingCredentialsButRejectsPartialCredentials()
+    {
+        var disabled = GoogleAuthenticationSettings.Validate(
+            new GoogleAuthenticationSettings());
+        var partial = GoogleAuthenticationSettings.Validate(
+            new GoogleAuthenticationSettings { ClientId = "configured-client" });
+
+        Assert.True(disabled.Succeeded);
+        Assert.True(partial.Failed);
+        Assert.Contains(
+            partial.Failures,
+            failure => failure.Contains("ClientSecret", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ProductionStartup_WithGoogleEnabledButWithoutCredentials_FailsValidation()
     {
         using var baseFactory = new WebAppFactory(_fixture.ConnectionString);
         using var factory = baseFactory.WithWebHostBuilder(builder =>
@@ -141,6 +155,7 @@ public sealed class ExternalAuthenticationConfigurationTests
                 configuration.AddInMemoryCollection(
                     new Dictionary<string, string?>
                     {
+                        ["Authentication:Google:Enabled"] = "true",
                         ["Authentication:Google:ClientId"] = null,
                         ["Authentication:Google:ClientSecret"] = null,
                     }));
@@ -158,20 +173,50 @@ public sealed class ExternalAuthenticationConfigurationTests
     }
 
     [Fact]
-    public void DevelopmentConfiguration_AllowsDisabledGoogleButRejectsPartialCredentials()
+    public void ProductionStartup_WithGoogleDisabledAndWithoutCredentials_Succeeds()
     {
-        var disabled = GoogleAuthenticationSettings.Validate(
-            new GoogleAuthenticationSettings(),
-            requireCredentials: false);
-        var partial = GoogleAuthenticationSettings.Validate(
-            new GoogleAuthenticationSettings { ClientId = "configured-client" },
-            requireCredentials: false);
+        using var baseFactory = new WebAppFactory(
+            _fixture.ConnectionString,
+            configureGoogle: false);
+        using var factory = baseFactory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment(Environments.Production);
+            builder.ConfigureAppConfiguration(configuration =>
+                configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["Authentication:Google:Enabled"] = "false",
+                        ["Authentication:Google:ClientId"] = null,
+                        ["Authentication:Google:ClientSecret"] = null,
+                    }));
+        });
 
-        Assert.True(disabled.Succeeded);
-        Assert.True(partial.Failed);
-        Assert.Contains(
-            partial.Failures,
-            failure => failure.Contains("ClientSecret", StringComparison.Ordinal));
+        var settings = factory.Services
+            .GetRequiredService<IOptions<GoogleAuthenticationSettings>>()
+            .Value;
+
+        Assert.False(settings.IsAvailable);
+    }
+
+    [Fact]
+    public async Task DisabledGoogle_WithStoredCredentials_DoesNotRegisterProvider()
+    {
+        using var baseFactory = new WebAppFactory(
+            _fixture.ConnectionString,
+            configureGoogle: false);
+        using var factory = baseFactory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration(configuration =>
+                configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["Authentication:Google:ClientId"] = "stored-client",
+                        ["Authentication:Google:ClientSecret"] = "stored-secret",
+                    })));
+
+        var schemes = factory.Services
+            .GetRequiredService<IAuthenticationSchemeProvider>();
+
+        Assert.Null(await schemes.GetSchemeAsync(ExternalLoginPolicy.GoogleProvider));
     }
 
     private static TException? FindException<TException>(Exception exception)
