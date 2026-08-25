@@ -207,7 +207,7 @@ journalctl -u indiefi-worker -n 100 --no-pager
 5. 서버에서 archive와 개별 파일 hash, .NET 10 runtime, 환경 파일과 systemd unit을 확인한 뒤 immutable release 디렉터리에 설치한다.
 6. Worker를 먼저 멈춰 백그라운드 DB 쓰기를 차단하고 Web을 멈춘 뒤, `/etc/indiefi/infra.env`의 PostgreSQL owner로 migration을 적용한다.
 7. `/opt/indiefi/current` symlink를 새 release로 원자적으로 바꾸고 Web을 시작한다.
-8. loopback에서 실제 `AllowedHosts`와 HTTPS forwarded header로 `/health/ready`를 통과한 뒤 Worker를 시작해 10초 동안 active 상태를 확인한다.
+8. EC2 loopback에서 `--resolve`로 실제 Nginx HTTPS 경로의 `/health/ready`를 호출하고 정확히 HTTP 200일 때만 Worker를 시작해 10초 동안 active 상태를 확인한다.
 9. 성공한 upload archive를 지우고, 성공·실패와 관계없이 runner의 임시 SSH 보안 그룹 규칙을 제거한다.
 
 release 구조는 다음과 같다.

@@ -218,15 +218,21 @@ for _ in $(seq 1 30); do
     break
   fi
 
-  if curl \
-    --fail \
-    --silent \
-    --show-error \
-    --max-time 5 \
-    --header "Host: $allowed_host" \
-    --header "X-Forwarded-Proto: https" \
-    http://127.0.0.1:5000/health/ready \
-    >/dev/null; then
+  # Exercise the real Nginx TLS path from loopback. Testing Kestrel directly used to
+  # omit X-Forwarded-For, so forwarded-header symmetry produced a 308 redirect; curl
+  # treats redirects as successful unless the status is checked explicitly.
+  readiness_status="$(
+    curl \
+      --silent \
+      --show-error \
+      --max-time 5 \
+      --resolve "$allowed_host:443:127.0.0.1" \
+      --output /dev/null \
+      --write-out '%{http_code}' \
+      "https://$allowed_host/health/ready" \
+      || true
+  )"
+  if [[ "$readiness_status" == "200" ]]; then
     web_ready=1
     break
   fi
