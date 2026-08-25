@@ -104,6 +104,7 @@ public sealed class FrontendInteractionBrowserTests : PageTest
         await Page.GetByRole(AriaRole.Button, new() { Name = "삭제 확인" }).ClickAsync();
 
         await Assertions.Expect(dialog).ToBeHiddenAsync();
+        await Page.WaitForFunctionAsync("() => window.confirmedSubmitCount === 1");
         Assert.Equal(1, await ConfirmedSubmitCountAsync());
     }
 

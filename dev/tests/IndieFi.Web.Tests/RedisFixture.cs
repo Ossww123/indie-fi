@@ -45,7 +45,30 @@ public sealed class RedisFixture : IAsyncLifetime
         var redisOptions = Options.Create(CreateOptions());
         _connection = new WaitingRoomRedisConnection(redisOptions);
         _keys = new WaitingRoomRedisKeys(redisOptions);
-        await _connection.GetAsync();
+        var multiplexer = await _connection.GetAsync();
+        await WaitUntilDatasetIsReadyAsync(multiplexer);
+    }
+
+    private static async Task WaitUntilDatasetIsReadyAsync(
+        IConnectionMultiplexer multiplexer)
+    {
+        const int MaximumAttempts = 100;
+        for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
+        {
+            try
+            {
+                await multiplexer.GetDatabase().PingAsync();
+                return;
+            }
+            catch (RedisServerException exception)
+                when (exception.Message.StartsWith(
+                    "LOADING",
+                    StringComparison.OrdinalIgnoreCase)
+                    && attempt < MaximumAttempts)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+            }
+        }
     }
 
     public WaitingRoomRedisOptions CreateOptions() => new()
