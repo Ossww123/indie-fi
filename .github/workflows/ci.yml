@@ -30,8 +30,13 @@ jobs:
       # the tests need. That is what catches a project which stopped compiling but
       # is not referenced by any test - it happened once and went unnoticed for
       # several commits.
+      #
+      # Worker references Web with different global properties so it can omit Web-only
+      # content. MSBuild treats that as a second Web build; one node keeps those builds
+      # from racing over the same runtimeconfig output. The deploy job publishes Web and
+      # Worker in separate sequential steps, so it does not need the same restriction.
       - name: Build
-        run: dotnet build dev/IndieFi.slnx
+        run: dotnet build dev/IndieFi.slnx -m:1
 
       # The browser contracts render the real production CSS and client bundles in
       # headless Chromium. Playwright versions and their browser binaries move as a
