@@ -138,6 +138,14 @@ sudo ops/generate-portfolio-key-material.sh
 
 Web은 이메일 Outbox를 기록하지만 SMTP 비밀과 발송 Worker를 갖지 않는다. `IndieFi.Worker`만 인증 이메일·일반 알림 이메일과 미디어 후처리를 활성화한다. Web만 브라우저 세션용 Data Protection 인증서·private key를 읽고 Worker에는 주입하지 않는다.
 
+최초 런타임 환경은 다음 대화형 도구로 작성한다. DB 애플리케이션 비밀번호와 데이터 서비스 비밀번호는 기존 root 전용 파일에서 읽고, R2·SES 값은 터미널에서 echo 없이 입력받는다. 후보 Web·Worker 파일을 먼저 함께 검증하고 성공할 때만 역할별 소유권으로 설치하므로 비밀을 명령행 인자나 shell history에 남기지 않는다.
+
+```bash
+sudo ops/configure-portfolio-runtime-environment.sh
+```
+
+입력하는 R2 URL은 버킷 공개 URL이 아니라 Cloudflare가 표시한 계정 S3 API endpoint다. SES 값은 Mail Manager ingress가 아니라 서울 리전 IAM SMTP 자격 증명이며, 발신 주소는 같은 서울 리전에서 `Verified`인 identity를 사용한다.
+
 ```bash
 sudo dev/ops/verify-portfolio-environment.sh \
   /etc/indiefi/infra.env \
