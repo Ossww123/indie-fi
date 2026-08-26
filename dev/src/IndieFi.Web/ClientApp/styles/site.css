@@ -2216,6 +2216,41 @@
     @apply p-4 text-center text-[10px] text-[#8c7d67];
   }
 
+  .site-main-account-security {
+    @apply max-w-[860px] py-6 lg:py-6;
+  }
+
+  .ivory-security-layout {
+    @apply grid items-start gap-5;
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+
+  .ivory-password-divider {
+    @apply flex items-center gap-3 font-mono text-[9px] tracking-[0.07em] text-[#a3937b];
+  }
+
+  .ivory-password-divider::before,
+  .ivory-password-divider::after {
+    content: "";
+    @apply h-px flex-1 bg-[#efe4d0];
+  }
+
+  .ivory-security-note {
+    @apply sticky top-24;
+  }
+
+  .ivory-security-note-icon {
+    @apply mb-3 flex size-8 items-center justify-center rounded-full bg-[#fdefe9] font-mono text-sm text-brand-primary;
+  }
+
+  .ivory-security-note h2 {
+    @apply mt-1.5 text-[13px] font-semibold text-brand-ink;
+  }
+
+  .ivory-security-note > p:last-child {
+    @apply mt-2 text-[11px] leading-relaxed text-[#6b6357];
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
