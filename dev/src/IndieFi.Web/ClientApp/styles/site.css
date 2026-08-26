@@ -2790,6 +2790,14 @@
       linear-gradient(145deg, #4a2b21, #1d1814 72%);
   }
 
+  .ivory-auth-eyebrow-spaced {
+    @apply mt-4;
+  }
+
+  .ivory-auth-request-result {
+    @apply mb-4 text-[11px] leading-relaxed;
+  }
+
   .auth-state-actions {
     @apply flex flex-col gap-2 sm:flex-row;
   }
