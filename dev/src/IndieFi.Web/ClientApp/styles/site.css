@@ -2809,6 +2809,13 @@
     @apply text-[11px] leading-relaxed text-[#6b6357];
   }
 
+  .ivory-auth-visual-link {
+    background-image:
+      radial-gradient(circle at 68% 26%, rgb(183 71 52 / 76%), transparent 22%),
+      radial-gradient(circle at 28% 74%, rgb(214 157 83 / 38%), transparent 29%),
+      linear-gradient(145deg, #44291f, #171412 72%);
+  }
+
   .auth-state-actions {
     @apply flex flex-col gap-2 sm:flex-row;
   }
