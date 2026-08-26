@@ -789,6 +789,119 @@
     @apply mt-1 block text-xl font-bold text-brand-deep;
   }
 
+  .site-main-profile {
+    @apply max-w-[1000px] py-6 lg:py-6;
+  }
+
+  .ivory-profile-card {
+    @apply overflow-hidden rounded-[10px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-profile-banner {
+    @apply flex h-[120px] items-center justify-end overflow-hidden px-7 font-mono text-xs tracking-[0.15em] text-white/45;
+    background:
+      linear-gradient(90deg, rgb(31 27 22 / 35%), transparent),
+      radial-gradient(circle at 72% 45%, rgb(196 64 47 / 70%), transparent 28%),
+      linear-gradient(135deg, #6d3928, #201a16 65%);
+  }
+
+  .ivory-profile-content {
+    @apply flex items-start gap-4 px-5 pt-3.5 pb-5;
+  }
+
+  .ivory-profile-content .profile-avatar {
+    @apply -mt-12 size-[74px] shrink-0 rounded-[10px] border-[3px] border-white bg-[#e4d4ba] object-cover shadow-none;
+  }
+
+  .ivory-profile-avatar-fallback {
+    @apply flex items-center justify-center text-2xl font-semibold text-[#6b6357];
+  }
+
+  .ivory-profile-identity {
+    @apply min-w-0 flex-1;
+  }
+
+  .ivory-profile-name-row {
+    @apply flex flex-wrap items-center gap-2.5;
+  }
+
+  .ivory-profile-name-row h1 {
+    @apply text-[23px] font-bold tracking-[-0.03em] text-brand-ink;
+  }
+
+  .ivory-reviewer-grade {
+    @apply rounded-[3px] bg-[#e4f0e8] px-2 py-1 font-mono text-[9.5px] font-semibold tracking-[0.07em] text-[#2f7d4f] uppercase;
+  }
+
+  .ivory-profile-bio {
+    @apply mt-1.5 max-w-2xl text-[13px] text-[#6b6357];
+  }
+
+  .ivory-profile-actions {
+    @apply flex shrink-0 flex-wrap justify-end gap-2;
+  }
+
+  .ivory-profile-stats {
+    @apply flex flex-wrap gap-x-7 gap-y-2 border-t border-[#efe4d0] bg-brand-soft px-5 py-3 font-mono text-[11.5px];
+  }
+
+  .ivory-profile-stats > div {
+    @apply flex gap-1.5;
+  }
+
+  .ivory-profile-stats dt {
+    @apply text-[#a3937b];
+  }
+
+  .ivory-profile-stats dd {
+    @apply font-semibold text-brand-ink;
+  }
+
+  .ivory-profile-stats .ivory-stat-accent {
+    @apply text-[#2f7d4f];
+  }
+
+  .ivory-profile-section {
+    @apply mt-[26px];
+  }
+
+  .ivory-profile-games {
+    @apply grid grid-cols-3 gap-3.5;
+  }
+
+  .ivory-profile-game {
+    @apply flex min-w-0 flex-col gap-2 rounded-[7px] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-brand-primary;
+  }
+
+  .ivory-profile-game-cover {
+    @apply flex aspect-[16/10] items-center justify-center overflow-hidden rounded-[7px] border border-[#e6d7bd] font-mono text-[9px] tracking-[0.07em] text-[#a3937b] transition-colors;
+    background: repeating-linear-gradient(135deg, #f0e4cf 0 8px, #e8d9c0 8px 16px);
+  }
+
+  .ivory-profile-game:hover .ivory-profile-game-cover {
+    @apply border-brand-primary;
+  }
+
+  .ivory-profile-game-copy {
+    @apply flex min-w-0 flex-col;
+  }
+
+  .ivory-profile-game-copy strong {
+    @apply truncate text-[13.5px] font-semibold tracking-[-0.01em] text-brand-ink;
+  }
+
+  .ivory-profile-game-copy time {
+    @apply mt-0.5 font-mono text-[10.5px] text-[#a3937b];
+  }
+
+  .ivory-profile-game-copy > span {
+    @apply mt-1 text-[12px] text-[#6b6357];
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
   .editor-shell {
     @apply mx-auto max-w-3xl;
   }
