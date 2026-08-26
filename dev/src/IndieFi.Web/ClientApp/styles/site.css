@@ -1703,6 +1703,86 @@
     @apply mt-2 text-[11px] text-[#7f715c];
   }
 
+  .site-main-key-drop {
+    @apply max-w-[1040px] py-6 lg:py-6;
+  }
+
+  .ivory-drop-heading {
+    @apply mb-5 border-b border-[#e6d7bd] pb-5;
+  }
+
+  .ivory-drop-heading > span {
+    @apply rounded-[4px] px-2.5 py-1 font-mono text-[10px] font-semibold tracking-[0.06em];
+  }
+
+  .ivory-drop-overview {
+    @apply mb-4 rounded-[10px] border border-[#e6d7bd] bg-white p-5 shadow-none;
+  }
+
+  .ivory-drop-overview .section-title {
+    @apply text-lg tracking-[-0.02em];
+  }
+
+  .ivory-drop-overview .drop-metrics {
+    @apply mt-4 grid grid-cols-3 gap-0 overflow-hidden rounded-[7px] border border-[#e6d7bd];
+  }
+
+  .ivory-drop-overview .drop-metric {
+    @apply rounded-none border-0 bg-[#faf5eb] px-4 py-3 shadow-none;
+  }
+
+  .ivory-drop-overview .drop-metric + .drop-metric {
+    @apply border-l border-[#e6d7bd];
+  }
+
+  .ivory-drop-overview .drop-metric dt {
+    @apply font-mono text-[9.5px] tracking-[0.06em] text-[#8c7d67];
+  }
+
+  .ivory-drop-overview .drop-metric-value {
+    @apply mt-1.5 text-[13px] font-semibold text-brand-ink;
+  }
+
+  .ivory-drop-flow {
+    @apply mb-4 grid gap-4 lg:grid-cols-2;
+  }
+
+  .ivory-drop-card {
+    @apply rounded-[10px] border-[#e6d7bd] bg-white p-5 shadow-none;
+  }
+
+  .ivory-drop-card .subsection-title {
+    @apply mt-1.5 text-[15px] tracking-[-0.01em] text-brand-ink;
+  }
+
+  .ivory-waiting-room-card {
+    @apply border-[#e3c9b5];
+  }
+
+  .ivory-waiting-room-card [data-waiting-room-client] {
+    @apply mt-4 rounded-[7px] border border-[#ead8c0] bg-[#faf5eb] p-3;
+  }
+
+  .ivory-drop-action {
+    @apply rounded-[10px] border border-[#e9b9a9] bg-[#fdefe9] p-5 text-brand-ink shadow-none;
+  }
+
+  .ivory-drop-action .ivory-card-label {
+    @apply text-brand-primary;
+  }
+
+  .ivory-drop-action .text-meta {
+    @apply text-[#6b6357];
+  }
+
+  .ivory-drop-action > div:last-child {
+    @apply shrink-0;
+  }
+
+  .ivory-drop-action > div:last-child > div {
+    @apply rounded-[6px] border border-[#e9b9a9] bg-white text-brand-ink;
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
