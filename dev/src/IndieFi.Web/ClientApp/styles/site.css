@@ -1783,6 +1783,43 @@
     @apply rounded-[6px] border border-[#e9b9a9] bg-white text-brand-ink;
   }
 
+  .ivory-form-section-heading small {
+    @apply ml-1 font-mono text-[9px] font-medium tracking-[0.05em] text-[#a3937b];
+  }
+
+  .ivory-key-input {
+    @apply font-mono text-xs leading-6;
+  }
+
+  .ivory-eligibility-grid {
+    @apply grid grid-cols-2 gap-4;
+  }
+
+  .ivory-input-suffix {
+    @apply flex items-stretch;
+  }
+
+  .ivory-input-suffix .field-input {
+    @apply rounded-r-none;
+  }
+
+  .ivory-input-suffix > span {
+    @apply flex min-w-11 items-center justify-center rounded-r-[6px] border border-l-0 border-[#d8c7aa] bg-[#f4e8d3] font-mono text-[10px] text-[#7f715c];
+  }
+
+  .ivory-drop-checklist {
+    @apply mt-4 space-y-3;
+  }
+
+  .ivory-drop-checklist li {
+    @apply relative pl-4 text-[11px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-drop-checklist li::before {
+    content: "·";
+    @apply absolute left-0 font-bold text-brand-primary;
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
