@@ -1820,6 +1820,42 @@
     @apply absolute left-0 font-bold text-brand-primary;
   }
 
+  .ivory-inventory-card dl {
+    @apply my-4 grid grid-cols-2 overflow-hidden rounded-[6px] border border-[#e6d7bd];
+  }
+
+  .ivory-inventory-card dl > div {
+    @apply bg-[#faf5eb] p-3;
+  }
+
+  .ivory-inventory-card dl > div + div {
+    @apply border-l border-[#e6d7bd];
+  }
+
+  .ivory-inventory-card dt {
+    @apply font-mono text-[9px] tracking-[0.06em] text-[#8c7d67];
+  }
+
+  .ivory-inventory-card dd {
+    @apply mt-1 text-2xl font-bold tracking-[-0.03em] text-brand-ink;
+  }
+
+  .ivory-unavailable-card {
+    @apply flex min-h-80 flex-col items-center justify-center rounded-[10px] border border-dashed border-[#d8c7aa] bg-white px-8 text-center;
+  }
+
+  .ivory-unavailable-card > span {
+    @apply mb-3 flex size-9 items-center justify-center rounded-full bg-[#fdefe9] font-mono text-lg text-brand-primary;
+  }
+
+  .ivory-unavailable-card h2 {
+    @apply text-lg font-semibold text-brand-ink;
+  }
+
+  .ivory-unavailable-card p {
+    @apply mb-4 mt-2 text-xs text-[#6b6357];
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
