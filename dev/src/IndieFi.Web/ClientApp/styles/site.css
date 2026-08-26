@@ -2757,6 +2757,39 @@
       linear-gradient(145deg, #41281f, #191613 72%);
   }
 
+  .ivory-auth-state-card {
+    @apply space-y-4;
+  }
+
+  .ivory-auth-state-card h2 {
+    @apply text-[15px] font-semibold text-brand-ink;
+  }
+
+  .ivory-auth-state-icon {
+    @apply flex size-10 items-center justify-center rounded-[9px] border border-[#f0c6b8] bg-[#fdefe9] font-mono text-base font-semibold text-brand-primary;
+  }
+
+  .ivory-auth-state-success {
+    @apply border-[#b9d7c3] bg-[#e4f0e8] text-[#2f7d4f];
+  }
+
+  .ivory-auth-state-warning {
+    @apply border-[#e9b9a9] bg-[#fdefe9] text-brand-primary;
+  }
+
+  .ivory-auth-state-card .alert-success,
+  .ivory-auth-state-card .alert-warning,
+  .ivory-auth-state-card .alert-neutral {
+    @apply text-[11px] leading-relaxed;
+  }
+
+  .ivory-auth-visual-confirm {
+    background-image:
+      radial-gradient(circle at 65% 38%, rgb(199 111 74 / 65%), transparent 23%),
+      radial-gradient(circle at 24% 76%, rgb(223 175 105 / 35%), transparent 28%),
+      linear-gradient(145deg, #4a2b21, #1d1814 72%);
+  }
+
   .auth-state-actions {
     @apply flex flex-col gap-2 sm:flex-row;
   }
