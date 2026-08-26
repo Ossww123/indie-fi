@@ -2537,6 +2537,89 @@
     @apply mt-1 text-[9.5px] text-[#8c7d67];
   }
 
+  .site-main-browser-support {
+    @apply max-w-[960px] py-6 lg:py-8;
+  }
+
+  .ivory-support-heading {
+    @apply border-b border-[#e6d7bd] pb-5;
+  }
+
+  .ivory-support-grid {
+    @apply grid grid-cols-2 gap-4;
+  }
+
+  .ivory-support-card {
+    @apply rounded-[10px] border border-[#e6d7bd] bg-white p-6;
+  }
+
+  .ivory-support-icon {
+    @apply mb-3 flex size-9 items-center justify-center rounded-[8px] border border-[#f0c6b8] bg-[#fdefe9] font-mono text-sm font-semibold text-brand-primary;
+  }
+
+  .ivory-support-card h2,
+  .ivory-troubleshooting h2 {
+    @apply mt-1.5 text-[16px] font-semibold tracking-[-0.01em] text-brand-ink;
+  }
+
+  .ivory-support-card > p:not(.ivory-card-label, .ivory-support-note) {
+    @apply mt-2 text-[11px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-support-card dl {
+    @apply mt-5 overflow-hidden rounded-[7px] border border-[#e6d7bd];
+  }
+
+  .ivory-support-card dl > div {
+    @apply grid gap-3 bg-[#faf5eb] px-4 py-3;
+    grid-template-columns: 74px minmax(0, 1fr);
+  }
+
+  .ivory-support-card dl > div + div {
+    @apply border-t border-[#e6d7bd];
+  }
+
+  .ivory-support-card dt {
+    @apply font-mono text-[9px] tracking-[0.06em] text-[#9c8d76];
+  }
+
+  .ivory-support-card dd {
+    @apply text-[11px] text-[#4f483e];
+  }
+
+  .ivory-support-note {
+    @apply mt-4 font-mono text-[9.5px] leading-relaxed text-[#8c7d67];
+  }
+
+  .ivory-support-checklist {
+    @apply mt-4 divide-y divide-[#efe4d0] border-y border-[#efe4d0];
+  }
+
+  .ivory-support-checklist li {
+    @apply py-3;
+  }
+
+  .ivory-support-checklist strong {
+    @apply block text-xs font-semibold text-brand-ink;
+  }
+
+  .ivory-support-checklist span {
+    @apply mt-1 block text-[10.5px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-troubleshooting {
+    @apply mt-4 grid items-center gap-4 rounded-[10px] border border-[#e6d7bd] bg-[#f4e8d3] p-5;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .ivory-troubleshooting .ivory-support-icon {
+    @apply m-0 bg-white;
+  }
+
+  .ivory-troubleshooting > div > p:last-child {
+    @apply mt-1.5 text-[11px] leading-relaxed text-[#6b6357];
+  }
+
   .dynamic-status {
     @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold;
   }
