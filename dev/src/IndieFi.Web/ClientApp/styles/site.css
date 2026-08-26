@@ -1344,6 +1344,105 @@
     @apply grid gap-4 sm:grid-cols-2;
   }
 
+  .site-main-games-dashboard {
+    @apply max-w-[1160px] py-6 lg:py-6;
+  }
+
+  .ivory-dashboard-summary {
+    @apply mb-5 grid grid-cols-3 gap-3;
+  }
+
+  .ivory-dashboard-stat,
+  .ivory-dashboard-shortcut {
+    @apply rounded-[9px] border border-[#e6d7bd] bg-white p-[15px];
+  }
+
+  .ivory-dashboard-stat {
+    @apply border-[#f0c6b8] bg-[#fdefe9];
+  }
+
+  .ivory-dashboard-summary span {
+    @apply block font-mono text-[10px] tracking-[0.09em] text-[#a3937b];
+  }
+
+  .ivory-dashboard-stat strong {
+    @apply mt-1 block text-3xl font-bold tracking-[-0.03em] text-brand-primary;
+  }
+
+  .ivory-dashboard-shortcut strong {
+    @apply mt-2 block text-[13px] font-semibold text-brand-ink;
+  }
+
+  .ivory-dashboard-shortcut:hover {
+    @apply border-brand-primary;
+  }
+
+  .ivory-owned-game-list {
+    @apply overflow-hidden rounded-[10px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-owned-game {
+    @apply grid items-center gap-[18px] p-[15px];
+    grid-template-columns: 132px minmax(0, 1fr) 110px 150px;
+  }
+
+  .ivory-owned-game + .ivory-owned-game {
+    @apply border-t border-[#efe4d0];
+  }
+
+  .ivory-owned-game-cover {
+    @apply flex aspect-[16/10] items-center justify-center overflow-hidden rounded-[6px] border border-[#e6d7bd] font-mono text-[9px] tracking-[0.07em] text-[#a3937b] hover:border-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
+    background: repeating-linear-gradient(135deg, #f0e4cf 0 7px, #e8d9c0 7px 14px);
+  }
+
+  .ivory-owned-game-cover img {
+    @apply size-full object-cover;
+  }
+
+  .ivory-owned-game-copy {
+    @apply min-w-0;
+  }
+
+  .ivory-owned-game-copy > div {
+    @apply flex items-center gap-2;
+  }
+
+  .ivory-owned-game-copy a {
+    @apply truncate text-[15px] font-semibold tracking-[-0.01em] text-brand-ink hover:text-brand-primary;
+  }
+
+  .ivory-published-badge {
+    @apply rounded-[3px] bg-[#e4f0e8] px-1.5 py-0.5 font-mono text-[9px] font-semibold tracking-[0.07em] text-[#2f7d4f];
+  }
+
+  .ivory-owned-game-copy time {
+    @apply mt-1 block font-mono text-[10.5px] text-[#a3937b];
+  }
+
+  .ivory-owned-game-copy p {
+    @apply mt-1.5 text-[12px] text-[#6b6357];
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .ivory-owned-game-meta {
+    @apply font-mono;
+  }
+
+  .ivory-owned-game-meta span {
+    @apply block text-[9.5px] tracking-[0.07em] text-[#a3937b];
+  }
+
+  .ivory-owned-game-meta strong {
+    @apply mt-1 block text-xs font-medium;
+  }
+
+  .ivory-owned-game-actions {
+    @apply flex flex-col gap-1.5;
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
