@@ -2108,6 +2108,114 @@
     @apply mt-4 flex justify-center;
   }
 
+  .site-main-profile-settings {
+    @apply max-w-[1040px] py-6 lg:py-6;
+  }
+
+  .ivory-profile-settings-layout {
+    @apply grid items-start gap-5;
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
+  .ivory-profile-information,
+  .ivory-profile-media-card {
+    @apply rounded-[10px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-settings-heading {
+    @apply border-b border-[#efe4d0] px-6 py-5;
+  }
+
+  .ivory-settings-heading h2 {
+    @apply mt-1 text-[16px] font-semibold tracking-[-0.01em] text-brand-ink;
+  }
+
+  .ivory-settings-heading > p:last-child {
+    @apply mt-1 text-[11px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-settings-form {
+    @apply space-y-5 p-6;
+  }
+
+  .ivory-settings-form .field-input {
+    @apply rounded-[6px] border-[#d8c7aa] bg-[#fffdfa] text-[13px] shadow-none focus:border-brand-primary focus:ring-brand-primary/20;
+  }
+
+  .ivory-profile-biography {
+    @apply resize-y leading-relaxed;
+  }
+
+  .ivory-settings-actions {
+    @apply flex justify-end border-t border-[#efe4d0] pt-5;
+  }
+
+  .ivory-profile-media-column {
+    @apply sticky top-24 space-y-3;
+  }
+
+  .ivory-profile-image-stage {
+    @apply flex justify-center px-5 py-5;
+  }
+
+  .ivory-profile-image-stage img,
+  .ivory-profile-image-stage [data-default-profile-image] {
+    @apply flex size-32 items-center justify-center rounded-full border-4 border-white bg-[#eadcc5] object-cover text-[#8c7d67] shadow-[0_0_0_1px_#d8c7aa];
+  }
+
+  .ivory-profile-image-stage svg {
+    @apply size-14;
+  }
+
+  .ivory-profile-media-status {
+    @apply mx-5 mb-3 rounded-[5px] border border-[#e6d7bd] bg-[#faf5eb] px-3 py-2 text-[10px];
+  }
+
+  .ivory-profile-media-upload {
+    @apply space-y-3 border-t border-[#efe4d0] px-5 pt-4;
+  }
+
+  .ivory-profile-media-upload .field-input {
+    @apply rounded-[5px] border-[#d8c7aa] bg-[#fffdfa] text-[10px];
+  }
+
+  .ivory-profile-media-hint {
+    @apply px-5 pb-4 pt-2 font-mono text-[9px] text-[#a3937b];
+  }
+
+  .ivory-profile-media-list {
+    @apply border-t border-[#efe4d0];
+  }
+
+  .ivory-profile-media-list article {
+    @apply flex gap-3 border-b border-[#efe4d0] p-4 last:border-b-0;
+  }
+
+  .ivory-profile-media-list article > img {
+    @apply size-12 shrink-0 rounded-full object-cover;
+  }
+
+  .ivory-profile-media-list article > div {
+    @apply min-w-0 text-[10px] text-[#6b6357];
+  }
+
+  .ivory-profile-media-list article [data-media-status-text] {
+    @apply mr-1 font-semibold text-brand-ink;
+  }
+
+  .ivory-profile-media-list article p:not(.field-error),
+  .ivory-profile-media-list article time {
+    @apply mt-1 block font-mono text-[9px] text-[#a3937b];
+  }
+
+  .ivory-profile-media-list article [data-media-actions] {
+    @apply mt-2;
+  }
+
+  .ivory-profile-media-empty {
+    @apply p-4 text-center text-[10px] text-[#8c7d67];
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
