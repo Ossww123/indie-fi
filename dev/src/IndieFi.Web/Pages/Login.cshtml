@@ -2,59 +2,83 @@
 @model LoginModel
 @{
     ViewData["Title"] = "로그인";
+    ViewData["MainClass"] = "site-main-auth";
 }
 
-<section class="auth-shell" data-auth-page="login">
-    <header class="auth-header">
-        <p class="auth-eyebrow">WELCOME BACK</p>
-        <h1 class="auth-title">로그인</h1>
-        <p class="auth-description">관심 있는 인디 게임과 새로운 피드백을 이어서 확인하세요.</p>
-    </header>
-
-    <div class="auth-card">
-        @if (Model.StatusMessage is not null)
-        {
-            <div class="alert-success" role="status">@Model.StatusMessage</div>
-        }
-
-        @if (Model.GoogleErrorMessage is not null)
-        {
-            <div class="alert-warning" role="alert">@Model.GoogleErrorMessage</div>
-        }
-
-        <form method="post" class="auth-form">
-            <input type="hidden" asp-for="ReturnUrl" />
-            <div asp-validation-summary="ModelOnly" role="alert"></div>
-
-            <div class="field-group">
-                <label asp-for="Email" class="field-label">이메일</label>
-                <input asp-for="Email" class="field-input" autocomplete="email" />
-                <span asp-validation-for="Email" class="field-error"></span>
-            </div>
-
-            <div class="field-group">
-                <label asp-for="Password" class="field-label">비밀번호</label>
-                <input asp-for="Password" class="field-input" autocomplete="current-password" />
-                <span asp-validation-for="Password" class="field-error"></span>
-            </div>
-
-            <button type="submit" class="button-primary w-full">로그인</button>
-        </form>
-
-        @if (Model.GoogleLoginAvailable)
-        {
-            <div class="auth-divider" aria-hidden="true">또는</div>
-
-            <form method="post" asp-page="/GoogleLogin" asp-page-handler="Challenge">
-                <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-                <button type="submit" class="button-outline w-full">Google로 계속하기</button>
-            </form>
-        }
-
-        <nav class="auth-links" aria-label="로그인 도움말">
-            <a asp-page="/Signup" class="text-link">처음이신가요? 가입하기</a>
-            <a asp-page="/ForgotPassword" class="text-link">비밀번호를 잊으셨나요?</a>
-            <a asp-page="/ResendConfirmationEmail" class="text-link">확인 메일 다시 받기</a>
+<section class="auth-shell ivory-auth-shell" data-auth-page="login">
+    <div class="ivory-auth-panel">
+        <nav class="ivory-auth-tabs" aria-label="인증 메뉴">
+            <span aria-current="page">SIGN IN</span>
+            <a asp-page="/Signup">SIGN UP</a>
+            <a asp-page="/ForgotPassword">RESET</a>
         </nav>
+
+        <header class="auth-header">
+            <p class="auth-eyebrow">WELCOME BACK</p>
+            <h1 class="auth-title">다시 만나 반가워요</h1>
+            <p class="auth-description">관심 게임, 리뷰 작업과 크레딧을 이어서 확인하세요.</p>
+        </header>
+
+        <div class="auth-card">
+            @if (Model.StatusMessage is not null)
+            {
+                <div class="alert-success" role="status">@Model.StatusMessage</div>
+            }
+
+            @if (Model.GoogleErrorMessage is not null)
+            {
+                <div class="alert-warning" role="alert">@Model.GoogleErrorMessage</div>
+            }
+
+            <form method="post" class="auth-form">
+                <input type="hidden" asp-for="ReturnUrl" />
+                <div asp-validation-summary="ModelOnly" role="alert"></div>
+
+                <div class="field-group">
+                    <label asp-for="Email" class="field-label">이메일</label>
+                    <input asp-for="Email" class="field-input" autocomplete="email" />
+                    <span asp-validation-for="Email" class="field-error"></span>
+                </div>
+
+                <div class="field-group">
+                    <div class="ivory-auth-label-row">
+                        <label asp-for="Password" class="field-label">비밀번호</label>
+                        <a asp-page="/ForgotPassword">비밀번호를 잊으셨나요?</a>
+                    </div>
+                    <input asp-for="Password" class="field-input" autocomplete="current-password" />
+                    <span asp-validation-for="Password" class="field-error"></span>
+                </div>
+
+                <button type="submit" class="button-primary w-full">로그인</button>
+            </form>
+
+            @if (Model.GoogleLoginAvailable)
+            {
+                <div class="auth-divider" aria-hidden="true">OR</div>
+
+                <form method="post" asp-page="/GoogleLogin" asp-page-handler="Challenge">
+                    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+                    <button type="submit" class="button-outline w-full ivory-google-button">Google로 계속하기</button>
+                </form>
+            }
+
+            <nav class="auth-links" aria-label="로그인 도움말">
+                <a asp-page="/Signup" class="text-link">처음이신가요? 가입하기</a>
+                <a asp-page="/ResendConfirmationEmail" class="text-link">확인 메일 다시 받기</a>
+            </nav>
+        </div>
     </div>
+
+    <aside class="ivory-auth-visual" aria-label="Indie-Fi 소개">
+        <div class="ivory-auth-mark" aria-hidden="true">IF</div>
+        <div class="ivory-auth-visual-copy">
+            <p>INDIE GAMES · HONEST FEEDBACK</p>
+            <h2>플레이어의 경험이<br />개발자에게 닿는 곳.</h2>
+            <ul>
+                <li>새로운 인디 게임 탐색</li>
+                <li>상호 리뷰와 피드백</li>
+                <li>공정한 게임 키 배포</li>
+            </ul>
+        </div>
+    </aside>
 </section>

@@ -2565,7 +2565,7 @@
   }
 
   .auth-shell {
-    @apply mx-auto w-full max-w-md;
+    @apply mx-auto w-full;
   }
 
   .auth-header {
@@ -2585,7 +2585,7 @@
   }
 
   .auth-card {
-    @apply rounded-2xl border border-brand-ink/10 bg-brand-surface p-5 shadow-lg sm:p-7;
+    @apply bg-transparent;
   }
 
   .auth-form {
@@ -2604,6 +2604,138 @@
 
   .auth-links {
     @apply mt-5 flex flex-col items-center gap-1 border-t border-brand-ink/10 pt-5 text-sm;
+  }
+
+  .site-main-auth {
+    @apply max-w-none p-0 sm:p-0 lg:p-0;
+  }
+
+  .ivory-auth-shell {
+    @apply grid min-h-[calc(100vh-142px)] bg-[#faf2e3] lg:grid-cols-2;
+  }
+
+  .ivory-auth-panel {
+    @apply flex flex-col justify-center px-6 py-10 sm:px-10 lg:px-16;
+  }
+
+  .ivory-auth-panel > * {
+    @apply mx-auto w-full max-w-[352px];
+  }
+
+  .ivory-auth-tabs {
+    @apply mb-6 flex gap-1 font-mono text-[10px] tracking-[0.07em];
+  }
+
+  .ivory-auth-tabs a,
+  .ivory-auth-tabs span {
+    @apply rounded-[4px] px-2.5 py-1.5;
+  }
+
+  .ivory-auth-tabs a {
+    @apply text-[#8c7d67] hover:bg-[#f4e8d3] hover:text-brand-primary;
+  }
+
+  .ivory-auth-tabs span {
+    @apply bg-brand-primary text-white;
+  }
+
+  .ivory-auth-panel .auth-header {
+    @apply mb-5 text-left;
+  }
+
+  .ivory-auth-panel .auth-eyebrow {
+    @apply font-mono text-[10px] font-semibold tracking-[0.09em] text-brand-primary;
+  }
+
+  .ivory-auth-panel .auth-title {
+    @apply mt-2 text-[26px] font-bold tracking-[-0.03em] text-brand-ink;
+  }
+
+  .ivory-auth-panel .auth-description {
+    @apply mt-2 text-[13px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-auth-panel .auth-card {
+    @apply rounded-none border-0 p-0 shadow-none;
+  }
+
+  .ivory-auth-panel .auth-form {
+    @apply space-y-4;
+  }
+
+  .ivory-auth-panel .field-label {
+    @apply font-mono text-[10.5px] font-semibold tracking-[0.05em] text-[#5f574c];
+  }
+
+  .ivory-auth-panel .field-input {
+    @apply h-[38px] rounded-[7px] border-[#d6c4a6] bg-white px-3 py-2 text-[13px] shadow-none focus:border-brand-primary focus:ring-brand-primary/20;
+  }
+
+  .ivory-auth-label-row {
+    @apply flex items-baseline justify-between;
+  }
+
+  .ivory-auth-label-row a {
+    @apply text-[10.5px] font-medium text-brand-primary hover:text-brand-primary-hover;
+  }
+
+  .ivory-auth-panel .auth-divider {
+    @apply my-4 font-mono text-[9.5px] tracking-[0.08em] text-[#a3937b];
+  }
+
+  .ivory-auth-panel .auth-divider::before,
+  .ivory-auth-panel .auth-divider::after {
+    @apply bg-[#e6d7bd];
+  }
+
+  .ivory-google-button {
+    @apply border-[#d6c4a6] bg-white text-[12px];
+  }
+
+  .ivory-auth-panel .auth-links {
+    @apply mt-5 flex-row flex-wrap justify-center gap-x-4 gap-y-1 border-t border-[#e6d7bd] pt-4 text-[10.5px];
+  }
+
+  .ivory-auth-panel .auth-links a {
+    @apply no-underline;
+  }
+
+  .ivory-auth-visual {
+    @apply relative hidden min-h-[620px] overflow-hidden border-l border-[#e6d7bd] bg-[#2d2018] lg:block;
+    background-image:
+      radial-gradient(circle at 72% 28%, rgb(196 64 47 / 78%), transparent 24%),
+      radial-gradient(circle at 28% 68%, rgb(221 166 97 / 36%), transparent 27%),
+      linear-gradient(140deg, #503023, #1f1b16 68%);
+  }
+
+  .ivory-auth-visual::before {
+    @apply absolute inset-0;
+    background: repeating-linear-gradient(135deg, transparent 0 18px, rgb(255 255 255 / 2.5%) 18px 36px);
+    content: "";
+  }
+
+  .ivory-auth-mark {
+    @apply absolute right-[-36px] top-[-58px] font-mono text-[260px] font-bold tracking-[-0.12em] text-white/[0.045];
+  }
+
+  .ivory-auth-visual-copy {
+    @apply absolute bottom-10 left-9 right-9 text-white;
+  }
+
+  .ivory-auth-visual-copy > p {
+    @apply font-mono text-[10px] tracking-[0.09em] text-white/65;
+  }
+
+  .ivory-auth-visual-copy h2 {
+    @apply mt-3 text-3xl font-bold leading-tight tracking-[-0.03em];
+  }
+
+  .ivory-auth-visual-copy ul {
+    @apply mt-5 flex flex-wrap gap-2;
+  }
+
+  .ivory-auth-visual-copy li {
+    @apply rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] text-white/80 backdrop-blur-sm;
   }
 
   .auth-state-actions {
