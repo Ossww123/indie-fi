@@ -1921,6 +1921,104 @@
     @apply mt-6 rounded-[7px] border border-[#e6d7bd] bg-[#faf5eb] px-4 py-3 text-xs text-[#6b6357];
   }
 
+  .site-main-account-ledger {
+    @apply max-w-[960px] py-6 lg:py-6;
+  }
+
+  .ivory-credit-balance {
+    @apply mb-4 grid items-stretch overflow-hidden rounded-[10px] border border-[#e9b9a9];
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .ivory-credit-balance > div {
+    @apply bg-[#fdefe9] p-6;
+  }
+
+  .ivory-credit-balance h2 {
+    @apply mt-1 text-lg font-medium text-brand-ink;
+  }
+
+  .ivory-credit-balance h2 strong {
+    @apply mr-1 text-4xl font-bold tracking-[-0.04em] text-brand-primary;
+  }
+
+  .ivory-credit-balance > div > p:last-child {
+    @apply mt-2 text-xs text-[#6b6357];
+  }
+
+  .ivory-credit-earn-link {
+    @apply flex flex-col justify-center border-l border-[#e9b9a9] bg-white p-5 hover:bg-[#fffaf3];
+  }
+
+  .ivory-credit-earn-link span {
+    @apply font-mono text-[9.5px] tracking-[0.07em] text-[#a3937b];
+  }
+
+  .ivory-credit-earn-link strong {
+    @apply mt-2 text-xs font-semibold text-brand-ink;
+  }
+
+  .ivory-credit-earn-link:hover strong {
+    @apply text-brand-primary;
+  }
+
+  .ivory-ledger {
+    @apply overflow-hidden rounded-[10px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-ledger-heading {
+    @apply flex items-center justify-between border-b border-[#e6d7bd] px-5 py-4;
+  }
+
+  .ivory-ledger-heading h2 {
+    @apply mt-1 text-[15px] font-semibold text-brand-ink;
+  }
+
+  .ivory-ledger-heading > span {
+    @apply font-mono text-[9.5px] text-[#a3937b];
+  }
+
+  .ivory-ledger-list {
+    @apply divide-y divide-[#efe4d0];
+  }
+
+  .ivory-ledger-entry {
+    @apply grid items-center gap-4 px-5 py-4;
+    grid-template-columns: 95px minmax(0, 1fr) 80px;
+  }
+
+  .ivory-ledger-entry time {
+    @apply font-mono text-[9.5px] text-[#a3937b];
+  }
+
+  .ivory-ledger-entry time span {
+    @apply block text-[10.5px] text-[#6b6357];
+  }
+
+  .ivory-ledger-entry > div strong {
+    @apply block text-xs font-semibold text-brand-ink;
+  }
+
+  .ivory-ledger-entry > div span {
+    @apply mt-1 block text-[10px] text-[#a3937b];
+  }
+
+  .ivory-ledger-entry > strong {
+    @apply text-right font-mono text-sm;
+  }
+
+  .ivory-ledger-positive {
+    @apply text-[#2f7d4f];
+  }
+
+  .ivory-ledger-negative {
+    @apply text-brand-primary;
+  }
+
+  .ivory-ledger-neutral {
+    @apply text-[#8c7d67];
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
