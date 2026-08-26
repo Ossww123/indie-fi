@@ -2,10 +2,11 @@
 @model StatusModel
 @{
     ViewData["Title"] = Model.Title;
+    ViewData["MainClass"] = "site-main-system";
 }
 
-<section class="status-page" data-status-page="@Model.DisplayStatusCode">
-    <p class="status-page-code">STATUS @Model.DisplayStatusCode</p>
+<section class="status-page ivory-system-card" data-status-page="@Model.DisplayStatusCode">
+    <p class="status-page-code"><span>@Model.DisplayStatusCode</span><small>HTTP STATUS</small></p>
     <h1 class="status-page-title">@Model.Title</h1>
     <p class="status-page-description">@Model.Description</p>
 
@@ -13,7 +14,11 @@
         @if (Model.DisplayStatusCode == StatusCodes.Status401Unauthorized)
         {
             <a asp-page="/Login" asp-route-returnUrl="@Model.ReturnUrl" class="button-primary">로그인하기</a>
+            <a asp-page="/Index" class="button-outline">홈으로 돌아가기</a>
         }
-        <a asp-page="/Index" class="button-outline">홈으로 돌아가기</a>
+        else
+        {
+            <a asp-page="/Index" class="button-primary">홈으로 돌아가기</a>
+        }
     </div>
 </section>
