@@ -1546,6 +1546,26 @@
     @apply mt-1 text-[11px] leading-relaxed text-[#6b6357];
   }
 
+  .ivory-editor-shortcuts {
+    @apply mt-4 divide-y divide-[#efe4d0] border-y border-[#efe4d0];
+  }
+
+  .ivory-editor-shortcuts a {
+    @apply block py-3 hover:text-brand-primary;
+  }
+
+  .ivory-editor-shortcuts strong {
+    @apply block text-xs font-semibold text-brand-ink;
+  }
+
+  .ivory-editor-shortcuts a:hover strong {
+    @apply text-brand-primary;
+  }
+
+  .ivory-editor-shortcuts span {
+    @apply mt-1 block font-mono text-[9.5px] text-[#8c7d67];
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
