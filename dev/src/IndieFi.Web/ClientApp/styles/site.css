@@ -2019,6 +2019,95 @@
     @apply text-[#8c7d67];
   }
 
+  .ivory-inbox-summary {
+    @apply mb-4 flex items-center justify-between rounded-[8px] border border-[#e9b9a9] bg-[#fdefe9] px-5 py-4;
+  }
+
+  .ivory-inbox-summary > div {
+    @apply flex items-baseline gap-2;
+  }
+
+  .ivory-inbox-summary > div > span {
+    @apply font-mono text-[9.5px] tracking-[0.07em] text-brand-primary;
+  }
+
+  .ivory-inbox-summary strong {
+    @apply text-2xl font-bold text-brand-primary;
+  }
+
+  .ivory-inbox-summary > div > p {
+    @apply text-xs text-[#6b6357];
+  }
+
+  .ivory-inbox-summary > p {
+    @apply m-0 border-0 bg-transparent p-0 text-[10px] shadow-none;
+  }
+
+  .ivory-inbox {
+    @apply overflow-hidden rounded-[10px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-inbox-heading {
+    @apply flex items-center justify-between border-b border-[#e6d7bd] px-5 py-4;
+  }
+
+  .ivory-inbox-heading h2 {
+    @apply mt-1 text-[15px] font-semibold text-brand-ink;
+  }
+
+  .ivory-inbox-heading > span {
+    @apply font-mono text-[9.5px] text-[#a3937b];
+  }
+
+  .ivory-inbox-list {
+    @apply divide-y divide-[#efe4d0];
+  }
+
+  .ivory-inbox-item {
+    @apply grid items-start gap-3 px-5 py-4;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+  }
+
+  .ivory-inbox-item-unread {
+    @apply bg-[#fffaf3];
+  }
+
+  .ivory-inbox-dot {
+    @apply mt-1.5 size-1.5 rounded-full bg-[#d4c5ac];
+  }
+
+  .ivory-inbox-item-unread .ivory-inbox-dot {
+    @apply bg-brand-primary;
+  }
+
+  .ivory-inbox-copy > div {
+    @apply flex flex-wrap items-baseline justify-between gap-2;
+  }
+
+  .ivory-inbox-copy h3 {
+    @apply text-[13px] font-semibold text-brand-ink;
+  }
+
+  .ivory-inbox-item-unread .ivory-inbox-copy h3 {
+    @apply text-brand-primary;
+  }
+
+  .ivory-inbox-copy time {
+    @apply font-mono text-[9.5px] text-[#a3937b];
+  }
+
+  .ivory-inbox-copy > p {
+    @apply mt-1.5 whitespace-pre-line text-xs leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-inbox-actions {
+    @apply flex items-center gap-2;
+  }
+
+  .ivory-pagination-action {
+    @apply mt-4 flex justify-center;
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
