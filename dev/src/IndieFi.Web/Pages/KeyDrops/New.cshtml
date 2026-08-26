@@ -2,74 +2,116 @@
 @model NewModel
 @{
     ViewData["Title"] = "드롭 예약";
+    ViewData["MainClass"] = "site-main-game-editor";
 }
 
-<section class="editor-shell" data-drop-editor="new">
-<header class="page-heading">
-    <div class="page-heading-copy">
-        <p class="auth-eyebrow">SCHEDULE DROP</p>
-        <h1 class="page-title mt-2">드롭 예약</h1>
-        <p class="page-description">@Model.Game.Title · 오픈 시각, 초기 재고와 참여 자격을 설정합니다.</p>
+<nav class="ivory-breadcrumb" aria-label="현재 위치">
+    <a asp-page="/Games/Detail" asp-route-id="@Model.Game.Id">@Model.Game.Title</a>
+    <span aria-hidden="true">/</span>
+    <span>새 키 배포</span>
+</nav>
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">SCHEDULE DROP</p>
+        <h1>드롭 예약</h1>
+        <p>오픈 시각, 초기 키 재고와 참여 자격을 정해 @(Model.Game.Title)의 새 배포를 만듭니다.</p>
     </div>
 </header>
 
-<form method="post"
-      asp-route-gameId="@Model.Game.Id"
-      data-key-drop-form
-      class="editor-card auth-form">
-    <div asp-validation-summary="ModelOnly" role="alert"></div>
+<div class="ivory-game-editor-layout" data-drop-editor="new">
+    <form method="post"
+          asp-route-gameId="@Model.Game.Id"
+          data-key-drop-form
+          class="ivory-game-editor-form">
+        <div asp-validation-summary="ModelOnly" role="alert"></div>
 
-    <div class="field-group">
-        <label asp-for="OpensAt" class="field-label">오픈 시각</label>
-        <input asp-for="OpensAt" type="datetime-local" class="field-input" />
-        <span asp-validation-for="OpensAt" class="field-error"></span>
-    </div>
+        <section class="ivory-form-section" aria-labelledby="drop-schedule-heading">
+            <div class="ivory-form-section-heading">
+                <span>01</span>
+                <div>
+                    <h2 id="drop-schedule-heading">오픈 일정</h2>
+                    <p>예약 시각이 되면 참여 자격을 충족한 사용자가 대기실을 통해 입장합니다.</p>
+                </div>
+            </div>
+            <div class="field-group">
+                <label asp-for="OpensAt" class="field-label">오픈 시각</label>
+                <input asp-for="OpensAt" type="datetime-local" class="field-input" />
+                <span asp-validation-for="OpensAt" class="field-error"></span>
+            </div>
+        </section>
 
-    <div class="field-group">
-        <label asp-for="KeysText" class="field-label">스팀 키</label>
-        <textarea asp-for="KeysText"
-                  class="field-input"
-                  rows="8"
-                  placeholder="한 줄에 키 하나"></textarea>
-        <span asp-validation-for="KeysText" class="field-error"></span>
-        <p class="text-sm text-slate-500">
-            키 하나는 앞뒤 공백을 제외하고 1~200자여야 하며 같은 키를 중복 입력할 수 없습니다.
-        </p>
-    </div>
+        <section class="ivory-form-section" aria-labelledby="drop-inventory-heading">
+            <div class="ivory-form-section-heading">
+                <span>02</span>
+                <div>
+                    <h2 id="drop-inventory-heading">초기 키 재고</h2>
+                    <p>배포에서 한 계정에 하나씩 지급할 게임 키를 입력합니다.</p>
+                </div>
+            </div>
+            <div class="field-group">
+                <label asp-for="KeysText" class="field-label">스팀 키</label>
+                <textarea asp-for="KeysText"
+                          class="field-input ivory-key-input"
+                          rows="10"
+                          spellcheck="false"
+                          placeholder="한 줄에 키 하나"></textarea>
+                <span asp-validation-for="KeysText" class="field-error"></span>
+                <p class="field-hint">키 하나는 앞뒤 공백을 제외하고 1~200자여야 하며 같은 키를 중복 입력할 수 없습니다.</p>
+            </div>
+        </section>
 
-    <fieldset class="auth-form surface-panel-muted">
-        <legend class="px-2 font-medium text-slate-700">참여 자격 (선택)</legend>
-        <p class="text-sm text-slate-500">
-            비워 두면 제한하지 않습니다. 두 조건을 모두 설정하면 둘 다 충족해야 합니다.
-        </p>
-        <div class="field-group">
-            <label asp-for="MinimumAccountAgeDays" class="field-label">최소 계정 경과 기간</label>
-            <input asp-for="MinimumAccountAgeDays"
-                   type="number"
-                   min="1"
-                   max="365"
-                   class="field-input" />
-            <span asp-validation-for="MinimumAccountAgeDays" class="field-error"></span>
+        <section class="ivory-form-section" aria-labelledby="drop-eligibility-heading">
+            <div class="ivory-form-section-heading">
+                <span>03</span>
+                <div>
+                    <h2 id="drop-eligibility-heading">참여 자격 <small>선택</small></h2>
+                    <p>둘 다 설정하면 계정 기간과 리뷰 수 조건을 모두 충족해야 합니다.</p>
+                </div>
+            </div>
+            <div class="ivory-eligibility-grid">
+                <div class="field-group">
+                    <label asp-for="MinimumAccountAgeDays" class="field-label">최소 계정 경과 기간</label>
+                    <div class="ivory-input-suffix">
+                        <input asp-for="MinimumAccountAgeDays" type="number" min="1" max="365" class="field-input" />
+                        <span>일</span>
+                    </div>
+                    <span asp-validation-for="MinimumAccountAgeDays" class="field-error"></span>
+                </div>
+                <div class="field-group">
+                    <label asp-for="MinimumCompletedReviewCount" class="field-label">최소 완료 리뷰 수</label>
+                    <div class="ivory-input-suffix">
+                        <input asp-for="MinimumCompletedReviewCount" type="number" min="1" max="100" class="field-input" />
+                        <span>개</span>
+                    </div>
+                    <span asp-validation-for="MinimumCompletedReviewCount" class="field-error"></span>
+                </div>
+            </div>
+        </section>
+
+        <div class="ivory-editor-actions">
+            <a asp-page="/Games/Detail" asp-route-id="@Model.Game.Id" class="button-link">취소</a>
+            <button type="submit" class="button-primary">드롭 예약</button>
         </div>
-        <div class="field-group">
-            <label asp-for="MinimumCompletedReviewCount" class="field-label">최소 완료 리뷰 수</label>
-            <input asp-for="MinimumCompletedReviewCount"
-                   type="number"
-                   min="1"
-                   max="100"
-                   class="field-input" />
-            <span asp-validation-for="MinimumCompletedReviewCount" class="field-error"></span>
-        </div>
-    </fieldset>
+    </form>
 
-    <div class="button-group">
-        <button type="submit" class="button-primary">드롭 예약</button>
-        <a asp-page="/Games/Detail"
-           asp-route-id="@Model.Game.Id"
-           class="button-link">취소</a>
-    </div>
-</form>
-</section>
+    <aside class="ivory-game-editor-sidebar" aria-label="키 배포 예약 안내">
+        <section class="ivory-side-card">
+            <p class="ivory-card-label">BEFORE SCHEDULING</p>
+            <h2>입력 확인</h2>
+            <ul class="ivory-drop-checklist">
+                <li>오픈 시각과 표준 시간대를 확인합니다.</li>
+                <li>게임 키는 빈 줄 없이 한 줄에 하나씩 입력합니다.</li>
+                <li>참여 제한이 불필요하면 자격 입력을 비워 둡니다.</li>
+            </ul>
+        </section>
+
+        <section class="ivory-side-card ivory-editor-note">
+            <p class="ivory-card-label">AFTER SCHEDULING</p>
+            <p>예약한 배포에는 이후 키를 추가할 수 있으며, 진행할 수 없는 배포는 소유자가 종료할 수 있습니다.</p>
+        </section>
+    </aside>
+</div>
 
 @section Scripts {
     <script type="module"

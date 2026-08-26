@@ -25,7 +25,7 @@ public sealed class FrontendBrowserSmokeTests : PageTest
 
         Assert.NotNull(box);
         Assert.True(box.Height >= 44, $"Expected a 44px touch target, got {box.Height}px.");
-        Assert.Equal("rgb(98, 71, 170)", await button.EvaluateAsync<string>(
+        Assert.Equal("rgb(196, 64, 47)", await button.EvaluateAsync<string>(
             "element => getComputedStyle(element).backgroundColor"));
     }
 }

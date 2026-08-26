@@ -2,64 +2,73 @@
 @model DetailModel
 @{
     ViewData["Title"] = Model.Profile.DisplayName;
+    ViewData["MainClass"] = "site-main-profile";
 }
 
 @if (Model.FollowMessage is not null)
 {
-    <div class="alert-success mb-6" role="status">@Model.FollowMessage</div>
+    <div class="alert-success" role="status">@Model.FollowMessage</div>
 }
 
-<section class="profile-hero" data-public-profile>
-    @if (Model.ProfileImage is { } profileImage)
-    {
-        <img data-profile-image
-             data-media-id="@profileImage.MediaId"
-             src="@profileImage.Url"
-             alt="@Model.Profile.DisplayName 프로필 이미지"
-             class="profile-avatar"
-             width="96"
-             height="96"
-             referrerpolicy="no-referrer" />
-    }
-    else
-    {
-        <div class="profile-avatar flex items-center justify-center text-brand-primary"
-             data-default-profile-image>
-            <svg class="size-12"
-                 viewBox="0 0 24 24"
-                 fill="none"
-                 stroke="currentColor"
-                 stroke-width="1.5"
+<section class="ivory-profile-card" data-public-profile>
+    <div class="ivory-profile-banner" aria-hidden="true">
+        <span>INDIE-FI CREATOR</span>
+    </div>
+    <div class="ivory-profile-content">
+        @if (Model.ProfileImage is { } profileImage)
+        {
+            <img data-profile-image
+                 data-media-id="@profileImage.MediaId"
+                 src="@profileImage.Url"
+                 alt="@Model.Profile.DisplayName 프로필 이미지"
+                 class="profile-avatar"
+                 width="96"
+                 height="96"
+                 referrerpolicy="no-referrer" />
+        }
+        else
+        {
+            <div class="profile-avatar ivory-profile-avatar-fallback"
+                 data-default-profile-image
                  role="img"
                  aria-label="기본 프로필 이미지">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.12a7.5 7.5 0 0 1 15 0A17.9 17.9 0 0 1 12 21.75a17.9 17.9 0 0 1-7.5-1.63Z" />
-            </svg>
+                <span>@Model.Profile.DisplayName[..1].ToUpperInvariant()</span>
+            </div>
+        }
+
+        <div class="ivory-profile-identity">
+            <div class="ivory-profile-name-row">
+                <h1>@Model.Profile.DisplayName</h1>
+                <span class="ivory-reviewer-grade" data-reviewer-grade>@Model.ReviewerGradeLabel</span>
+            </div>
+            @if (string.IsNullOrEmpty(Model.Profile.Biography))
+            {
+                <p class="ivory-profile-bio">아직 소개가 없습니다.</p>
+            }
+            else
+            {
+                <p class="ivory-profile-bio whitespace-pre-line">@Model.Profile.Biography</p>
+            }
         </div>
-    }
-    <div class="min-w-0 flex-1">
-        <div class="flex flex-wrap items-center gap-3">
-            <h1 class="page-title">@Model.Profile.DisplayName</h1>
+
+        <div class="ivory-profile-actions">
             @if (Model.IsOwner)
             {
-                <a asp-page="/Account/Profile" class="button-outline button-small">프로필 수정</a>
-                <a asp-page="/Account/Following" class="button-outline button-small">팔로잉 목록</a>
+                <a asp-page="/Account/Profile" class="button-outline">프로필 수정</a>
+                <a asp-page="/Account/Following" class="button-outline">팔로잉 목록</a>
             }
             else if (Model.CanManageFollow)
             {
                 @if (Model.IsFollowing)
                 {
-                    <form method="post"
-                          asp-page-handler="Unfollow"
-                          asp-route-id="@Model.Profile.UserId">
-                        <button type="submit" class="button-outline button-small">팔로우 해제</button>
+                    <form method="post" asp-page-handler="Unfollow" asp-route-id="@Model.Profile.UserId">
+                        <button type="submit" class="button-outline">팔로우 해제</button>
                     </form>
                 }
                 else
                 {
-                    <form method="post"
-                          asp-page-handler="Follow"
-                          asp-route-id="@Model.Profile.UserId">
-                        <button type="submit" class="button-primary button-small">팔로우</button>
+                    <form method="post" asp-page-handler="Follow" asp-route-id="@Model.Profile.UserId">
+                        <button type="submit" class="button-primary">팔로우</button>
                     </form>
                 }
             }
@@ -67,64 +76,55 @@
             {
                 <a asp-page="/Login"
                    asp-route-returnUrl="@($"/Profiles/{Model.Profile.UserId}")"
-                   class="button-outline button-small">로그인 후 팔로우</a>
+                   class="button-outline">로그인 후 팔로우</a>
             }
         </div>
-        @if (string.IsNullOrEmpty(Model.Profile.Biography))
-        {
-            <p class="mt-3 text-slate-500">아직 소개가 없습니다.</p>
-        }
-        else
-        {
-            <p class="mt-3 max-w-3xl whitespace-pre-line leading-7 text-slate-700">@Model.Profile.Biography</p>
-        }
     </div>
+
+    <dl class="ivory-profile-stats">
+        <div>
+            <dt>GAMES</dt>
+            <dd>@Model.Profile.Games.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)</dd>
+        </div>
+        <div>
+            <dt>REVIEWS WRITTEN</dt>
+            <dd>@Model.Profile.CompletedReviewCount.ToString(System.Globalization.CultureInfo.InvariantCulture)</dd>
+        </div>
+        <div>
+            <dt>REVIEWER GRADE</dt>
+            <dd class="ivory-stat-accent">@Model.ReviewerGradeLabel</dd>
+        </div>
+    </dl>
 </section>
 
-<section class="mt-10" aria-labelledby="profile-review-heading">
-    <h2 id="profile-review-heading" class="subsection-title">리뷰 활동</h2>
-    <div class="profile-stats max-w-2xl">
-        <div class="profile-stat">
-            <span class="text-meta">완료한 리뷰</span>
-            <strong class="profile-stat-value">@(Model.Profile.CompletedReviewCount)개</strong>
-        </div>
-        <div class="profile-stat">
-            <span class="text-meta">리뷰어 등급</span>
-            <strong class="profile-stat-value" data-reviewer-grade>@Model.ReviewerGradeLabel</strong>
-        </div>
+<section class="ivory-profile-section" aria-labelledby="profile-games-heading">
+    <div class="ivory-section-heading">
+        <h2 id="profile-games-heading">등록한 게임</h2>
+        <span>@Model.Profile.Games.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)개</span>
     </div>
-</section>
 
-<h2 class="subsection-title mt-10">등록한 게임</h2>
-@if (Model.Profile.Games.Count == 0)
-{
-    <div class="empty-state empty-state-compact" data-empty-state="profile-games">
-        <div class="empty-state-icon" aria-hidden="true">◇</div>
-        <h3 class="empty-state-title">아직 등록한 게임이 없습니다.</h3>
-        <p class="empty-state-description">공개된 게임이 생기면 이 프로필에서 함께 확인할 수 있습니다.</p>
-    </div>
-}
-else
-{
-    <div class="grid gap-4 sm:grid-cols-2">
-        @foreach (var game in Model.Profile.Games)
-        {
-            <a asp-page="/Games/Detail"
-               asp-route-id="@game.Id"
-               class="surface-card surface-link">
-                <div class="flex items-center justify-between gap-4">
-                    <span class="font-bold text-brand-ink">@game.Title</span>
-                    <span class="text-meta">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
-                </div>
-                @if (game.Description is not null)
-                {
-                    <div class="mt-3 text-sm text-brand-ink/70">@game.Description</div>
-                }
-                else
-                {
-                    <div class="mt-3 text-meta">아직 등록된 소개가 없습니다.</div>
-                }
-            </a>
-        }
-    </div>
-}
+    @if (Model.Profile.Games.Count == 0)
+    {
+        <div class="empty-state empty-state-compact" data-empty-state="profile-games">
+            <div class="empty-state-icon" aria-hidden="true">◇</div>
+            <h3 class="empty-state-title">아직 등록한 게임이 없습니다.</h3>
+            <p class="empty-state-description">공개된 게임이 생기면 이 프로필에서 함께 확인할 수 있습니다.</p>
+        </div>
+    }
+    else
+    {
+        <div class="ivory-profile-games">
+            @foreach (var game in Model.Profile.Games)
+            {
+                <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="ivory-profile-game">
+                    <span class="ivory-profile-game-cover" aria-hidden="true">COVER 640×400</span>
+                    <span class="ivory-profile-game-copy">
+                        <strong>@game.Title</strong>
+                        <time datetime="@game.CreatedAt.ToString("O")">@game.CreatedAt.ToLocalTime().ToString("yyyy.MM.dd")</time>
+                        <span>@(game.Description ?? "아직 등록된 소개가 없습니다.")</span>
+                    </span>
+                </a>
+            }
+        </div>
+    }
+</section>

@@ -2,43 +2,66 @@
 @model ConfirmEmailModel
 @{
     ViewData["Title"] = "이메일 확인";
+    ViewData["MainClass"] = "site-main-auth";
 }
 
-<section class="auth-shell" data-auth-page="confirm-email">
-    <header class="auth-header">
-        <p class="auth-eyebrow">EMAIL CONFIRMATION</p>
-        <h1 class="auth-title">이메일 확인</h1>
-        <p class="auth-description">이메일 주소 확인을 마치면 IndieFi의 모든 기능을 이용할 수 있습니다.</p>
-    </header>
-
-    <div class="auth-card">
-        @if (Model.State == EmailConfirmationPageState.Confirmed)
-        {
-            <div class="alert-success" role="status">이메일 확인이 완료되었습니다. 이제 로그인할 수 있습니다.</div>
-            <div class="auth-state-actions">
-                <a asp-page="/Login" class="button-primary w-full">로그인하기</a>
-            </div>
-        }
-        else if (Model.State == EmailConfirmationPageState.Invalid)
-        {
-            <div class="alert-warning" role="alert">유효하지 않거나 만료된 확인 링크입니다.</div>
-        }
-        else if (Model.State == EmailConfirmationPageState.ReadyToConfirm)
-        {
-            <div class="alert-neutral">아래 버튼을 눌러 이메일 주소 확인을 마쳐 주세요.</div>
-            <form method="post">
-                <input type="hidden" asp-for="Token" />
-                <button type="submit" class="button-primary w-full">이메일 주소 확인</button>
-            </form>
-        }
-        else
-        {
-            <div class="alert-neutral">가입할 때 받은 확인 메일의 링크를 열어 주세요.</div>
-        }
-
-        <nav class="auth-links" aria-label="이메일 확인 도움말">
-            <a asp-page="/ResendConfirmationEmail" class="text-link">확인 메일 다시 받기</a>
-            <a asp-page="/Login" class="text-link">로그인으로 돌아가기</a>
+<section class="auth-shell ivory-auth-shell" data-auth-page="confirm-email">
+    <div class="ivory-auth-panel">
+        <nav class="ivory-auth-tabs" aria-label="인증 메뉴">
+            <a asp-page="/Login">← SIGN IN</a>
         </nav>
+
+        <header class="auth-header">
+            <p class="auth-eyebrow">EMAIL CONFIRMATION</p>
+            <h1 class="auth-title">이메일 확인</h1>
+            <p class="auth-description">이메일 주소 확인을 마치면 Indie-Fi의 모든 기능을 이용할 수 있습니다.</p>
+        </header>
+
+        <div class="auth-card ivory-auth-state-card">
+            @if (Model.State == EmailConfirmationPageState.Confirmed)
+            {
+                <div class="ivory-auth-state-icon ivory-auth-state-success" aria-hidden="true">✓</div>
+                <h2>확인이 완료됐습니다.</h2>
+                <div class="alert-success" role="status">이메일 확인이 완료되었습니다. 이제 로그인할 수 있습니다.</div>
+                <div class="auth-state-actions">
+                    <a asp-page="/Login" class="button-primary w-full">로그인하기</a>
+                </div>
+            }
+            else if (Model.State == EmailConfirmationPageState.Invalid)
+            {
+                <div class="ivory-auth-state-icon ivory-auth-state-warning" aria-hidden="true">!</div>
+                <h2>링크를 확인할 수 없습니다.</h2>
+                <div class="alert-warning" role="alert">유효하지 않거나 만료된 확인 링크입니다.</div>
+            }
+            else if (Model.State == EmailConfirmationPageState.ReadyToConfirm)
+            {
+                <div class="ivory-auth-state-icon" aria-hidden="true">✉</div>
+                <h2>마지막 단계입니다.</h2>
+                <div class="alert-neutral">아래 버튼을 눌러 이메일 주소 확인을 마쳐 주세요.</div>
+                <form method="post">
+                    <input type="hidden" asp-for="Token" />
+                    <button type="submit" class="button-primary w-full">이메일 주소 확인</button>
+                </form>
+            }
+            else
+            {
+                <div class="ivory-auth-state-icon" aria-hidden="true">✉</div>
+                <h2>확인 메일을 열어 주세요.</h2>
+                <div class="alert-neutral">가입할 때 받은 확인 메일의 링크를 열어 주세요.</div>
+            }
+
+            <nav class="auth-links" aria-label="이메일 확인 도움말">
+                <a asp-page="/ResendConfirmationEmail" class="text-link">확인 메일 다시 받기</a>
+                <a asp-page="/Login" class="text-link">로그인으로 돌아가기</a>
+            </nav>
+        </div>
     </div>
+
+    <aside class="ivory-auth-visual ivory-auth-visual-confirm" aria-label="이메일 확인 안내">
+        <div class="ivory-auth-mark" aria-hidden="true">&#64;</div>
+        <div class="ivory-auth-visual-copy">
+            <p>VERIFIED ACCOUNT</p>
+            <h2>확인된 계정으로<br />안전하게 시작하세요.</h2>
+        </div>
+    </aside>
 </section>
