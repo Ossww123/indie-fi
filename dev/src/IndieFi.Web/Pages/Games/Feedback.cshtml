@@ -3,18 +3,24 @@
 @using IndieFi.Web.Modules.Feedback.Domain
 @{
     ViewData["Title"] = $"{Model.GameTitle} - 받은 피드백";
+    ViewData["MainClass"] = "site-main-feedback";
 }
 
-<header class="page-heading">
-    <div class="page-heading-copy">
-        <p class="auth-eyebrow">RECEIVED FEEDBACK</p>
-        <h1 class="page-title mt-2">@Model.GameTitle</h1>
-        <p class="page-description">받은 피드백을 확인하고 유용성을 평가해 리뷰어 신뢰도에 반영하세요.</p>
+<nav class="ivory-breadcrumb" aria-label="현재 위치">
+    <a asp-page="/Games/Detail" asp-route-id="@Model.GameId">@Model.GameTitle</a>
+    <span aria-hidden="true">/</span>
+    <span aria-current="page">받은 피드백</span>
+</nav>
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">RECEIVED FEEDBACK</p>
+        <h1>@Model.GameTitle</h1>
+        <p>받은 피드백을 읽고 유용성을 평가하면 리뷰어 신뢰도에 반영됩니다.</p>
     </div>
     <a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="button-outline">게임 상세</a>
 </header>
 
-<h2 class="section-title">받은 피드백</h2>
 @if (Model.RatingMessage is not null)
 {
     <div class="alert-success" role="status">@Model.RatingMessage</div>
@@ -33,57 +39,60 @@
 }
 else
 {
-    <div class="space-y-5 mb-6">
+    <div class="ivory-feedback-list">
         @foreach (var item in Model.Items)
         {
             var useSubmittedValues = Model.PreserveSubmittedRating
                 && Model.SubmittedFeedbackId == item.FeedbackId;
-            var selectedScore = useSubmittedValues
-                ? Model.SubmittedScore
-                : item.RatingScore;
-            var reason = useSubmittedValues
-                ? Model.SubmittedReason
-                : item.RatingReason;
+            var selectedScore = useSubmittedValues ? Model.SubmittedScore : item.RatingScore;
+            var reason = useSubmittedValues ? Model.SubmittedReason : item.RatingReason;
 
-            <article class="surface-card">
-                <div class="text-meta">
-                    <a asp-page="/Profiles/Detail"
-                       asp-route-id="@item.ReviewerId"
-                       class="text-link">@item.ReviewerDisplayName</a>
-                    · 제출 @item.SubmittedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                </div>
-                <div class="feedback-body">@item.Body</div>
+            <article class="ivory-feedback-card">
+                <section class="ivory-feedback-content" aria-labelledby="feedback-author-@item.FeedbackId">
+                    <header class="ivory-feedback-author">
+                        <span class="ivory-feedback-avatar" aria-hidden="true">
+                            @item.ReviewerDisplayName[..1].ToUpperInvariant()
+                        </span>
+                        <span>
+                            <a id="feedback-author-@item.FeedbackId"
+                               asp-page="/Profiles/Detail"
+                               asp-route-id="@item.ReviewerId">@item.ReviewerDisplayName</a>
+                            <time datetime="@item.SubmittedAt.ToString("O")">
+                                @item.SubmittedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm") 제출
+                            </time>
+                        </span>
+                    </header>
+                    <div class="ivory-feedback-body">@item.Body</div>
+                </section>
 
-                <section class="feedback-rating-panel"
-                         aria-labelledby="rating-heading-@item.FeedbackId">
-                    <h3 id="rating-heading-@item.FeedbackId" class="font-semibold text-slate-900">
-                        피드백 품질 평가
-                    </h3>
+                <section class="ivory-feedback-rating" aria-labelledby="rating-heading-@item.FeedbackId">
+                    <p class="ivory-side-label">QUALITY RATING</p>
+                    <h3 id="rating-heading-@item.FeedbackId">피드백 품질 평가</h3>
 
                     @if (item.RatingScore is int currentScore)
                     {
-                        <p class="mt-2 text-sm text-slate-700" data-current-feedback-rating="@item.FeedbackId">
-                            현재 평가: <strong>@(currentScore)점</strong>
-                            (@FeedbackModel.GetScoreLabel(currentScore))
-                        </p>
+                        <div class="ivory-current-rating" data-current-feedback-rating="@item.FeedbackId">
+                            <strong>@currentScore</strong>
+                            <span>5점 만점 · @FeedbackModel.GetScoreLabel(currentScore)</span>
+                        </div>
                         @if (item.RatingReason is not null)
                         {
-                            <p class="mt-1 whitespace-pre-wrap text-sm text-slate-600">@item.RatingReason</p>
+                            <p class="ivory-rating-reason whitespace-pre-wrap">@item.RatingReason</p>
                         }
                     }
                     else
                     {
-                        <p class="mt-2 text-sm text-slate-600">아직 평가하지 않았습니다.</p>
+                        <p class="ivory-side-copy">아직 평가하지 않았습니다.</p>
                     }
 
-                    <p class="mt-1 text-xs text-slate-500">
-                        평가 가능 기한: @item.RatingClosesAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                    <p class="ivory-rating-deadline">
+                        평가 가능 기한<br />
+                        <time datetime="@item.RatingClosesAt.ToString("O")">@item.RatingClosesAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")</time>
                     </p>
 
-                    @if (Model.SubmittedFeedbackId == item.FeedbackId
-                        && Model.RatingErrors.Count > 0)
+                    @if (Model.SubmittedFeedbackId == item.FeedbackId && Model.RatingErrors.Count > 0)
                     {
-                        <div class="validation-summary-errors mt-3" role="alert">
+                        <div class="validation-summary-errors" role="alert">
                             <ul>
                                 @foreach (var error in Model.RatingErrors)
                                 {
@@ -99,7 +108,7 @@ else
                               asp-page-handler="Rate"
                               asp-route-id="@Model.GameId"
                               data-feedback-rating-form="@item.FeedbackId"
-                              class="mt-4 space-y-4">
+                              class="ivory-rating-form">
                             <input type="hidden" name="feedbackId" value="@item.FeedbackId" />
                             @if (item.RatingRevision is int revision)
                             {
@@ -108,10 +117,7 @@ else
 
                             <div class="field-group">
                                 <label for="rating-score-@item.FeedbackId" class="field-label">유용성 점수</label>
-                                <select id="rating-score-@item.FeedbackId"
-                                        name="score"
-                                        class="field-input"
-                                        required>
+                                <select id="rating-score-@item.FeedbackId" name="score" class="field-input" required>
                                     <option value="">점수를 선택해 주세요</option>
                                     <option value="1" selected="@(selectedScore == 1)">1점 — 매우 도움 안 됨</option>
                                     <option value="2" selected="@(selectedScore == 2)">2점 — 도움 안 됨</option>
@@ -122,28 +128,24 @@ else
                             </div>
 
                             <div class="field-group">
-                                <label for="rating-reason-@item.FeedbackId" class="field-label">
-                                    평가 사유 <span class="font-normal text-slate-500">(선택)</span>
-                                </label>
+                                <label for="rating-reason-@item.FeedbackId" class="field-label">평가 사유 <span class="text-meta">(선택)</span></label>
                                 <textarea id="rating-reason-@item.FeedbackId"
                                           name="reason"
                                           rows="3"
                                           maxlength="@FeedbackQualityPolicy.MaximumReasonLength"
                                           class="field-input"
-                                          placeholder="어떤 점이 도움이 되었거나 아쉬웠는지 적어 주세요.">@reason</textarea>
-                                <p class="text-xs text-slate-500">
-                                    최대 @FeedbackQualityPolicy.MaximumReasonLength 자
-                                </p>
+                                          placeholder="도움이 되었거나 아쉬웠던 점을 적어 주세요.">@reason</textarea>
+                                <p class="field-hint">최대 @FeedbackQualityPolicy.MaximumReasonLength 자</p>
                             </div>
 
-                            <button type="submit" class="button-primary">
+                            <button type="submit" class="button-primary w-full">
                                 @(item.RatingScore is null ? "평가 등록" : "평가 수정")
                             </button>
                         </form>
                     }
                     else
                     {
-                        <p class="mt-3 text-sm font-medium text-slate-600">평가 기간이 종료되었습니다.</p>
+                        <p class="ivory-rating-closed">평가 기간이 종료되었습니다.</p>
                     }
                 </section>
             </article>
@@ -151,4 +153,4 @@ else
     </div>
 }
 
-<a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="text-link">← 게임 상세로 돌아가기</a>
+<a asp-page="/Games/Detail" asp-route-id="@Model.GameId" class="ivory-back-link">← 게임 상세로 돌아가기</a>
