@@ -2,7 +2,16 @@
 @model DetailModel
 @{
     ViewData["Title"] = Model.Game.Title;
+    ViewData["MainClass"] = "site-main-detail";
 }
+
+<nav class="ivory-breadcrumb" aria-label="현재 위치">
+    <a asp-page="/Index">게임 찾기</a>
+    <span aria-hidden="true">/</span>
+    <a asp-page="/Index" asp-route-genre="@Model.Classifications.Genre.Code">@Model.Classifications.Genre.DisplayName</a>
+    <span aria-hidden="true">/</span>
+    <span aria-current="page">@Model.Game.Title</span>
+</nav>
 
 @if (TempData["GameMessage"] is string gameMessage)
 {
@@ -21,345 +30,326 @@
     <div class="alert-success" role="status">@Model.FavoriteMessage</div>
 }
 
-<header class="game-detail-heading">
-    <div class="page-heading-copy">
-        <p class="auth-eyebrow">INDIE GAME</p>
-        <h1 class="page-title mt-2">@Model.Game.Title</h1>
-        <p class="mt-2 text-meta">
-            개발자
-            <a asp-page="/Profiles/Detail"
-               asp-route-id="@Model.Game.OwnerId"
-               class="text-link">@Model.OwnerDisplayName</a>
-            <span aria-hidden="true">·</span>
-            @Model.Game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd") 등록
-        </p>
-    </div>
-
-    <div class="game-detail-actions" aria-label="게임 작업">
-        @* Hiding this link is only UX; the Edit endpoint enforces ownership. *@
-        @if (Model.IsOwner)
+<div class="ivory-detail-layout">
+    <article class="ivory-detail-main">
+        @if (Model.PublicMedia.Cover is { } cover)
         {
-            <a asp-page="/Games/Edit"
-               asp-route-id="@Model.Game.Id"
-               class="button-outline button-small">수정</a>
-            @if (Model.CanManageMedia)
-            {
-                <a asp-page="/Games/Media"
-                   asp-route-id="@Model.Game.Id"
-                   class="button-outline button-small">미디어 관리</a>
-            }
-            <a asp-page="/KeyDrops/New"
-               asp-route-gameId="@Model.Game.Id"
-               class="button-outline button-small">드롭 예약</a>
-            @* Hiding this button is only UX; the handler enforces ownership. *@
-            <form method="post"
-                  asp-page-handler="RequestFeedback"
-                  asp-route-id="@Model.Game.Id">
-                <input type="hidden" name="operationId" value="@Model.RequestOperationId" />
-                <button type="submit" class="button-outline button-small">피드백 요청</button>
-            </form>
+            <figure class="ivory-detail-cover"
+                    data-game-cover
+                    data-media-id="@cover.MediaId">
+                <img src="@cover.Url"
+                     alt="@Model.Game.Title 대표 이미지"
+                     width="1600"
+                     height="900"
+                     fetchpriority="high"
+                     referrerpolicy="no-referrer" />
+            </figure>
         }
-        @if (Model.CanManageFavorite)
+        else
         {
-            @if (Model.IsFavorite)
+            <div class="ivory-detail-cover ivory-media-fallback"
+                 data-game-cover-fallback
+                 role="img"
+                 aria-label="@Model.Game.Title 대표 이미지 없음">
+                <span>GAME COVER</span>
+            </div>
+        }
+
+        @if (Model.PublicMedia.Screenshots.Count > 0)
+        {
+            <div class="ivory-screenshot-strip" data-game-screenshots aria-label="게임 스크린샷">
+                @for (var index = 0; index < Model.PublicMedia.Screenshots.Count; index++)
+                {
+                    var screenshot = Model.PublicMedia.Screenshots[index];
+                    <a href="@screenshot.Url"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       data-game-screenshot
+                       data-media-id="@screenshot.MediaId">
+                        <img src="@screenshot.Url"
+                             alt="@Model.Game.Title 스크린샷 @(index + 1)"
+                             width="640"
+                             height="400"
+                             loading="lazy"
+                             decoding="async"
+                             referrerpolicy="no-referrer" />
+                    </a>
+                }
+            </div>
+        }
+
+        <header class="ivory-detail-header">
+            <h1>@Model.Game.Title</h1>
+            <p class="ivory-detail-meta">
+                <span>by <a asp-page="/Profiles/Detail" asp-route-id="@Model.Game.OwnerId">@Model.OwnerDisplayName</a></span>
+                <span aria-hidden="true">·</span>
+                <time datetime="@Model.Game.CreatedAt.ToString("O")">@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy.MM.dd") 등록</time>
+                @if (Model.Classifications.Platforms.Count > 0)
+                {
+                    <span aria-hidden="true">·</span>
+                    <span>@string.Join(" · ", Model.Classifications.Platforms.Select(platform => platform.DisplayName))</span>
+                }
+            </p>
+            <div class="ivory-tag-list" aria-label="게임 분류">
+                <a asp-page="/Index"
+                   asp-route-genre="@Model.Classifications.Genre.Code">#@Model.Classifications.Genre.DisplayName</a>
+                @foreach (var tag in Model.Classifications.Tags)
+                {
+                    <a asp-page="/Index" asp-route-tags="@tag.Code">#@tag.DisplayName</a>
+                }
+            </div>
+        </header>
+
+        <section class="ivory-detail-description" aria-labelledby="game-description-heading">
+            <h2 id="game-description-heading" class="sr-only">게임 소개</h2>
+            @if (Model.Game.Description is not null)
             {
-                <form method="post"
-                      asp-page-handler="Unfavorite"
-                      asp-route-id="@Model.Game.Id">
-                    <button type="submit" class="button-outline button-small">관심 게임 제거</button>
-                </form>
+                <p class="whitespace-pre-line">@Model.Game.Description</p>
             }
             else
             {
-                <form method="post"
-                      asp-page-handler="Favorite"
-                      asp-route-id="@Model.Game.Id">
-                    <button type="submit" class="button-primary button-small">관심 게임 추가</button>
-                </form>
+                <p class="text-meta">아직 등록된 게임 소개가 없습니다.</p>
             }
-        }
-        else
-        {
-            <a asp-page="/Login"
-               asp-route-returnUrl="@($"/Games/Detail/{Model.Game.Id}")"
-               class="button-outline button-small">로그인 후 관심 게임 추가</a>
-        }
-    </div>
-</header>
+        </section>
 
-<section class="game-detail-hero" aria-label="게임 개요">
-    @if (Model.PublicMedia.Cover is { } cover)
-    {
-        <figure class="game-detail-cover"
-                data-game-cover
-                data-media-id="@cover.MediaId">
-            <img src="@cover.Url"
-                 alt="@Model.Game.Title 대표 이미지"
-                 class="size-full object-cover"
-                 width="1600"
-                 height="900"
-                 fetchpriority="high"
-                 referrerpolicy="no-referrer" />
-        </figure>
-    }
-    else
-    {
-        <div class="game-detail-cover flex items-center justify-center p-8 text-center text-meta"
-             data-game-cover-fallback
-             role="img"
-             aria-label="@Model.Game.Title 대표 이미지 없음">
-            등록된 대표 이미지가 없습니다.
-        </div>
-    }
-
-    <div class="game-detail-summary">
-        <p class="auth-eyebrow">ABOUT THIS GAME</p>
-        <h2 class="subsection-title mt-2">게임 정보</h2>
-        @if (Model.Game.Description is not null)
-        {
-            <p class="mt-3 whitespace-pre-line leading-7 text-brand-ink/75">@Model.Game.Description</p>
-        }
-        else
-        {
-            <p class="mt-3 text-meta">아직 등록된 게임 소개가 없습니다.</p>
-        }
-
-        <dl class="mt-6 space-y-4">
-            <div>
-                <dt class="field-label">장르</dt>
-                <dd class="mt-2"><span class="badge-neutral">@Model.Classifications.Genre.DisplayName</span></dd>
+        <section class="ivory-detail-section" aria-labelledby="game-screenshots-heading">
+            <div class="ivory-section-heading">
+                <h2 id="game-screenshots-heading">스크린샷</h2>
+                <span>@Model.PublicMedia.Screenshots.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)장</span>
             </div>
-            <div>
-                <dt class="field-label">태그</dt>
-                <dd class="mt-2 flex flex-wrap gap-2">
-                    @if (Model.Classifications.Tags.Count == 0)
-                    {
-                        <span class="text-meta">등록된 태그 없음</span>
-                    }
-                    else
-                    {
-                        @foreach (var tag in Model.Classifications.Tags)
-                        {
-                            <span class="badge-neutral">@tag.DisplayName</span>
-                        }
-                    }
-                </dd>
-            </div>
-            <div>
-                <dt class="field-label">지원 플랫폼</dt>
-                <dd class="mt-2 flex flex-wrap gap-2">
-                    @if (Model.Classifications.Platforms.Count == 0)
-                    {
-                        <span class="text-meta">등록된 지원 플랫폼 없음</span>
-                    }
-                    else
-                    {
-                        @foreach (var platform in Model.Classifications.Platforms)
-                        {
-                            <span class="badge-neutral">@platform.DisplayName</span>
-                        }
-                    }
-                </dd>
-            </div>
-        </dl>
-    </div>
-</section>
-
-<section class="mt-8" aria-labelledby="game-screenshots-heading">
-    <h2 id="game-screenshots-heading" class="subsection-title">스크린샷</h2>
-    @if (Model.PublicMedia.Screenshots.Count == 0)
-    {
-        <div class="empty-state empty-state-compact mt-3" data-game-screenshots-fallback data-empty-state="game-screenshots">
-            <div class="empty-state-icon" aria-hidden="true">◇</div>
-            <h3 class="empty-state-title">공개된 스크린샷이 없습니다.</h3>
-            <p class="empty-state-description">게임 플레이 화면이 등록되면 이곳에서 확인할 수 있습니다.</p>
-            @if (Model.IsOwner && Model.CanManageMedia)
+            @if (Model.PublicMedia.Screenshots.Count == 0)
             {
-                <div class="empty-state-actions">
-                    <a asp-page="/Games/Media" asp-route-id="@Model.Game.Id" class="button-outline">스크린샷 관리</a>
+                <div class="empty-state empty-state-compact" data-game-screenshots-fallback data-empty-state="game-screenshots">
+                    <div class="empty-state-icon" aria-hidden="true">◇</div>
+                    <h3 class="empty-state-title">공개된 스크린샷이 없습니다.</h3>
+                    <p class="empty-state-description">게임 플레이 화면이 등록되면 이곳에서 확인할 수 있습니다.</p>
+                    @if (Model.IsOwner && Model.CanManageMedia)
+                    {
+                        <div class="empty-state-actions">
+                            <a asp-page="/Games/Media" asp-route-id="@Model.Game.Id" class="button-outline">스크린샷 관리</a>
+                        </div>
+                    }
                 </div>
             }
-        </div>
-    }
-    else
-    {
-        <div class="mt-3 grid gap-4 sm:grid-cols-2" data-game-screenshots>
-            @for (var index = 0; index < Model.PublicMedia.Screenshots.Count; index++)
+            else
             {
-                var screenshot = Model.PublicMedia.Screenshots[index];
-                <a href="@screenshot.Url"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   class="overflow-hidden rounded-xl bg-slate-100"
-                   data-game-screenshot
-                   data-media-id="@screenshot.MediaId">
-                    <img src="@screenshot.Url"
-                         alt="@Model.Game.Title 스크린샷 @(index + 1)"
-                         class="aspect-[16/9] w-full object-cover"
-                         width="1600"
-                         height="900"
-                         loading="lazy"
-                         decoding="async"
-                         referrerpolicy="no-referrer" />
-                </a>
+                <div class="ivory-screenshot-gallery">
+                    @for (var index = 0; index < Model.PublicMedia.Screenshots.Count; index++)
+                    {
+                        var screenshot = Model.PublicMedia.Screenshots[index];
+                        <a href="@screenshot.Url" target="_blank" rel="noopener noreferrer">
+                            <img src="@screenshot.Url"
+                                 alt="@Model.Game.Title 스크린샷 @(index + 1) 크게 보기"
+                                 width="960"
+                                 height="540"
+                                 loading="lazy"
+                                 decoding="async"
+                                 referrerpolicy="no-referrer" />
+                        </a>
+                    }
+                </div>
             }
-        </div>
-    }
-</section>
+        </section>
 
-<h2 class="subsection-title mt-8">플레이하기</h2>
-@if (Model.PlayLinks.Count == 0)
-{
-    <div class="empty-state empty-state-compact" data-empty-state="play-links">
-        <div class="empty-state-icon" aria-hidden="true">◇</div>
-        <h3 class="empty-state-title">등록된 외부 플레이 링크 없음</h3>
-        <p class="empty-state-description">공개된 플레이 경로가 아직 등록되지 않았습니다.</p>
         @if (Model.IsOwner)
         {
-            <div class="empty-state-actions">
-                <a asp-page="/Games/Edit" asp-route-id="@Model.Game.Id" class="button-outline">플레이 링크 등록</a>
-            </div>
-        }
-    </div>
-}
-else
-{
-    <div class="alert-warning">
-        아래 링크는 외부 사이트로 이동합니다. IndieFi는 외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.
-    </div>
-    <div class="surface-list">
-        @foreach (var link in Model.PlayLinks)
-        {
-            <a href="@link.Url"
-               target="_blank"
-               rel="noopener noreferrer"
-               class="surface-item surface-link flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                <span class="font-semibold text-slate-900">@link.DisplayName</span>
-                <span class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-                    <span class="badge-neutral">@link.ProviderText</span>
-                    @if (link.TargetPlatformText is { } platform)
-                    {
-                        <span class="badge-neutral">@platform</span>
-                    }
-                    <span class="text-meta whitespace-nowrap">새 창에서 열기 ↗</span>
-                </span>
-            </a>
-        }
-    </div>
-}
-
-@if (Model.IsOwner)
-{
-    <h2 class="subsection-title mt-8">피드백 요청</h2>
-    @if (Model.Requests.Count == 0)
-    {
-        <div class="empty-state empty-state-compact" data-empty-state="feedback-requests">
-            <div class="empty-state-icon" aria-hidden="true">◇</div>
-            <h3 class="empty-state-title">등록한 피드백 요청 없음</h3>
-            <p class="empty-state-description">상단의 피드백 요청 버튼을 사용하면 리뷰 대기열에 게임을 등록할 수 있습니다.</p>
-        </div>
-    }
-    else
-    {
-        <div class="surface-list mb-4">
-            @foreach (var request in Model.Requests)
-            {
-                <div class="surface-item flex items-center justify-between gap-4">
-                    <span>
-                        <span>
-                            요청 @request.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                            · @request.StatusText
-                        </span>
-                        @if (request.CompletedAt is DateTimeOffset completedAt)
+            <section class="ivory-detail-section" aria-labelledby="feedback-request-heading">
+                <div class="ivory-section-heading">
+                    <h2 id="feedback-request-heading">피드백 요청</h2>
+                    <a asp-page="/Games/Feedback" asp-route-id="@Model.Game.Id">받은 피드백 보기 →</a>
+                </div>
+                @if (Model.Requests.Count == 0)
+                {
+                    <div class="empty-state empty-state-compact" data-empty-state="feedback-requests">
+                        <div class="empty-state-icon" aria-hidden="true">◇</div>
+                        <h3 class="empty-state-title">등록한 피드백 요청 없음</h3>
+                        <p class="empty-state-description">오른쪽 관리 메뉴의 피드백 요청 버튼으로 리뷰 대기열에 게임을 등록할 수 있습니다.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="ivory-compact-list">
+                        @foreach (var request in Model.Requests)
                         {
-                            <span class="text-meta block">
-                                완료 @completedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                            </span>
+                            <div class="ivory-compact-row">
+                                <span>
+                                    <strong>@request.StatusText</strong>
+                                    <time datetime="@request.CreatedAt.ToString("O")">@request.CreatedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm") 요청</time>
+                                    @if (request.CompletedAt is DateTimeOffset completedAt)
+                                    {
+                                        <small>완료 @completedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")</small>
+                                    }
+                                </span>
+                                @if (request.IsCancellable)
+                                {
+                                    <form method="post"
+                                          asp-page-handler="CancelRequest"
+                                          asp-route-id="@Model.Game.Id"
+                                          asp-route-requestId="@request.Id"
+                                          data-confirm-title="피드백 요청 취소"
+                                          data-confirm-message="이 요청을 취소하면 대기열에서 제거되며 사용한 크레딧은 반환됩니다. 취소할까요?"
+                                          data-confirm-label="요청 취소">
+                                        <button type="submit" class="button-danger button-small">취소</button>
+                                    </form>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+        }
+
+        <a asp-page="/Games/Index" class="ivory-back-link">← 목록으로</a>
+    </article>
+
+    <aside class="ivory-detail-sidebar" aria-label="게임 행동과 상세 정보">
+        <section class="ivory-side-card" aria-labelledby="play-game-heading">
+            <p class="ivory-side-label">PLAY THIS GAME</p>
+            <h2 id="play-game-heading">플레이하기</h2>
+            @if (Model.PlayLinks.Count == 0)
+            {
+                <p class="ivory-side-copy">등록된 외부 플레이 링크가 없습니다.</p>
+                @if (Model.IsOwner)
+                {
+                    <a asp-page="/Games/Edit" asp-route-id="@Model.Game.Id" class="button-outline w-full">플레이 링크 등록</a>
+                }
+            }
+            else
+            {
+                <p class="ivory-external-note">외부 사이트로 이동합니다.</p>
+                @for (var index = 0; index < Model.PlayLinks.Count; index++)
+                {
+                    var link = Model.PlayLinks[index];
+                    <a href="@link.Url"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="@(index == 0 ? "button-primary" : "button-outline") w-full">
+                        @link.DisplayName ↗
+                    </a>
+                    <span class="ivory-play-meta">
+                        @link.ProviderText
+                        @if (link.TargetPlatformText is { } platform)
+                        {
+                            <span>· @platform</span>
                         }
                     </span>
-                    @* Hiding this button is only UX; the service enforces ownership and status. *@
-                    @if (request.IsCancellable)
+                }
+            }
+
+            <div class="ivory-side-actions">
+                @if (Model.CanManageFavorite)
+                {
+                    @if (Model.IsFavorite)
                     {
-                        <form method="post"
-                              asp-page-handler="CancelRequest"
-                              asp-route-id="@Model.Game.Id"
-                              asp-route-requestId="@request.Id"
-                              data-confirm-title="피드백 요청 취소"
-                              data-confirm-message="이 요청을 취소하면 대기열에서 제거되며 사용한 크레딧은 반환됩니다. 취소할까요?"
-                              data-confirm-label="요청 취소">
-                            <button type="submit" class="button-danger button-small">취소</button>
+                        <form method="post" asp-page-handler="Unfavorite" asp-route-id="@Model.Game.Id">
+                            <button type="submit" class="button-outline w-full">관심 게임 제거</button>
                         </form>
                     }
-                </div>
-            }
-        </div>
-    }
-    <p><a asp-page="/Games/Feedback" asp-route-id="@Model.Game.Id" class="text-link">받은 피드백 보기</a></p>
-}
-else
-{
-    <p class="mt-6 text-slate-500">대기 중인 피드백 요청 @(Model.PendingRequestCount)개</p>
-}
-
-<h2 class="subsection-title mt-8">예약된 드롭</h2>
-@if (Model.Drops.Count == 0)
-{
-    <div class="empty-state empty-state-compact" data-empty-state="key-drops">
-        <div class="empty-state-icon" aria-hidden="true">◇</div>
-        <h3 class="empty-state-title">예약된 드롭 없음</h3>
-        <p class="empty-state-description">게임 키 배포가 예약되면 오픈 시각과 재고 상태를 이곳에서 확인할 수 있습니다.</p>
-        @if (Model.IsOwner)
-        {
-            <div class="empty-state-actions">
-                <a asp-page="/KeyDrops/New" asp-route-gameId="@Model.Game.Id" class="button-outline">드롭 예약하기</a>
-            </div>
-        }
-    </div>
-}
-else
-{
-    <div class="surface-list">
-        @foreach (var drop in Model.Drops)
-        {
-            <div class="surface-item">
-                <div class="flex items-center justify-between gap-4">
-                    <a asp-page="/KeyDrops/Detail"
-                       asp-route-id="@drop.Id"
-                       class="text-link">
-                        @drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                    </a>
-                    <span class="text-sm text-slate-500">
-                        @drop.RemainingKeys/@drop.TotalKeys 남음
-                    </span>
-                    @if (drop.CanClaim)
-                    {
-                        <span class="badge-success">@drop.StatusText</span>
-                    }
                     else
                     {
-                        <span class="badge-neutral">@drop.StatusText</span>
+                        <form method="post" asp-page-handler="Favorite" asp-route-id="@Model.Game.Id">
+                            <button type="submit" class="button-outline w-full">관심 게임 추가</button>
+                        </form>
                     }
-                    @if (Model.IsOwner && (drop.CanAddInventory || drop.CanCloseEarly))
+                }
+                else
+                {
+                    <a asp-page="/Login"
+                       asp-route-returnUrl="@($"/Games/Detail/{Model.Game.Id}")"
+                       class="button-outline w-full">로그인 후 관심 게임 추가</a>
+                }
+            </div>
+        </section>
+
+        @if (Model.IsOwner)
+        {
+            <section class="ivory-side-card ivory-side-card-accent" aria-labelledby="owner-tools-heading">
+                <p class="ivory-side-label">OWNER TOOLS</p>
+                <h2 id="owner-tools-heading">게임 관리</h2>
+                <div class="ivory-owner-actions">
+                    <a asp-page="/Games/Edit" asp-route-id="@Model.Game.Id" class="button-outline">게임 수정</a>
+                    @if (Model.CanManageMedia)
                     {
-                        <span class="flex flex-wrap items-center gap-2">
-                            @if (drop.CanAddInventory)
+                        <a asp-page="/Games/Media" asp-route-id="@Model.Game.Id" class="button-outline">미디어 관리</a>
+                    }
+                    <a asp-page="/KeyDrops/New" asp-route-gameId="@Model.Game.Id" class="button-outline">드롭 예약</a>
+                    <form method="post" asp-page-handler="RequestFeedback" asp-route-id="@Model.Game.Id">
+                        <input type="hidden" name="operationId" value="@Model.RequestOperationId" />
+                        <button type="submit" class="button-primary w-full">피드백 요청</button>
+                    </form>
+                </div>
+            </section>
+        }
+        else if (Model.PendingRequestCount > 0)
+        {
+            <section class="ivory-side-card ivory-side-card-accent">
+                <p class="ivory-side-label">FEEDBACK WANTED</p>
+                <h2>피드백 모집 중</h2>
+                <p class="ivory-side-copy">대기 중인 피드백 요청 @Model.PendingRequestCount.ToString(System.Globalization.CultureInfo.InvariantCulture)개</p>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a asp-page="/Reviews/Index" class="button-primary w-full">리뷰 작업 보기</a>
+                }
+                else
+                {
+                    <a asp-page="/Login" class="button-primary w-full">로그인하고 참여하기</a>
+                }
+            </section>
+        }
+
+        <section class="ivory-side-card" aria-labelledby="game-details-heading">
+            <p class="ivory-side-label">DETAILS</p>
+            <h2 id="game-details-heading" class="sr-only">게임 상세 정보</h2>
+            <dl class="ivory-detail-facts">
+                <div><dt>장르</dt><dd>@Model.Classifications.Genre.DisplayName</dd></div>
+                <div><dt>등록일</dt><dd>@Model.Game.CreatedAt.ToLocalTime().ToString("yyyy.MM.dd")</dd></div>
+                <div><dt>태그</dt><dd>@(Model.Classifications.Tags.Count == 0 ? "없음" : $"{Model.Classifications.Tags.Count}개")</dd></div>
+                <div><dt>플랫폼</dt><dd>@(Model.Classifications.Platforms.Count == 0 ? "없음" : $"{Model.Classifications.Platforms.Count}개")</dd></div>
+            </dl>
+        </section>
+
+        <section class="ivory-side-card" aria-labelledby="scheduled-drops-heading">
+            <div class="ivory-side-card-heading">
+                <div>
+                    <p class="ivory-side-label">KEY DROPS</p>
+                    <h2 id="scheduled-drops-heading">예약된 드롭</h2>
+                </div>
+                @if (Model.IsOwner)
+                {
+                    <a asp-page="/KeyDrops/New" asp-route-gameId="@Model.Game.Id">예약 →</a>
+                }
+            </div>
+            @if (Model.Drops.Count == 0)
+            {
+                <p class="ivory-side-copy">예약된 드롭 없음</p>
+            }
+            else
+            {
+                <div class="ivory-drop-list">
+                    @foreach (var drop in Model.Drops)
+                    {
+                        <div class="ivory-drop-item">
+                            <a asp-page="/KeyDrops/Detail" asp-route-id="@drop.Id">
+                                @drop.OpensAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")
+                            </a>
+                            <span>@drop.RemainingKeys/@drop.TotalKeys 남음 · @drop.StatusText</span>
+                            @if (Model.IsOwner && (drop.CanAddInventory || drop.CanCloseEarly))
                             {
-                                <a asp-page="/KeyDrops/AddKeys"
-                                   asp-route-id="@drop.Id"
-                                   class="button-link">키 추가</a>
+                                <span class="ivory-drop-actions">
+                                    @if (drop.CanAddInventory)
+                                    {
+                                        <a asp-page="/KeyDrops/AddKeys" asp-route-id="@drop.Id">키 추가</a>
+                                    }
+                                    @if (drop.CanCloseEarly)
+                                    {
+                                        <a asp-page="/KeyDrops/Close" asp-route-id="@drop.Id">조기 마감</a>
+                                    }
+                                </span>
                             }
-                            @if (drop.CanCloseEarly)
-                            {
-                                <a asp-page="/KeyDrops/Close"
-                                   asp-route-id="@drop.Id"
-                                   class="button-danger button-small">조기 마감</a>
-                            }
-                        </span>
+                        </div>
                     }
                 </div>
-            </div>
-        }
-    </div>
-}
-
-<a asp-page="/Games/Index" class="text-link mt-6 inline-block">← 목록으로</a>
+            }
+        </section>
+    </aside>
+</div>
