@@ -1856,6 +1856,71 @@
     @apply mb-4 mt-2 text-xs text-[#6b6357];
   }
 
+  .site-main-confirm {
+    @apply max-w-[760px] py-6 lg:py-6;
+  }
+
+  .ivory-confirm-card {
+    @apply rounded-[10px] border border-[#e3c9b5] bg-white p-7 text-center;
+  }
+
+  .ivory-confirm-symbol {
+    @apply mx-auto mb-3 flex size-11 items-center justify-center rounded-full bg-[#fdefe9] font-mono text-xl font-bold text-brand-primary;
+  }
+
+  .ivory-confirm-card h2 {
+    @apply mt-2 text-xl font-semibold tracking-[-0.02em] text-brand-ink;
+  }
+
+  .ivory-confirm-metrics {
+    @apply my-6 grid grid-cols-3 overflow-hidden rounded-[7px] border border-[#e6d7bd] text-left;
+  }
+
+  .ivory-confirm-metrics > div {
+    @apply bg-[#faf5eb] p-3;
+  }
+
+  .ivory-confirm-metrics > div + div {
+    @apply border-l border-[#e6d7bd];
+  }
+
+  .ivory-confirm-metrics dt {
+    @apply font-mono text-[9px] tracking-[0.06em] text-[#8c7d67];
+  }
+
+  .ivory-confirm-metrics dd {
+    @apply mt-1.5 text-sm font-semibold text-brand-ink;
+  }
+
+  .ivory-confirm-warning {
+    @apply rounded-[7px] border border-[#e9b9a9] bg-[#fdefe9] p-4 text-left;
+  }
+
+  .ivory-confirm-warning strong {
+    @apply text-xs font-semibold text-brand-primary;
+  }
+
+  .ivory-confirm-warning ul {
+    @apply mt-2 space-y-1 text-[11px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-confirm-warning li {
+    @apply relative pl-3;
+  }
+
+  .ivory-confirm-warning li::before {
+    content: "·";
+    @apply absolute left-0;
+  }
+
+  .ivory-confirm-actions {
+    @apply mt-5 flex items-center justify-end gap-3 border-t border-[#efe4d0] pt-5;
+  }
+
+  .ivory-confirm-unavailable {
+    @apply mt-6 rounded-[7px] border border-[#e6d7bd] bg-[#faf5eb] px-4 py-3 text-xs text-[#6b6357];
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
