@@ -930,6 +930,173 @@
     @apply mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-brand-ink/10 pt-4;
   }
 
+  .site-main-queue {
+    @apply max-w-[1080px] py-6 lg:py-6;
+  }
+
+  .ivory-page-heading {
+    @apply mb-5 flex items-end justify-between gap-6;
+  }
+
+  .ivory-page-heading h1 {
+    @apply text-[27px] font-bold tracking-[-0.03em] text-brand-ink;
+  }
+
+  .ivory-page-heading p {
+    @apply mt-1.5 max-w-2xl text-[13.5px] text-[#6b6357];
+  }
+
+  .ivory-credit-chip {
+    @apply inline-flex min-h-[31px] shrink-0 items-center gap-2 rounded-[5px] border border-[#f0c6b8] bg-[#fdf0e8] px-3 font-mono text-xs font-semibold text-brand-primary hover:border-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary;
+  }
+
+  .ivory-credit-chip > span {
+    @apply size-1.5 rounded-full bg-brand-primary;
+  }
+
+  .ivory-queue-tabs {
+    @apply mb-3 flex gap-0.5 font-mono text-[11px] tracking-[0.06em] text-[#a3937b];
+  }
+
+  .ivory-queue-tabs > span {
+    @apply rounded-[4px] px-3 py-1.5;
+  }
+
+  .ivory-queue-tabs .ivory-queue-tab-active {
+    @apply border border-[#f0c6b8] bg-[#fdf0e8] font-semibold text-brand-primary;
+  }
+
+  .ivory-queue-table {
+    @apply overflow-hidden rounded-[10px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-queue-table-head,
+  .ivory-queue-row {
+    @apply grid items-center gap-3.5;
+    grid-template-columns: minmax(0, 1fr) 116px 96px 112px;
+  }
+
+  .ivory-queue-table-head {
+    @apply border-b border-[#e6d7bd] bg-brand-soft px-4 py-2.5 font-mono text-[10px] tracking-[0.08em] text-[#a3937b];
+  }
+
+  .ivory-queue-row {
+    @apply px-4 py-3;
+  }
+
+  .ivory-queue-row + .ivory-queue-row {
+    @apply border-t border-[#efe4d0];
+  }
+
+  .ivory-queue-game {
+    @apply flex min-w-0 items-center gap-2.5;
+  }
+
+  .ivory-queue-cover {
+    @apply h-[26px] w-[42px] shrink-0 rounded-[4px] border border-[#e6d7bd];
+    background: repeating-linear-gradient(135deg, #f0e4cf 0 6px, #e8d9c0 6px 12px);
+  }
+
+  .ivory-queue-game > span:last-child {
+    @apply flex min-w-0 flex-col;
+  }
+
+  .ivory-queue-game strong {
+    @apply truncate text-[13px] font-semibold tracking-[-0.01em];
+  }
+
+  .ivory-queue-game small,
+  .ivory-queue-row time {
+    @apply font-mono text-[10.5px] text-[#a3937b];
+  }
+
+  .ivory-queue-row .ivory-time-urgent {
+    @apply text-brand-primary;
+  }
+
+  .ivory-queue-actions {
+    @apply mt-5 grid grid-cols-2 gap-3.5;
+  }
+
+  .ivory-queue-action-primary,
+  .ivory-queue-action-secondary {
+    @apply rounded-[10px] border border-[#e6d7bd] p-4;
+  }
+
+  .ivory-queue-action-primary {
+    @apply bg-brand-soft;
+  }
+
+  .ivory-queue-action-secondary {
+    @apply bg-white;
+  }
+
+  .ivory-queue-actions h2 {
+    @apply text-[15px] font-semibold tracking-[-0.01em];
+  }
+
+  .ivory-queue-actions p {
+    @apply mt-1.5 text-[12.5px] text-[#6b6357];
+  }
+
+  .ivory-queue-actions form {
+    @apply mt-3;
+  }
+
+  .ivory-queue-section {
+    @apply mt-7;
+  }
+
+  .ivory-history-list {
+    @apply overflow-hidden rounded-[9px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-history-row {
+    @apply grid items-center gap-3 px-4 py-3 text-[12.5px];
+    grid-template-columns: minmax(0, 1fr) 150px 150px 64px;
+  }
+
+  .ivory-history-row + .ivory-history-row {
+    @apply border-t border-[#efe4d0];
+  }
+
+  .ivory-history-row time {
+    @apply font-mono text-[10.5px] text-[#a3937b];
+  }
+
+  .ivory-waiting-grid {
+    @apply grid grid-cols-3 gap-3;
+  }
+
+  .ivory-waiting-card {
+    @apply overflow-hidden rounded-lg border border-[#e6d7bd] bg-white transition-colors hover:border-brand-primary;
+  }
+
+  .ivory-waiting-cover {
+    @apply flex h-20 items-start justify-start p-2 font-mono text-[9px] tracking-[0.07em] text-[#a3937b];
+    background: repeating-linear-gradient(135deg, #f0e4cf 0 7px, #e8d9c0 7px 14px);
+  }
+
+  .ivory-waiting-card > div {
+    @apply p-3;
+  }
+
+  .ivory-waiting-card h3 {
+    @apply text-[13px] font-semibold;
+  }
+
+  .ivory-waiting-card p {
+    @apply mt-1 text-[11.5px] text-[#6b6357];
+  }
+
+  .ivory-waiting-card p a {
+    @apply text-brand-primary hover:text-brand-primary-hover;
+  }
+
+  .ivory-waiting-card time {
+    @apply mt-2 block font-mono text-[10px] text-[#a3937b];
+  }
+
   .feedback-body {
     @apply mt-4 whitespace-pre-wrap rounded-xl bg-brand-canvas p-4 leading-7 text-brand-ink/80;
     overflow-wrap: anywhere;

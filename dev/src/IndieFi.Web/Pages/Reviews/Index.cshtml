@@ -2,89 +2,114 @@
 @model IndexModel
 @{
     ViewData["Title"] = "리뷰 작업";
+    ViewData["MainClass"] = "site-main-queue";
+    var completedCount = Model.AssignmentHistory.Count(item => item.IsCompleted);
+    var expiredCount = Model.AssignmentHistory.Count - completedCount;
 }
 
-<header class="page-heading">
-    <div class="page-heading-copy">
-        <h1 class="page-title">리뷰 작업</h1>
-        <p class="page-description">배정받은 작업의 마감을 확인하고, 다른 개발자에게 도움이 되는 피드백을 남겨 보세요.</p>
+<header class="ivory-page-heading">
+    <div>
+        <h1>리뷰 작업</h1>
+        <p>작업은 한 번에 하나씩 배정됩니다. 마감 전에 플레이 경험을 구체적인 피드백으로 남겨 주세요.</p>
     </div>
+    <a asp-page="/Credits/Index" class="ivory-credit-chip">
+        <span aria-hidden="true"></span>
+        내 크레딧 보기
+    </a>
 </header>
 
 @if (Model.ClaimMessage is { } claimMessage)
 {
-    <div class="@(claimMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">
-        @claimMessage.Message
-    </div>
+    <div class="@(claimMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">@claimMessage.Message</div>
 }
-
 @if (Model.SubmitMessage is { } submitMessage)
 {
-    <div class="@(submitMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">
-        @submitMessage.Message
-    </div>
+    <div class="@(submitMessage.IsSuccess ? "alert-success" : "alert-warning")" role="status">@submitMessage.Message</div>
 }
-
 @if (Model.SweepMessage is { } sweepMessage)
 {
-    <div class="@(sweepMessage.IsSuccess ? "alert-success" : "alert-neutral")" role="status">
-        @sweepMessage.Message
-    </div>
+    <div class="@(sweepMessage.IsSuccess ? "alert-success" : "alert-neutral")" role="status">@sweepMessage.Message</div>
 }
 
-@if (Model.MyAssignments.Count > 0)
-{
-    <section class="mb-8">
-        <h2 class="section-title">내가 받은 작업 @(Model.MyAssignments.Count)개</h2>
-        <div class="workflow-card-grid">
+<div class="ivory-queue-tabs" aria-label="리뷰 작업 상태 요약">
+    <span class="ivory-queue-tab-active">ACTIVE · @Model.MyAssignments.Count</span>
+    <span>SUBMITTED · @completedCount</span>
+    <span>EXPIRED · @expiredCount</span>
+</div>
+
+<section aria-labelledby="active-assignments-heading">
+    <h2 id="active-assignments-heading" class="sr-only">내가 받은 작업</h2>
+    @if (Model.MyAssignments.Count == 0)
+    {
+        <div class="empty-state empty-state-compact" data-empty-state="active-review-assignments">
+            <div class="empty-state-icon" aria-hidden="true">◇</div>
+            <h3 class="empty-state-title">진행 중인 리뷰 작업이 없습니다.</h3>
+            <p class="empty-state-description">아래에서 새 리뷰 작업을 배정받을 수 있습니다.</p>
+        </div>
+    }
+    else
+    {
+        <div class="ivory-queue-table">
+            <div class="ivory-queue-table-head" aria-hidden="true">
+                <span>GAME</span><span>DEADLINE</span><span>STATUS</span><span></span>
+            </div>
             @foreach (var assignment in Model.MyAssignments)
             {
                 var isOverdue = assignment.LeasedUntil <= DateTimeOffset.UtcNow;
-                <article class="workflow-card @(isOverdue ? "workflow-card-urgent" : null)">
-                    <div class="flex items-start justify-between gap-4">
-                        <h3 class="text-lg font-bold text-brand-ink">@assignment.GameTitle</h3>
-                        <span class="@(isOverdue ? "badge-warning" : "badge-success")">
-                            @(isOverdue ? "마감 지남" : "진행 중")
+                <article class="ivory-queue-row">
+                    <div class="ivory-queue-game">
+                        <span class="ivory-queue-cover" aria-hidden="true"></span>
+                        <span>
+                            <strong>@assignment.GameTitle</strong>
+                            <small>배정 @assignment.AssignedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")</small>
                         </span>
                     </div>
-                    <div class="mt-3 text-meta">
-                        배정 @assignment.AssignedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                        <span class="mt-1 block font-medium">마감 @assignment.LeasedUntil.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
-                    </div>
+                    <time class="@(isOverdue ? "ivory-time-urgent" : null)"
+                          datetime="@assignment.LeasedUntil.ToString("O")">
+                        @assignment.LeasedUntil.ToLocalTime().ToString("MM.dd HH:mm")
+                    </time>
+                    <span class="@(isOverdue ? "badge-warning" : "badge-success")">
+                        @(isOverdue ? "마감 지남" : "진행 중")
+                    </span>
                     @if (!isOverdue)
                     {
-                        <div class="workflow-card-footer">
-                            <span class="text-meta">제출 전까지 내용을 수정할 수 있습니다.</span>
-                            <a asp-page="Submit"
-                               asp-route-assignmentId="@assignment.AssignmentId"
-                               class="button-primary button-small">피드백 쓰기</a>
-                        </div>
+                        <a asp-page="Submit"
+                           asp-route-assignmentId="@assignment.AssignmentId"
+                           class="button-primary button-small">피드백 쓰기</a>
+                    }
+                    else
+                    {
+                        <span class="text-meta">정리 필요</span>
                     }
                 </article>
             }
         </div>
-    </section>
-}
+    }
+</section>
 
-<section class="workflow-action-panel" aria-labelledby="review-claim-heading">
-    <div>
-        <h2 id="review-claim-heading" class="subsection-title">새 리뷰 시작하기</h2>
-        <p class="text-meta">대기 중인 요청에서 조건에 맞는 작업 하나를 배정받습니다.</p>
-    </div>
-    <div class="button-group">
+<div class="ivory-queue-actions">
+    <section class="ivory-queue-action-primary" aria-labelledby="review-claim-heading">
+        <h2 id="review-claim-heading">새 리뷰를 시작할까요?</h2>
+        <p>대기 중인 요청에서 현재 조건에 맞는 작업 하나를 배정받습니다.</p>
         <form method="post" asp-page-handler="Claim">
             <input type="hidden" name="operationId" value="@Model.ClaimOperationId" />
             <button type="submit" class="button-primary">리뷰 작업 받기</button>
         </form>
-
+    </section>
+    <section class="ivory-queue-action-secondary">
+        <h2>마감된 작업 정리</h2>
+        <p>기한이 지난 배정을 반환해 다른 리뷰어가 작업을 받을 수 있게 합니다.</p>
         <form method="post" asp-page-handler="Sweep">
-            <button type="submit" class="button-secondary">마감 지난 작업 정리</button>
+            <button type="submit" class="button-outline">마감 지난 작업 정리</button>
         </form>
-    </div>
-</section>
+    </section>
+</div>
 
-<section class="mb-8">
-    <h2 class="section-title">내 작업 이력 @(Model.AssignmentHistory.Count)개</h2>
+<section class="ivory-queue-section" aria-labelledby="review-history-heading">
+    <div class="ivory-section-heading">
+        <h2 id="review-history-heading">내 작업 이력</h2>
+        <span>@Model.AssignmentHistory.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)개</span>
+    </div>
     @if (Model.AssignmentHistory.Count == 0)
     {
         <div class="empty-state empty-state-compact" data-empty-state="review-history">
@@ -95,29 +120,25 @@
     }
     else
     {
-        <div class="surface-list">
+        <div class="ivory-history-list">
             @foreach (var assignment in Model.AssignmentHistory)
             {
-                <div class="surface-item">
-                    <div class="flex items-center justify-between gap-4">
-                        <div class="font-semibold">@assignment.GameTitle</div>
-                        <span class="@(assignment.IsCompleted ? "badge-success" : "badge-neutral")">
-                            @assignment.StatusText
-                        </span>
-                    </div>
-                    <div class="text-meta mt-1">
-                        배정 @assignment.AssignedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                        · @assignment.StatusText @assignment.EndedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-                    </div>
+                <div class="ivory-history-row">
+                    <strong>@assignment.GameTitle</strong>
+                    <time datetime="@assignment.AssignedAt.ToString("O")">@assignment.AssignedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")</time>
+                    <time datetime="@assignment.EndedAt.ToString("O")">@assignment.EndedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")</time>
+                    <span class="@(assignment.IsCompleted ? "badge-success" : "badge-neutral")">@assignment.StatusText</span>
                 </div>
             }
         </div>
     }
 </section>
 
-<section>
-    <h2 class="section-title">피드백을 기다리는 게임 @(Model.Items.Count)개</h2>
-
+<section class="ivory-queue-section" aria-labelledby="review-queue-heading">
+    <div class="ivory-section-heading">
+        <h2 id="review-queue-heading">피드백을 기다리는 게임</h2>
+        <span>@Model.Items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)개</span>
+    </div>
     @if (Model.Items.Count == 0)
     {
         <div class="empty-state empty-state-compact" data-empty-state="review-queue">
@@ -128,18 +149,19 @@
     }
     else
     {
-        <div class="surface-list">
+        <div class="ivory-waiting-grid">
             @foreach (var item in Model.Items)
             {
-                <div class="surface-item">
-                    <div class="font-semibold">@item.GameTitle</div>
-                    <div class="text-meta">
-                        <a asp-page="/Profiles/Detail"
-                           asp-route-id="@item.RequesterId"
-                           class="text-link">@item.RequesterDisplayName</a>
-                        · @item.RequestedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                <article class="ivory-waiting-card">
+                    <span class="ivory-waiting-cover" aria-hidden="true">COVER</span>
+                    <div>
+                        <h3>@item.GameTitle</h3>
+                        <p>
+                            by <a asp-page="/Profiles/Detail" asp-route-id="@item.RequesterId">@item.RequesterDisplayName</a>
+                        </p>
+                        <time datetime="@item.RequestedAt.ToString("O")">@item.RequestedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm") 요청</time>
                     </div>
-                </div>
+                </article>
             }
         </div>
     }
