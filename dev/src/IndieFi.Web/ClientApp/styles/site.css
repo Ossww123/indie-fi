@@ -1566,6 +1566,143 @@
     @apply mt-1 block font-mono text-[9.5px] text-[#8c7d67];
   }
 
+  .site-main-media {
+    @apply max-w-[1160px] py-6 lg:py-6;
+  }
+
+  .ivory-media-notice {
+    @apply mb-4 flex items-start gap-3 rounded-[7px] border border-[#e6d7bd] bg-[#f4e8d3] px-4 py-3 text-xs leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-media-notice > span {
+    @apply flex size-5 shrink-0 items-center justify-center rounded-full border border-[#cdbb9d] font-mono text-[10px] font-semibold text-[#7f715c];
+  }
+
+  .ivory-media-client-status {
+    @apply mb-4 rounded-[6px] border border-[#e6d7bd] bg-white px-4 py-3 text-xs;
+  }
+
+  .ivory-media-layout {
+    @apply grid items-start gap-5;
+    grid-template-columns: minmax(0, 1fr) 330px;
+  }
+
+  .ivory-media-panel {
+    @apply rounded-[10px] border border-[#e6d7bd] bg-white p-5;
+  }
+
+  .ivory-media-panel-heading {
+    @apply mb-4 flex items-start justify-between gap-4 border-b border-[#efe4d0] pb-4;
+  }
+
+  .ivory-media-panel-heading h2 {
+    @apply mt-1 text-lg font-semibold tracking-[-0.02em] text-brand-ink;
+  }
+
+  .ivory-media-panel-heading p:last-child {
+    @apply mt-1 text-[11px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-media-panel-heading > strong {
+    @apply rounded-[5px] bg-[#fdefe9] px-2.5 py-1 font-mono text-[10px] text-brand-primary;
+  }
+
+  .ivory-media-upload,
+  .ivory-cover-upload {
+    @apply mb-5 grid items-end gap-2 rounded-[7px] border border-dashed border-[#d8c7aa] bg-[#faf5eb] p-3;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .ivory-cover-upload {
+    @apply mb-0 mt-4;
+    grid-template-columns: 1fr;
+  }
+
+  .ivory-media-upload .field-group,
+  .ivory-cover-upload .field-group {
+    @apply gap-1;
+  }
+
+  .ivory-media-upload .field-input,
+  .ivory-cover-upload .field-input {
+    @apply rounded-[5px] border-[#d8c7aa] bg-white text-[11px];
+  }
+
+  .ivory-screenshot-grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  .ivory-media-card {
+    @apply overflow-hidden rounded-[7px] border border-[#e6d7bd] bg-[#fffdfa];
+  }
+
+  .ivory-media-preview-stage,
+  .ivory-cover-preview {
+    @apply flex aspect-[16/10] items-center justify-center overflow-hidden bg-[#eadcc5] font-mono text-[9px] tracking-[0.08em] text-[#9c8d76];
+  }
+
+  .ivory-media-preview-stage img,
+  .ivory-cover-preview img {
+    @apply size-full max-w-none rounded-none object-cover;
+  }
+
+  .ivory-media-card-copy {
+    @apply space-y-2 p-3;
+  }
+
+  .ivory-media-card-copy > div:first-child {
+    @apply flex flex-wrap items-center gap-2 text-xs;
+  }
+
+  .ivory-media-card-copy > p:not(.field-error),
+  .ivory-media-card-copy time {
+    @apply block font-mono text-[9.5px] leading-relaxed text-[#8c7d67];
+  }
+
+  .ivory-media-card-copy [data-media-actions] {
+    @apply mt-2 flex flex-wrap gap-1.5 border-t border-[#efe4d0] pt-2;
+  }
+
+  .ivory-media-empty {
+    @apply col-span-2 flex min-h-56 flex-col items-center justify-center rounded-[7px] border border-dashed border-[#d8c7aa] bg-[#faf5eb] px-6 text-center;
+  }
+
+  .ivory-media-empty > span {
+    @apply mb-3 font-mono text-xl text-[#c4b497];
+  }
+
+  .ivory-media-empty strong {
+    @apply text-sm font-semibold text-brand-ink;
+  }
+
+  .ivory-media-empty p {
+    @apply mt-2 max-w-sm text-[11px] leading-relaxed text-[#7f715c];
+  }
+
+  .ivory-media-sidebar {
+    @apply sticky top-24 space-y-3;
+  }
+
+  .ivory-cover-list {
+    @apply space-y-3;
+  }
+
+  .ivory-cover-card {
+    @apply overflow-hidden rounded-[7px] border border-[#e6d7bd] bg-[#fffdfa];
+  }
+
+  .ivory-cover-empty {
+    @apply flex aspect-[16/10] flex-col items-center justify-center rounded-[7px] border border-dashed border-[#d8c7aa] bg-[#eadcc5] text-center;
+  }
+
+  .ivory-cover-empty span {
+    @apply font-mono text-[10px] tracking-[0.12em] text-[#9c8d76];
+  }
+
+  .ivory-cover-empty p {
+    @apply mt-2 text-[11px] text-[#7f715c];
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
