@@ -2738,6 +2738,25 @@
     @apply rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] text-white/80 backdrop-blur-sm;
   }
 
+  .ivory-auth-privacy {
+    @apply mt-4 flex items-start gap-2 rounded-[7px] border border-[#e6d7bd] bg-[#f4e8d3] p-3;
+  }
+
+  .ivory-auth-privacy > span {
+    @apply shrink-0 font-mono text-brand-primary;
+  }
+
+  .ivory-auth-privacy p {
+    @apply text-[10.5px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-auth-visual-signup {
+    background-image:
+      radial-gradient(circle at 28% 25%, rgb(196 64 47 / 70%), transparent 21%),
+      radial-gradient(circle at 76% 70%, rgb(207 143 77 / 42%), transparent 29%),
+      linear-gradient(145deg, #41281f, #191613 72%);
+  }
+
   .auth-state-actions {
     @apply flex flex-col gap-2 sm:flex-row;
   }
