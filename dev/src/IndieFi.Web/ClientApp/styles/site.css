@@ -1106,6 +1106,95 @@
     @apply mt-5 rounded-xl border border-brand-primary/15 bg-brand-soft/20 p-4 sm:p-5;
   }
 
+  .site-main-review {
+    @apply max-w-[1160px] py-6 lg:py-6;
+  }
+
+  .ivory-review-layout {
+    @apply grid items-start gap-[26px];
+    grid-template-columns: minmax(0, 1fr) 296px;
+  }
+
+  .ivory-review-editor {
+    @apply min-w-0;
+  }
+
+  .ivory-review-heading {
+    @apply mb-5;
+  }
+
+  .ivory-assignment-badge {
+    @apply inline-flex rounded-[4px] border border-[#f0c6b8] bg-[#fdefe9] px-2 py-1 font-mono text-[10px] font-semibold tracking-[0.08em] text-brand-primary;
+  }
+
+  .ivory-review-heading h1 {
+    @apply mt-3 text-[27px] font-bold tracking-[-0.03em];
+  }
+
+  .ivory-review-heading p {
+    @apply mt-2 max-w-3xl text-[13.5px] text-[#6b6357];
+  }
+
+  .ivory-review-prompt {
+    @apply mb-[22px] rounded-[9px] border border-[#e6d7bd] bg-brand-soft p-4;
+  }
+
+  .ivory-review-prompt > p:last-child {
+    @apply text-[14px] text-[#3d3831];
+    line-height: 1.65;
+  }
+
+  .ivory-review-form {
+    @apply rounded-[10px] border border-[#e6d7bd] bg-white p-[18px];
+  }
+
+  .ivory-review-label-row {
+    @apply mb-2 flex items-baseline justify-between gap-3;
+  }
+
+  .ivory-review-textarea {
+    @apply min-h-[300px] resize-y rounded-[7px] p-3 text-[13.5px];
+    line-height: 1.65;
+  }
+
+  .ivory-review-submit-row {
+    @apply mt-[18px] flex items-center gap-2.5 border-t border-[#e6d7bd] pt-[18px];
+  }
+
+  .ivory-review-sidebar {
+    @apply sticky top-[78px] flex flex-col gap-3;
+  }
+
+  .ivory-review-game-cover {
+    @apply -m-[15px] mb-3 flex aspect-[16/10] items-center justify-center rounded-t-[9px] border-b border-[#e6d7bd] font-mono text-[9px] tracking-[0.08em] text-[#a3937b];
+    background: repeating-linear-gradient(135deg, #f0e4cf 0 7px, #e8d9c0 7px 14px);
+  }
+
+  .ivory-review-game-copy h2 {
+    @apply text-[14px] font-semibold;
+  }
+
+  .ivory-review-game-copy > p:last-child {
+    @apply mt-1 text-[11.5px] text-[#6b6357];
+  }
+
+  .ivory-review-deadline {
+    @apply block font-mono text-[15px] font-semibold text-brand-primary;
+  }
+
+  .ivory-review-checklist {
+    @apply mt-2.5 space-y-2 text-[11.5px] text-[#6b6357];
+  }
+
+  .ivory-review-checklist li {
+    @apply flex gap-2;
+  }
+
+  .ivory-review-checklist li::before {
+    @apply text-brand-primary;
+    content: "✓";
+  }
+
   .drop-overview {
     @apply mb-6 overflow-hidden rounded-2xl border border-brand-primary/15 p-5 shadow-sm sm:p-7;
     background: linear-gradient(135deg, #ffffff 10%, #f4edf8 62%, #edf6f5 100%);
