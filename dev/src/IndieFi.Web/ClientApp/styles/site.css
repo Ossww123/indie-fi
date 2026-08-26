@@ -2798,6 +2798,13 @@
     @apply mb-4 text-[11px] leading-relaxed;
   }
 
+  .ivory-auth-visual-reset {
+    background-image:
+      radial-gradient(circle at 38% 30%, rgb(194 79 57 / 72%), transparent 22%),
+      radial-gradient(circle at 76% 72%, rgb(205 157 89 / 38%), transparent 30%),
+      linear-gradient(145deg, #3d261f, #191613 70%);
+  }
+
   .auth-state-actions {
     @apply flex flex-col gap-2 sm:flex-row;
   }
