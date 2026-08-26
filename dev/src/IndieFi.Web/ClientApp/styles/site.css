@@ -2251,6 +2251,85 @@
     @apply mt-2 text-[11px] leading-relaxed text-[#6b6357];
   }
 
+  .ivory-preferences-form {
+    @apply overflow-hidden rounded-[10px] border border-[#e6d7bd] bg-white;
+  }
+
+  .ivory-preferences-heading {
+    @apply flex items-center justify-between border-b border-[#e6d7bd] px-5 py-4;
+  }
+
+  .ivory-preferences-heading h2 {
+    @apply mt-1 text-[15px] font-semibold text-brand-ink;
+  }
+
+  .ivory-preferences-heading > div:first-child > p:last-child {
+    @apply mt-1 text-[11px] text-[#6b6357];
+  }
+
+  .ivory-channel-legend {
+    @apply flex gap-2;
+  }
+
+  .ivory-channel-legend span {
+    @apply rounded-[4px] border border-[#e6d7bd] bg-[#faf5eb] px-2 py-1 font-mono text-[9px] tracking-[0.06em] text-[#8c7d67];
+  }
+
+  .ivory-preferences-table {
+    @apply overflow-x-auto;
+  }
+
+  .ivory-preferences-table table {
+    @apply min-w-full border-collapse;
+  }
+
+  .ivory-preferences-table thead {
+    @apply bg-[#f4e8d3];
+  }
+
+  .ivory-preferences-table th {
+    @apply border-b border-[#e6d7bd] px-4 py-3 text-left font-mono text-[9.5px] font-semibold tracking-[0.06em] text-[#7f715c];
+  }
+
+  .ivory-preferences-table th:nth-child(2),
+  .ivory-preferences-table th:nth-child(3),
+  .ivory-preferences-table td:nth-child(2),
+  .ivory-preferences-table td:nth-child(3) {
+    @apply w-20 text-center;
+  }
+
+  .ivory-preferences-table tbody tr + tr {
+    @apply border-t border-[#efe4d0];
+  }
+
+  .ivory-preferences-table tbody tr:hover {
+    @apply bg-[#fffaf3];
+  }
+
+  .ivory-preferences-table td {
+    @apply px-4 py-3 text-xs text-[#6b6357];
+  }
+
+  .ivory-preferences-table td:first-child strong {
+    @apply mr-2 text-[12.5px] font-semibold text-brand-ink;
+  }
+
+  .ivory-preferences-table td:first-child small {
+    @apply mt-1 block font-mono text-[9px] text-[#a3937b];
+  }
+
+  .ivory-preferences-table td:last-child {
+    @apply font-mono text-[9.5px] text-[#8c7d67];
+  }
+
+  .ivory-preferences-table td:last-child span {
+    @apply block;
+  }
+
+  .ivory-preferences-actions {
+    @apply flex items-center justify-end gap-3 border-t border-[#e6d7bd] bg-[#faf5eb] px-5 py-4;
+  }
+
   .empty-state {
     @apply rounded-2xl border border-dashed border-brand-primary/25 bg-brand-surface px-5 py-10 text-center shadow-sm sm:px-8;
   }
