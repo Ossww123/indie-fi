@@ -2805,6 +2805,10 @@
       linear-gradient(145deg, #3d261f, #191613 70%);
   }
 
+  .ivory-auth-state-intro {
+    @apply text-[11px] leading-relaxed text-[#6b6357];
+  }
+
   .auth-state-actions {
     @apply flex flex-col gap-2 sm:flex-row;
   }
