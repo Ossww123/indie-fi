@@ -2493,6 +2493,50 @@
     @apply mt-7 flex flex-wrap justify-center gap-2;
   }
 
+  .site-main-system {
+    @apply max-w-[900px] py-10 lg:py-11;
+  }
+
+  .ivory-system-card {
+    @apply max-w-none rounded-[10px] border-[#e6d7bd] bg-white px-8 py-9 shadow-none;
+  }
+
+  .ivory-system-card .status-page-code {
+    @apply flex flex-col items-center font-mono tracking-normal;
+  }
+
+  .ivory-system-card .status-page-code > span {
+    @apply text-[52px] font-semibold leading-none tracking-[-0.03em] text-brand-primary;
+  }
+
+  .ivory-system-card .status-page-code > small {
+    @apply mt-2 text-[9px] tracking-[0.11em] text-[#a3937b];
+  }
+
+  .ivory-system-card .status-page-title {
+    @apply mt-3 text-[23px] font-bold tracking-[-0.03em] text-brand-ink;
+  }
+
+  .ivory-system-card .status-page-description {
+    @apply mt-2 max-w-[460px] text-[13px] leading-relaxed text-[#6b6357];
+  }
+
+  .ivory-request-reference {
+    @apply mx-auto mt-5 inline-grid min-w-72 rounded-[7px] border border-[#e6d7bd] bg-[#f4e8d3] px-4 py-3 text-left;
+  }
+
+  .ivory-request-reference > span {
+    @apply font-mono text-[8.5px] tracking-[0.08em] text-[#9c8d76];
+  }
+
+  .ivory-request-reference code {
+    @apply mt-1 break-all font-mono text-[11px] font-semibold text-[#4f483e];
+  }
+
+  .ivory-request-reference p {
+    @apply mt-1 text-[9.5px] text-[#8c7d67];
+  }
+
   .dynamic-status {
     @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold;
   }

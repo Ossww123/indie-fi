@@ -2,10 +2,11 @@
 @model ErrorModel
 @{
     ViewData["Title"] = "문제가 발생했습니다";
+    ViewData["MainClass"] = "site-main-system";
 }
 
-<section class="status-page" data-status-page="500">
-    <p class="status-page-code">ERROR 500</p>
+<section class="status-page ivory-system-card" data-status-page="500">
+    <p class="status-page-code"><span>500</span><small>INTERNAL ERROR</small></p>
     <h1 class="status-page-title">요청을 처리하지 못했습니다.</h1>
     <p class="status-page-description">
         일시적인 문제일 수 있습니다. 잠시 뒤 다시 시도하거나 홈으로 돌아가 주세요.
@@ -13,13 +14,15 @@
 
     @if (Model.ShowRequestId)
     {
-        <p class="mt-5 text-xs text-brand-ink/70">
-            문의 시 요청 번호 <code class="font-mono">@Model.RequestId</code>를 알려 주세요.
-        </p>
+        <div class="ivory-request-reference">
+            <span>REQUEST ID</span>
+            <code>@Model.RequestId</code>
+            <p>문의 시 이 요청 번호를 알려 주세요.</p>
+        </div>
     }
 
     <div class="status-page-actions">
-        <a asp-page="/Index" class="button-primary">홈으로 돌아가기</a>
-        <a href="" class="button-outline">다시 시도</a>
+        <a href="" class="button-primary">다시 시도</a>
+        <a asp-page="/Index" class="button-outline">홈으로 돌아가기</a>
     </div>
 </section>
