@@ -92,7 +92,10 @@ function Invoke-NativeText {
         $output = $outputTask.Result
         $errorText = $errorTask.Result
         if ($process.ExitCode -ne 0) {
-            throw "Command failed ($($process.ExitCode)): $FilePath`n$errorText"
+            $details = @($output.Trim(), $errorText.Trim()) |
+                Where-Object { $_ } |
+                Select-Object -Unique
+            throw "Command failed ($($process.ExitCode)): $FilePath`n$($details -join [Environment]::NewLine)"
         }
         if ($errorText) {
             Write-Verbose $errorText.Trim()
@@ -146,6 +149,58 @@ function Invoke-NativeToFile {
     finally {
         if ($output) {
             $output.Dispose()
+        }
+        $process.Dispose()
+    }
+}
+
+function Invoke-NativeFromFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$InputPath
+    )
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $FilePath
+    $startInfo.Arguments = ConvertTo-NativeArgumentString $Arguments
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    $input = $null
+    try {
+        if (-not $process.Start()) {
+            throw "Could not start command: $FilePath"
+        }
+        $outputTask = $process.StandardOutput.ReadToEndAsync()
+        $errorTask = $process.StandardError.ReadToEndAsync()
+        $input = [System.IO.File]::OpenRead($InputPath)
+        $input.CopyTo($process.StandardInput.BaseStream)
+        $input.Dispose()
+        $input = $null
+        $process.StandardInput.Close()
+        $process.WaitForExit()
+        $output = $outputTask.Result
+        $errorText = $errorTask.Result
+        if ($process.ExitCode -ne 0) {
+            $details = @($output.Trim(), $errorText.Trim()) |
+                Where-Object { $_ } |
+                Select-Object -Unique
+            throw "Command failed ($($process.ExitCode)): $FilePath`n$($details -join [Environment]::NewLine)"
+        }
+        if ($errorText) {
+            Write-Verbose $errorText.Trim()
+        }
+        return $output.TrimEnd("`r", "`n")
+    }
+    finally {
+        if ($input) {
+            $input.Dispose()
         }
         $process.Dispose()
     }
