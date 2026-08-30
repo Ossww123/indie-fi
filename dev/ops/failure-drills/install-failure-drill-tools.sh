@@ -22,10 +22,17 @@ install -o root -g root -m 0755 \
 install -o root -g root -m 0755 \
   "$script_dir/capture-rabbitmq-state.sh" \
   "$target_dir/capture-rabbitmq-state.sh"
+install -o root -g root -m 0755 \
+  "$script_dir/capture-external-retry-state.sh" \
+  "$target_dir/capture-external-retry-state.sh"
 install -o root -g root -m 0644 \
   "$script_dir/audit-authoritative-state.sql" \
   "$target_dir/audit-authoritative-state.sql"
+install -o root -g root -m 0644 \
+  "$script_dir/audit-external-retry-state.sql" \
+  "$target_dir/audit-external-retry-state.sql"
 
 "$target_dir/run-controlled-failure.sh" --plan web-restart 60 install-check >/dev/null
 test -r "$target_dir/audit-authoritative-state.sql"
+test -r "$target_dir/audit-external-retry-state.sql"
 echo "Failure drill tools installed in $target_dir."

@@ -49,3 +49,4 @@ dashboard를 본다. SSH가 끊기거나 Ctrl+C를 눌러도 trap이 원복을 �
 - `postgresql-outage-runbook.md`: DB 실패 닫힘과 크레딧 원장·키 지급·Outbox before/after 감사
 - `redis-outage-runbook.md`: AOF와 대기 순번 복구, PostgreSQL 최종 키 지급 경계
 - `rabbitmq-outage-runbook.md`: broker 중단·Outbox 재발행과 격리 retry·`_error` queue 경계
+- `external-dependency-outage-runbook.md`: R2 media retry와 SES email Outbox·실제 전달 수렴
