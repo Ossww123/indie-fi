@@ -79,3 +79,5 @@ dev/loadtest/results/
 dev/loadtest/app.log
 dev/loadtest/diagnose/dump-*.txt
 dev/ops/validation/runs/
+dev/ops/recovery/runs/
+dev/ops/recovery/private/

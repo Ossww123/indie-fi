@@ -1,0 +1,54 @@
+{
+  "formatVersion": 1,
+  "runId": "recovery-20260830T120000Z-002fc171",
+  "capture": {
+    "startedUtc": "2026-08-30T12:00:00Z",
+    "completedUtc": "2026-08-30T12:04:30Z",
+    "writeIngressControlled": true,
+    "queuesConverged": true
+  },
+  "release": {
+    "commit": "002fc171d8ebec57957b4c86d0179b338768334b",
+    "path": "/opt/indiefi/releases/002fc171d8ebec57957b4c86d0179b338768334b"
+  },
+  "postgresql": {
+    "serverVersion": "18.x",
+    "pgDumpVersion": "18.x",
+    "database": "indiefi",
+    "format": "custom",
+    "rowCounts": {
+      "users": 0,
+      "games": 0,
+      "game_keys": 0,
+      "media_assets": 0,
+      "data_protection_keys": 0
+    }
+  },
+  "r2": {
+    "endpointHost": "example.r2.cloudflarestorage.com",
+    "bucket": "indiefi-media-portfolio",
+    "objectCount": 0,
+    "totalBytes": 0,
+    "activeReferencesPresent": true
+  },
+  "protection": {
+    "accountPurposeKeyIds": {
+      "account-email-encryption": ["email-2026-08"],
+      "account-email-lookup": ["lookup-2026-08"],
+      "account-email-message-encryption": ["message-2026-08"],
+      "account-request-ip-lookup": ["request-ip-2026-08"],
+      "game-key-encryption": ["game-encryption-2026-08"],
+      "game-key-fingerprint": ["game-fingerprint-2026-08"]
+    },
+    "dataProtectionCertificateSha256": "example-non-secret-fingerprint",
+    "dataProtectionCertificateNotAfterUtc": "2027-08-24T00:00:00Z",
+    "certificateMatchesPrivateKey": true
+  },
+  "files": [
+    {
+      "path": "postgresql/indiefi.dump",
+      "size": 1,
+      "sha256": "example-sha256"
+    }
+  ]
+}
