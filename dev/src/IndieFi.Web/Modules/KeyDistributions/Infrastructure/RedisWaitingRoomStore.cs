@@ -1,5 +1,6 @@
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
+using IndieFi.Web.Infrastructure.Observability;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Diagnostics;
@@ -502,6 +503,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         CancellationToken cancellationToken = default)
     {
         ValidateIdentity(dropId, userId);
+        using var activity = StartRedisActivity("get_entry");
         var started = Stopwatch.GetTimestamp();
         try
         {
@@ -516,11 +518,13 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         }
         catch (RedisException exception)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             RecordRedisFailure("get_entry", exception);
             throw Unavailable(exception);
         }
         catch (WaitingRoomUnavailableException exception)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             RecordRedisFailure("get_entry", exception);
             throw;
         }
@@ -770,6 +774,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         RedisValue[] values,
         CancellationToken cancellationToken)
     {
+        using var activity = StartRedisActivity(operation);
         var started = Stopwatch.GetTimestamp();
         try
         {
@@ -782,11 +787,13 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
         }
         catch (RedisException exception)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             RecordRedisFailure(operation, exception);
             throw Unavailable(exception);
         }
         catch (WaitingRoomUnavailableException exception)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             RecordRedisFailure(operation, exception);
             throw;
         }
@@ -802,6 +809,16 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     {
         var multiplexer = await _connection.GetAsync(cancellationToken);
         return multiplexer.GetDatabase();
+    }
+
+    private static Activity? StartRedisActivity(string operation)
+    {
+        var activity = ObservabilityActivity.Source.StartActivity(
+            $"redis.waiting_room.{operation}",
+            ActivityKind.Client);
+        activity?.SetTag("db.system.name", "redis");
+        activity?.SetTag("db.operation.name", operation);
+        return activity;
     }
 
     private static long ToMilliseconds(TimeSpan value) =>
@@ -851,4 +868,10 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     private static WaitingRoomUnavailableException Unavailable(
         RedisException exception) =>
         new("The virtual waiting-room Redis operation failed.", exception);
+
+    private static class ObservabilityActivity
+    {
+        internal static readonly ActivitySource Source =
+            new(ObservabilityActivitySources.Redis);
+    }
 }

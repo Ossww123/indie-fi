@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
@@ -82,13 +83,49 @@ public static class ObservabilityModule
                         "deployment.environment.name",
                         environment.EnvironmentName),
                 ]))
-            .WithMetrics(metrics => metrics
-                .AddRuntimeInstrumentation()
-                .AddOtlpExporter(exporter => ConfigureExporter(exporter, endpoint)))
-            .WithTracing(tracing => tracing
-                .SetSampler(new ParentBasedSampler(
-                    new TraceIdRatioBasedSampler(options.TraceSamplingRatio)))
-                .AddOtlpExporter(exporter => ConfigureExporter(exporter, endpoint)));
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddRuntimeInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddNpgsqlInstrumentation()
+                    .AddMeter(
+                        "IndieFi.Feedback",
+                        "IndieFi.Media",
+                        "IndieFi.Notifications",
+                        "IndieFi.WaitingRoom")
+                    .AddOtlpExporter(exporter => ConfigureExporter(exporter, endpoint));
+
+                if (serviceName == ObservabilityServiceNames.Web)
+                {
+                    metrics.AddAspNetCoreInstrumentation();
+                }
+            })
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .SetSampler(new ParentBasedSampler(
+                        new TraceIdRatioBasedSampler(options.TraceSamplingRatio)))
+                    .AddSource(ObservabilityActivitySources.Redis)
+                    .AddNpgsql()
+                    .AddHttpClientInstrumentation(instrumentation =>
+                    {
+                        instrumentation.EnrichWithHttpRequestMessage =
+                            ObservabilityPrivacy.SanitizeOutboundHttp;
+                    })
+                    .AddOtlpExporter(exporter => ConfigureExporter(exporter, endpoint));
+
+                if (serviceName == ObservabilityServiceNames.Web)
+                {
+                    tracing.AddAspNetCoreInstrumentation(instrumentation =>
+                    {
+                        instrumentation.Filter =
+                            ObservabilityPrivacy.ShouldTraceInboundHttp;
+                        instrumentation.EnrichWithHttpRequest =
+                            ObservabilityPrivacy.SanitizeInboundHttp;
+                    });
+                }
+            });
 
         logging.AddOpenTelemetry(logs =>
         {

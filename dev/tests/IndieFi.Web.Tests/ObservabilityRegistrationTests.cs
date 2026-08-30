@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using IndieFi.Web.Infrastructure.Observability;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -89,6 +91,43 @@ public sealed class ObservabilityRegistrationTests
         };
 
         Assert.False(ObservabilityOptions.IsValid(options));
+    }
+
+    [Fact]
+    public void InboundHttp_ExcludesHealthProbeTraces()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/health/ready";
+
+        Assert.False(ObservabilityPrivacy.ShouldTraceInboundHttp(context));
+    }
+
+    [Fact]
+    public void OutboundHttp_RemovesSensitiveUrlTags()
+    {
+        using var activity = new Activity("test").Start();
+        activity.SetTag(
+            "url.full",
+            "https://example.test/object?signature=secret");
+        activity.SetTag("url.path", "/private-object");
+        activity.SetTag("url.query", "signature=secret");
+        activity.SetTag(
+            "http.url",
+            "https://example.test/object?signature=secret");
+        activity.SetTag("http.target", "/object?signature=secret");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "https://example.test/object?signature=secret");
+
+        ObservabilityPrivacy.SanitizeOutboundHttp(activity, request);
+
+        Assert.DoesNotContain(activity.TagObjects, tag =>
+            tag.Key is "url.full"
+                or "url.path"
+                or "url.query"
+                or "http.url"
+                or "http.target"
+            && tag.Value is not null);
     }
 
     private static Dictionary<string, string?> EnabledSettings() => new()
