@@ -1,89 +1,51 @@
-# 키 받기 부하 측정
+# IndieFi 운영 부하 검증 도구
 
-이 도구는 현재 키 받기 구현을 고치지 않고, 드롭 오픈 순간의 충돌 건수와 응답 시간을 관측한다. 명령은 저장소 루트를 기준으로 실행한다.
+이 폴더는 운영 EC2 밖의 로컬 PC에서 k6 부하를 만들고, 같은 run id로 입력·결과·관측 구간을 묶는
+도구다. 로컬 수치는 개발 회귀 확인용이며 EC2 용량 수치로 사용하지 않는다.
 
-## 측정 순서
+## 구성
 
-1. PostgreSQL 컨테이너를 시작한다.
-
-   ```powershell
-   docker start indiefi-db
-   ```
-
-2. 별도 터미널에서 앱 디렉터리로 이동하고 HTTP 프로필로 앱을 시작한다. **로그를 파일로 함께 남긴다** — 받기 결과(성공/소진/충돌)의 종류는 화면이 아니라 이 로그에서 센다.
-
-   ```powershell
-   cd dev/src/IndieFi.Web
-   dotnet run --launch-profile http 2>&1 | Tee-Object -FilePath ..\..\loadtest\app.log
-   ```
-
-   앱 주소가 `http://localhost:5258`인지 확인한다. 이 터미널은 측정이 끝날 때까지 그대로 둔다.
-
-   > **왜 로그로 세나:** 받기 결과는 화면에 리다이렉트 뒤 안내 메시지로 뜨는데, 그 메시지(한 번 쓰고 지워지는 쿠키)가 부하 흐름에서 불안정하게 유실된다. 그래서 k6 화면 판정으로는 `soldout`·`conflict`가 `other`로 뭉친다. 서버가 남기는 `KeyClaim outcome=...` 로그가 종류별로 정확한 신호다.
-
-3. 저장소 루트 터미널에서 계정과 새 드롭을 준비한다.
-
-   ```powershell
-   dotnet run --project dev/tools/IndieFi.Seed -- --users 500 --late-users 200 --keys 100 --opens-in 90
-   ```
-
-   계정은 `loadtest-0001@example.test`부터 만들어지며 비밀번호는 모두 `LoadTest123!`이다. 앞의 500개는 오픈 순간에 몰리는 사람, 뒤의 200개는 늦게 오는 사람이 쓴다. 이미 있는 계정과 부하용 게임은 재사용하고, 드롭과 키는 실행할 때마다 새로 만든다. 실행 결과는 `dev/loadtest/drop.json`에 저장된다.
-
-4. **곧바로** 부하를 시작한다.
-
-   ```powershell
-   k6 run dev/loadtest/keydrop.js
-   ```
-
-   ⚠️ 오픈까지 남은 90초 안에 700개 흐름이 전부 로그인을 끝내야 한다. 여기서 꾸물거리면 일부가 오픈 시각을 놓쳐 "동시에 몰림"이 아니게 된다. 결과에서 `notopen`이 0이 아니거나 `granted + conflict + soldout`의 합이 700보다 한참 적으면 `--opens-in`을 늘려서 다시 잰다.
-
-5. 콘솔 표와 `dev/loadtest/results/last-run.json`을 확인한다. k6 표의 `granted`는 정확하다(화면이 DB를 다시 조회해 그린다). `other`에 뭉친 실패의 **종류**는 로그로 센다:
-
-   ```bash
-   bash dev/loadtest/tally.sh
-   ```
-
-   이번 드롭의 결과를 종류별로 집계한다 — 예:
-
-   ```
-   drop 7 claim outcomes:
-       100 Granted
-       380 Conflict
-       220 SoldOut
-   ```
-
-   `Conflict`는 **락 없이 같은 키를 동시에 고른 요청들**이 `UNIQUE(key_id)`에 걸려 실패한 수다. 이게 규모를 키울수록 늘어나는 것이 이번 관측의 핵심이다.
-
-## 세 시나리오
-
-- `browsers`: 로그인하지 않은 50명이 홈, 부하용 게임 상세, 드롭 상세를 차례로 조회한다. 각 조회 사이에는 1~2초를 기다린다. 조회 한 건의 시간은 `browse_duration`에만 기록된다.
-
-- `claimers`: 계정 수와 같은 수의 VU가 서로 다른 계정으로 미리 로그인하고 드롭 상세를 읽는다. 모두 절대 시각인 `opensAt`까지 기다린 뒤 한 번씩 Claim POST를 보낸다.
-
-- `latecomers`: **전용 계정**(501번부터)을 쓰는 200명. 이들도 오픈 전에 미리 로그인해두고, 오픈 이후 0~30초 사이의 임의 시점에 흩어져서 Claim POST를 보낸다. 대부분 소진된 상태를 만난다.
-
-  이 시나리오가 이렇게 생긴 이유 두 가지:
-  - **계정을 재사용하지 않는다.** 이미 키를 받은 계정으로 다시 받기를 누르면 `AlreadyClaimed`가 되는데, 화면은 이걸 새로 받은 것과 **똑같이** 보여준다(둘 다 "받은 키:"). 계정을 돌려쓰면 가짜 성공이 집계에 섞인다.
-  - **로그인을 측정 구간 안에서 하지 않는다.** 비밀번호 해싱(PBKDF2)은 CPU를 크게 먹는다. 측정 중에 로그인이 계속 돌면 응답이 느려져도 그게 **락 경합 때문인지 해싱 때문인지 구분할 수 없다.**
-
-`claimers`와 `latecomers`는 브라우저와 같이 로그인 GET, 로그인 POST, 드롭 상세 GET, Claim POST 순서로 움직인다. 각 흐름은 빈 쿠키 저장소에서 시작하며, 그 흐름 안에서는 k6의 VU별 쿠키 저장소가 인증 쿠키와 antiforgery 쿠키를 유지한다. Claim POST의 302 응답도 자동으로 따라가며, POST부터 최종 HTML을 받을 때까지의 시간은 `claim_duration`에 기록된다.
-
-## 결과 읽기
-
-최종 HTML에 표시된 문구 하나로 각 Claim 흐름을 분류한다.
-
-| 결과 | 의미 |
+| 파일 | 역할 |
 |---|---|
-| `granted` | `받은 키:`가 표시됨 |
-| `conflict` | `동시 요청으로`가 표시됨 |
-| `soldout` | `키가 모두 소진되었습니다`가 표시됨 |
-| `notopen` | `아직 오픈되지 않았습니다`가 표시됨 |
-| `other` | 어느 문구에도 해당하지 않음. 로그인이나 페이지 처리 실패도 여기에 포함됨 |
+| `config/*.example.json` | 공개 실행 계약·단계 계획·자격 증명 형식 |
+| `contract-check.js` | HTTPS·run id·commit·결과 경로와 비밀 분리 검사 |
+| `seed-contract-check.js` | seed manifest의 계정 pool·catalog·drop 연결 검사 |
+| `browse.js` | 공개 catalog·상세·검색·filter·cursor 일정 도착률 부하 |
+| `keydrop.js` | 사전 대기·늦은 진입·동일 사용자 재시도를 포함한 오픈 집중 부하 |
+| `Invoke-LoadValidation.ps1` | 계획 대조, Grafana annotation, 경보 감시, 안전 중단과 cool-down |
+| `lib/` | contract·seed 검증과 민감하지 않은 summary 공통 코드 |
 
-콘솔 표는 각 결과의 건수와 전체 Claim 흐름 중 비율을 보여 준다. `claim p50`, `p95`, `p99`는 Claim POST와 뒤따른 리다이렉트 GET을 합친 브라우저 관점의 시간이다. `browse p95`는 구경꾼의 개별 조회 시간이다. 임계값은 없으므로 충돌이나 긴 지연이 발생해도 k6가 그 숫자 때문에 측정을 실패 처리하지 않는다.
+세부 계약은 `execution-contract.md`, 데이터 준비와 감사는 `seed-audit-runbook.md`, 두 시나리오는
+`browse-runbook.md`·`keydrop-runbook.md`, 실행 안전선은 `load-safety-runbook.md`를 본다.
 
-`granted`는 **사용자가 최종 화면에서 본 결과**의 횟수다. 계정 풀을 나눠 놓았으므로 이 값은 실제 INSERT 성공 횟수와 같아야 하며, 키 수(기본 100)를 **넘을 수 없다.** 넘는다면 집계가 잘못된 것이니 원인을 먼저 찾는다.
+## 파일 경계
 
-## 측정 한계
+- example만 Git에 저장한다.
+- 실제 contract·plan·credentials와 `results/`는 `.gitignore` 대상이다.
+- credentials에는 테스트 계정 비밀번호만 두며 console·summary에 출력하지 않는다.
+- 응답 cookie·antiforgery token·게임 키 원문은 어떤 결과 파일에도 저장하지 않는다.
+- 매 실행은 새 run id를 사용하며 기존 seed나 runner evidence를 덮어쓰지 않는다.
 
-앱, PostgreSQL, k6가 모두 같은 노트북에서 실행된다. 부하 생성기가 앱과 데이터베이스의 CPU, 메모리, 네트워크 자원을 나눠 쓰므로 절대 수치를 서버 성능으로 해석하면 안 된다. 같은 환경과 같은 인자로 반복한 수정 전후 비교에만 의미가 있다.
+## 기본 흐름
+
+1. EC2에 실행 대상 commit을 배포하고 관측 SSH tunnel을 연다.
+2. 같은 commit·origin으로 전용 seed와 before audit를 만든다.
+3. example을 복사해 ignored contract·plan·credentials를 작성한다.
+4. `Invoke-LoadValidation.ps1 -ValidateOnly`로 계획과 입력 연결을 검사한다.
+5. 실제 실행 뒤 runner·k6 결과, after audit, Redis·RabbitMQ snapshot을 같은 run 폴더에 모은다.
+6. 최소 60초와 자원·queue 수렴을 기다린 뒤 다음 사다리 단계로 간다.
+
+Windows에서는 저장소 루트의 `loadtest.bat`이 PowerShell 실행기를 그대로 호출한다.
+
+```powershell
+.\loadtest.bat `
+  -ContractPath dev/loadtest/config/<run>-contract.json `
+  -SeedManifestPath dev/loadtest/results/<run>/seed-manifest.json `
+  -BeforeAuditPath dev/loadtest/results/<run>/before-audit.json `
+  -PlanPath dev/loadtest/config/load-plan.json `
+  -ValidateOnly
+```
+
+`browse`는 credentials가 필요 없고, `keydrop`은 `-CredentialsPath`를 추가한다. 각 단계를 한 번씩
+수동 승인해 실행하는 이유는 warning·정합성 감사 결과를 확인하지 않은 채 자동으로 더 높은 부하를
+보내지 않기 위해서다.

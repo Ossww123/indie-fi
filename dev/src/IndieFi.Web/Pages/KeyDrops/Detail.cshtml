@@ -227,7 +227,9 @@
     <div>
         @if (Model.ClaimedKey is not null)
         {
-            <div class="rounded-xl bg-white px-4 py-3 text-brand-deep" role="alert">
+            <div class="rounded-xl bg-white px-4 py-3 text-brand-deep"
+                 role="alert"
+                 data-claim-result="granted">
                 받은 키: <strong>@Model.ClaimedKey</strong>
             </div>
         }

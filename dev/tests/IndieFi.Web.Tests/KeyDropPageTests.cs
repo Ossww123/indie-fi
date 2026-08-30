@@ -143,6 +143,7 @@ public sealed class KeyDropPageTests
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, recipientResponse.StatusCode);
         Assert.Contains(secret, recipientHtml);
+        Assert.Contains("data-claim-result=\"granted\"", recipientHtml);
         Assert.True(recipientResponse.Headers.CacheControl?.NoStore);
 
         using var anonymousClient = factory.CreateClient();

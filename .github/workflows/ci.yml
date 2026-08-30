@@ -105,6 +105,19 @@ jobs:
             --output release/worker \
             -p:SourceRevisionId=${{ github.sha }}
 
+      # The operational load seed/audit tool runs on the EC2 host because PostgreSQL
+      # remains loopback-only. It is framework-dependent like Web and Worker and is
+      # invoked only through the root-owned bounded wrapper in release/ops.
+      - name: Publish load validation data tool for Linux x64
+        run: |
+          mkdir -p release/seed
+          dotnet publish dev/tools/IndieFi.Seed \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained false \
+            --output release/seed \
+            -p:SourceRevisionId=${{ github.sha }}
+
       # The server has no SDK and no source, so it cannot run migrations the way a laptop
       # does. This bakes them into one executable instead.
       #
@@ -137,12 +150,14 @@ jobs:
 
           test -f release/web/IndieFi.Web.dll
           test -f release/worker/IndieFi.Worker.dll
+          test -f release/seed/IndieFi.Seed.dll
           test -x release/efbundle
           test -x release/ops/deploy-portfolio-release.sh
           test -x release/ops/migrate-portfolio-database.sh
           test -x release/ops/configure-portfolio-database-role.sh
           test -x release/ops/generate-portfolio-key-material.sh
           test -x release/ops/configure-portfolio-runtime-environment.sh
+          test -x release/ops/run-load-validation-data.sh
 
           if find release -type l -print -quit | grep -q .; then
             echo "Release packages may not contain symlinks." >&2
@@ -151,7 +166,7 @@ jobs:
 
           (
             cd release
-            find web worker ops -type f -print0 \
+            find web worker seed ops -type f -print0 \
               | sort -z \
               | xargs -0 sha256sum
             sha256sum efbundle release.sha
@@ -168,6 +183,7 @@ jobs:
           file \
             release/web/IndieFi.Web \
             release/worker/IndieFi.Worker \
+            release/seed/IndieFi.Seed \
             release/efbundle
 
       # Everything above takes tens of seconds and needs nothing from the server, so

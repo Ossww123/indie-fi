@@ -150,6 +150,10 @@ fi
   || fail "the Web artifact is missing."
 [[ -f "$target_release/worker/IndieFi.Worker.dll" ]] \
   || fail "the Worker artifact is missing."
+[[ -f "$target_release/seed/IndieFi.Seed.dll" ]] \
+  || fail "the load validation data tool is missing."
+[[ -x "$target_release/ops/run-load-validation-data.sh" ]] \
+  || fail "the load validation data wrapper is missing or is not executable."
 [[ -x "$target_release/ops/install-portfolio-service-files.sh" ]] \
   || fail "the host service installer is missing or is not executable."
 [[ -x "$target_release/ops/migrate-portfolio-database.sh" ]] \
