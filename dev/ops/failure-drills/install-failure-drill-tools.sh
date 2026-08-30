@@ -16,6 +16,9 @@ install -o root -g root -m 0755 \
 install -o root -g root -m 0755 \
   "$script_dir/capture-authoritative-state.sh" \
   "$target_dir/capture-authoritative-state.sh"
+install -o root -g root -m 0755 \
+  "$script_dir/capture-redis-state.sh" \
+  "$target_dir/capture-redis-state.sh"
 install -o root -g root -m 0644 \
   "$script_dir/audit-authoritative-state.sql" \
   "$target_dir/audit-authoritative-state.sql"
