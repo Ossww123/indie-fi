@@ -326,7 +326,9 @@ function addPoolScenario(target, name, executorName, count) {
         exec: executorName,
         vus: count,
         iterations: 1,
-        maxDuration: `${secondsUntilOpen + parameters.admissionTimeoutSeconds + 120}s`,
+        maxDuration: `${Math.max(
+            1,
+            secondsUntilOpen + parameters.admissionTimeoutSeconds + 120)}s`,
         tags: {
             run_id: contract.runId,
             scenario: contract.scenario,
