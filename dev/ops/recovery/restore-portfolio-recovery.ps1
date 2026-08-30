@@ -194,7 +194,7 @@ mc ls --recursive --json "restore/$RESTORE_BUCKET"
     $readiness = 'not-requested'
     if ($StartApplication) {
         [void](Invoke-NativeText $docker (
-            Get-ComposeArguments @('--profile', 'application', 'up', '-d', '--build', 'web') $runtimeEnvironment))
+            Get-ComposeArguments @('--profile', 'application', 'up', '-d', '--build', 'proxy') $runtimeEnvironment))
         $readinessProbe = @'
 exec 3<>/dev/tcp/127.0.0.1/8080
 printf "GET /health/ready HTTP/1.0\r\nHost: localhost\r\nX-Forwarded-For: 127.0.0.1\r\nX-Forwarded-Proto: https\r\n\r\n" >&3
@@ -230,12 +230,17 @@ timeout 3 cat <&3
         objectBytes = $restoredBytes
         protectionKeyPairMatches = $true
         applicationReadiness = $readiness
+        manualUserFlowUrl = $(if ($StartApplication) { 'https://127.0.0.1:55443' } else { $null })
         result = 'pass'
     }
     Write-Utf8Json $result (Join-Path $workspace 'restore-result.json')
     $result | Format-List
     Write-Host "Isolated recovery restore: PASS"
     Write-Host "Workspace: $workspace"
+    if ($StartApplication) {
+        Write-Host "Manual restored user flow: https://127.0.0.1:55443"
+        Write-Host "A browser warning is expected for the short-lived self-signed certificate."
+    }
     Write-Host "Purge the environment and plaintext workspace after user-flow verification."
 }
 catch {

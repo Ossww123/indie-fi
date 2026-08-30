@@ -102,6 +102,11 @@ plain-HTTP MinIO integration을 끈 상태로 DB와 보호 키 구성을 검사�
 restore 도구가 object count·총 byte를 S3 API로 따로 검증한다. 복원 미디어를 Web
 화면에서 조회하는 최종 사용자 흐름은 13-3-6 실행 증거에서 별도로 확인한다.
 
+`-StartApplication`은 이틀짜리 자체서명 인증서와 복원 전용 Nginx도 만들고
+`https://127.0.0.1:55443`을 loopback에만 연다. 브라우저의 인증서 경고를 일회성으로
+통과한 뒤 기존 사용자 로그인과 게임 키 복호화를 확인한다. 인증서를 Windows 신뢰
+저장소에 설치하거나 운영 인증서로 재사용하지 않는다.
+
 상태 확인과 정리는 다음처럼 한다.
 
 ```powershell

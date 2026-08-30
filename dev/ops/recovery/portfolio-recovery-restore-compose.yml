@@ -61,6 +61,26 @@ services:
       - ${RECOVERY_KEYS_PATH:?set RECOVERY_KEYS_PATH}:/source:ro
       - recovery-key-data:/target
 
+  tls-init:
+    profiles: ["application"]
+    image: postgres:18
+    container_name: indiefi-recovery-tls-init
+    restart: "no"
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
+          -keyout /target/localhost.key \
+          -out /target/localhost.crt \
+          -days 2 \
+          -subj '/CN=localhost' \
+          -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' >/dev/null 2>&1
+        chmod 0600 /target/localhost.key
+        chmod 0644 /target/localhost.crt
+    volumes:
+      - recovery-tls-data:/target
+
   web:
     profiles: ["application"]
     build:
@@ -108,6 +128,22 @@ services:
       key-init:
         condition: service_completed_successfully
 
+  proxy:
+    profiles: ["application"]
+    image: nginx:1.28.0-alpine
+    container_name: indiefi-recovery-proxy
+    restart: "no"
+    ports:
+      - "127.0.0.1:55443:8443"
+    volumes:
+      - ./restore-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - recovery-tls-data:/etc/nginx/tls:ro
+    depends_on:
+      web:
+        condition: service_started
+      tls-init:
+        condition: service_completed_successfully
+
 volumes:
   recovery-postgres-data:
     name: indiefi-recovery-restore-postgres-data
@@ -115,3 +151,5 @@ volumes:
     name: indiefi-recovery-restore-minio-data
   recovery-key-data:
     name: indiefi-recovery-restore-key-data
+  recovery-tls-data:
+    name: indiefi-recovery-restore-tls-data
