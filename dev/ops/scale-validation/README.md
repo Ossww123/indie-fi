@@ -29,3 +29,4 @@
 
 - `shared-boundaries-runbook.md`: cookie·cursor, SignalR Redis backplane과 Web 공통 upload 제한
 - `key-drop-concurrency-runbook.md`: 다중 Redis 대기 순번과 마지막 key grant의 HTTP·DB 대조
+- `worker-competition-runbook.md`: Worker 경쟁 소비·재시작과 Inbox·lease·부작용 수렴
