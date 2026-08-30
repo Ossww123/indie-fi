@@ -1,0 +1,41 @@
+[Unit]
+Description=IndieFi scale-validation worker instance %i
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=indiefi-worker
+Group=indiefi-worker
+SupplementaryGroups=indiefi-secrets
+WorkingDirectory=/opt/indiefi/current/worker
+EnvironmentFile=/etc/indiefi/worker.env
+EnvironmentFile=/run/indiefi-scale/worker-%i.env
+
+ExecStartPre=+/usr/local/lib/indiefi/verify-portfolio-environment.sh /etc/indiefi/infra.env /etc/indiefi/web.env /etc/indiefi/worker.env
+ExecStartPre=/usr/bin/test -r /opt/indiefi/current/worker/IndieFi.Worker.dll
+ExecStart=/usr/bin/dotnet /opt/indiefi/current/worker/IndieFi.Worker.dll
+
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=indiefi-scale-worker-%i
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+UMask=0077
