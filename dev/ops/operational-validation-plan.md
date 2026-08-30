@@ -383,3 +383,68 @@ catalog와 계정 pool은 생성 비용을 줄이기 위해 같은 기준 측정
 - cleanup 전 대상 행 수와 FK 영향을 dry-run으로 출력하고 예상 수가 다르면 중단한다.
 - 측정 중인 기준 snapshot은 개선 재측정이 끝날 때까지 보존한다.
 - 최종 cleanup 뒤에도 사용자당 지급, key fingerprint와 원장 감사 쿼리를 한 번 실행한다.
+
+## 15. 측정 구간과 시각 계약
+
+- EC2, 로컬 부하 발생기와 관측 저장소는 실행 전 UTC 시각과 NTP 동기화 상태를
+  기록한다. 서로의 차이가 1초를 넘으면 측정을 시작하지 않는다.
+- run 시작 2분 전부터 끝난 뒤 cool-down 종료까지를 전체 관측 구간으로 보존한다.
+- warm-up·로그인·seed는 그래프에 표시하되 성능 백분위 집계에서 제외한다.
+- W1·W2의 measurement는 단계별 120초, W3·W4는 합의한 절대 UTC burst와
+  terminal 상태 도달까지로 고정한다.
+- 단계 사이에는 최소 60초와 CPU·DB·queue가 직전 기준선으로 돌아올 때까지
+  cool-down을 둔다.
+- k6와 대시보드에는 `run_id`, `scenario`, `stage`, `topology`, `commit`의 같은
+  낮은 카디널리티 tag·annotation을 사용한다.
+
+## 16. 안전 경보와 중단 조건
+
+아래 수치는 최초 EC2 기준선에서 더 보수적으로 조정할 수 있다. 안전 중단은 현재
+단계와 이후 높은 단계를 멈추지만 증거 수집과 cool-down·정합성 감사는 계속한다.
+
+| 영역 | warning | 해당 시나리오 또는 전체 run 중단 |
+|---|---|---|
+| 정합성 | 감사 지연·미완료 | 초과·중복 키 지급, 원장 불일치, 객체·DB current 불일치 1건 |
+| 프로세스 | restart 1회 또는 readiness 일시 실패 | OOM, crash loop, readiness 15초 이상 연속 실패 |
+| HTTP | 예상하지 않은 오류율 1% 이상 30초 | 5% 이상 30초 또는 timeout 급증으로 사용자 결과 분류 불가 |
+| CPU | host CPU 90% 이상 60초 | 95% 이상 120초이면서 queue·지연이 계속 증가 |
+| 메모리 | available 768MiB 미만 60초 | 512MiB 미만 60초, OOM·지속적인 reclaim 발생 |
+| 디스크 | root 사용률 75% 이상 | 85% 이상 또는 dump·로그 증가로 여유 공간 예측 불가 |
+| PostgreSQL | connection 80%, lock wait 5초 | connection 90% 30초, lock/query 30초 초과, health 실패 |
+| Redis | latency·memory가 기준선의 2배 | health 실패, host 메모리 중단선 동반, AOF 오류 |
+| RabbitMQ | ready 1,000 또는 unacked 지속 증가 | ready 10,000, disk/memory alarm, consumer 0이 30초 지속 |
+| Worker | 처리 p95 목표 초과 | retry·적체가 cool-down 5분 뒤에도 계속 증가 |
+| CPU 크레딧 | 시작 balance의 25% 이하 | 시작 balance의 10% 이하 또는 throttling 징후 |
+| 부하 발생기 | CPU 75%, network 오류 발생 | CPU 85% 지속, 메모리 부족·시각 drift·로컬 network 포화 |
+
+전체 본 부하는 CloudWatch CPUCreditBalance가 13-0에서 확인한 최대 기준의 절반보다
+낮은 상태에서는 시작하지 않는다. warning·중단선에는 실행 시작 balance도 함께
+기록해 AWS 지표 지연 때문에 단일 표본만으로 중단하지 않는다.
+
+## 17. 결과 판정
+
+### 17.1. 통과
+
+- 시나리오 threshold와 정합성 불변식을 모두 만족한다.
+- 관측 신호와 사후 감사가 완전하고 다음 단계 시작 조건을 충족한다.
+
+### 17.2. 유효한 실패
+
+- target 응답시간·오류율 또는 자원 안전선을 넘었지만 부하 발생기와 관측이
+  정상이며 서버의 포화·복구 과정을 끝까지 기록했다.
+- 실패 직전 안정 단계를 안전 용량 후보로 남기고 더 높은 단계는 실행하지 않는다.
+
+### 17.3. 무효
+
+다음 경우 성능 숫자를 용량 표에 사용하지 않는다.
+
+- commit·설정·topology 또는 seed 인자가 measurement 중 변경됨
+- EC2와 부하 발생기 시각 차이가 1초를 넘거나 annotation이 누락됨
+- 핵심 metric·trace가 측정 구간의 10% 넘게 비어 원인을 연결할 수 없음
+- 로컬 부하 발생기 CPU·메모리·network가 먼저 포화됨
+- 계정 준비·CSRF·TLS 오류 때문에 의도한 요청이 서버에 도달하지 않음
+- 이전 run의 queue·지급 상태가 수렴하지 않은 채 다음 run을 시작함
+
+k6 threshold 실패나 `dropped_iterations` 자체는 자동으로 무효가 아니다. 부하
+발생기가 정상인데 서버 응답 지연 때문에 목표 도착률을 유지하지 못했다면 이는
+유효한 용량 실패다. 원인이 로컬 VU·CPU 부족이면 무효로 분류한다.
