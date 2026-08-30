@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using IndieFi.Web.Infrastructure.Observability;
 using IndieFi.Web.Modules.Accounts.Application;
 using Microsoft.Extensions.Options;
 
@@ -39,6 +40,9 @@ public sealed class SmtpAuthenticationEmailSender : IAuthenticationEmailSender
         Func<AuthenticationEmailDelivery, MailMessage> createMessage,
         CancellationToken cancellationToken)
     {
+        using var activity = ExternalOperationTelemetry.Start(
+            "ses_smtp",
+            "send_authentication");
         using var message = createMessage(delivery);
         using var client = new SmtpClient(_options.Smtp.Host, _options.Smtp.Port)
         {
@@ -58,6 +62,14 @@ public sealed class SmtpAuthenticationEmailSender : IAuthenticationEmailSender
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken);
         timeout.CancelAfter(_options.Smtp.Timeout);
-        await client.SendMailAsync(message, timeout.Token);
+        try
+        {
+            await client.SendMailAsync(message, timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            ExternalOperationTelemetry.RecordFailure(activity, exception);
+            throw;
+        }
     }
 }

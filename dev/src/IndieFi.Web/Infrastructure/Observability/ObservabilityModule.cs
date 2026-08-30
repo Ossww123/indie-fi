@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Options;
+using MassTransit.Logging;
 using Npgsql;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -91,6 +92,7 @@ public static class ObservabilityModule
                     .AddNpgsqlInstrumentation()
                     .AddMeter(
                         "IndieFi.Feedback",
+                        "IndieFi.KeyDistributions",
                         "IndieFi.Media",
                         "IndieFi.Notifications",
                         "IndieFi.WaitingRoom")
@@ -106,7 +108,11 @@ public static class ObservabilityModule
                 tracing
                     .SetSampler(new ParentBasedSampler(
                         new TraceIdRatioBasedSampler(options.TraceSamplingRatio)))
-                    .AddSource(ObservabilityActivitySources.Redis)
+                    .AddSource(
+                        DiagnosticHeaders.DefaultListenerName,
+                        ObservabilityActivitySources.External,
+                        ObservabilityActivitySources.KeyDistributions,
+                        ObservabilityActivitySources.Redis)
                     .AddNpgsql()
                     .AddHttpClientInstrumentation(instrumentation =>
                     {

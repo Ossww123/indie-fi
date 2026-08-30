@@ -1,6 +1,7 @@
 using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Accounts.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
+using IndieFi.Web.Modules.KeyDistributions.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
@@ -60,6 +61,7 @@ public class KeyClaimService
         long userId,
         CancellationToken cancellationToken = default)
     {
+        using var claimActivity = KeyDistributionTelemetry.StartClaim();
         await using var transaction =
             await AccountMutationGuard.BeginTransactionIfNeededAsync(
                 _db,
@@ -328,6 +330,7 @@ public class KeyClaimService
     // one-shot TempData cookie) is an unreliable signal, so outcomes are counted here.
     private ClaimResult Result(ClaimOutcome outcome, long dropId, long userId)
     {
+        KeyDistributionTelemetry.RecordClaim(outcome);
         _logger.LogInformation(
             "KeyClaim outcome={Outcome} drop={DropId} user={UserId}",
             outcome,
