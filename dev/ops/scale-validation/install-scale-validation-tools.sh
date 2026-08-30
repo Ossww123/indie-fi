@@ -13,6 +13,15 @@ install -d -o root -g root -m 0755 "$target_dir"
 install -o root -g root -m 0755 \
   "$script_dir/manage-scale-processes.sh" \
   "$target_dir/manage-scale-processes.sh"
+install -o root -g root -m 0755 \
+  "$script_dir/manage-scale-topology.sh" \
+  "$target_dir/manage-scale-topology.sh"
+install -o root -g root -m 0755 \
+  "$script_dir/emergency-restore-nginx.sh" \
+  "$target_dir/emergency-restore-nginx.sh"
+install -o root -g root -m 0755 \
+  "$script_dir/render-scale-nginx.sh" \
+  "$target_dir/render-scale-nginx.sh"
 install -o root -g root -m 0644 \
   "$script_dir/systemd/indiefi-scale-web@.service" \
   /etc/systemd/system/indiefi-scale-web@.service
@@ -28,4 +37,5 @@ for unit in \
     && { echo "$unit unexpectedly became enabled." >&2; exit 1; }
 done
 "$target_dir/manage-scale-processes.sh" --plan >/dev/null
+"$target_dir/manage-scale-topology.sh" --plan >/dev/null
 echo 'Scale-validation templates and tools are installed; no instance was started or enabled.'

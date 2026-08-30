@@ -15,3 +15,12 @@
 
 `start`는 다음 단계의 topology 전환기가 정확한 run id를 `/run/indiefi-scale/armed`에
 기록한 뒤에만 허용된다. template을 직접 `systemctl start`하지 않는다.
+
+## Nginx topology 전환
+
+- `manage-scale-topology.sh`: 원본 config backup, 5101·5102 round robin, 45분 timer와 전체 원복
+- `emergency-restore-nginx.sh`: 검증 중 재부팅하면 Nginx 시작 전에 single config 복원
+- `nginx-distribution-runbook.md`: 두 upstream 확인, Web 1 제거·복귀와 사용자 영향 기록
+
+검증 header와 Nginx 변경은 topology stop에서 제거된다. 45분보다 긴 검증은 허용하지 않고
+필요하면 완전히 원복한 새 run으로 나눈다.

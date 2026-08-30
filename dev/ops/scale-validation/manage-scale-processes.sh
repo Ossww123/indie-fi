@@ -21,6 +21,10 @@ Usage:
   sudo manage-scale-processes.sh restart-web-2 <run-id> RESTART-WEB-2-<run-id>
   sudo manage-scale-processes.sh restart-worker-1 <run-id> RESTART-WORKER-1-<run-id>
   sudo manage-scale-processes.sh restart-worker-2 <run-id> RESTART-WORKER-2-<run-id>
+  sudo manage-scale-processes.sh stop-web-1 <run-id> STOP-WEB-1-<run-id>
+  sudo manage-scale-processes.sh start-web-1 <run-id> START-WEB-1-<run-id>
+  sudo manage-scale-processes.sh stop-web-2 <run-id> STOP-WEB-2-<run-id>
+  sudo manage-scale-processes.sh start-web-2 <run-id> START-WEB-2-<run-id>
   manage-scale-processes.sh status
 EOF
 }
@@ -136,6 +140,28 @@ restart_instance() {
   echo "$unit restarted."
 }
 
+set_web_instance_state() {
+  local instance="$1"
+  local desired_state="$2"
+  local expected_confirmation="$3"
+  local unit="indiefi-scale-web@${instance}.service"
+  require_root
+  validate_run_id
+  [[ "$confirmation" == "${expected_confirmation}-${run_id}" ]] \
+    || fail "invalid Web state confirmation."
+  require_armed_run
+
+  if [[ "$desired_state" == active ]]; then
+    [[ -r "${runtime_directory}/web-${instance}.env" ]] \
+      || fail "the Web instance environment is missing."
+    systemctl start "$unit"
+  else
+    systemctl stop "$unit"
+  fi
+  wait_for_unit "$unit" "$desired_state"
+  echo "$unit is $desired_state."
+}
+
 show_status() {
   systemctl show "${web_units[@]}" "${worker_units[@]}" \
     --property=Id,LoadState,ActiveState,SubState,MainPID,NRestarts,EnvironmentFiles
@@ -152,7 +178,7 @@ requires_armed_marker=true
 enabled_at_boot=false
 EOF
     ;;
-  start|stop|restart-web-1|restart-web-2|restart-worker-1|restart-worker-2)
+  start|stop|restart-web-1|restart-web-2|restart-worker-1|restart-worker-2|stop-web-1|start-web-1|stop-web-2|start-web-2)
     exec 9>"$lock_file"
     flock -n 9 || fail "another scale validation command is running."
     case "$command_name" in
@@ -162,6 +188,10 @@ EOF
       restart-web-2) restart_instance indiefi-scale-web@2.service RESTART-WEB-2 ;;
       restart-worker-1) restart_instance indiefi-scale-worker@1.service RESTART-WORKER-1 ;;
       restart-worker-2) restart_instance indiefi-scale-worker@2.service RESTART-WORKER-2 ;;
+      stop-web-1) set_web_instance_state 1 inactive STOP-WEB-1 ;;
+      start-web-1) set_web_instance_state 1 active START-WEB-1 ;;
+      stop-web-2) set_web_instance_state 2 inactive STOP-WEB-2 ;;
+      start-web-2) set_web_instance_state 2 active START-WEB-2 ;;
     esac
     ;;
   status) show_status ;;
