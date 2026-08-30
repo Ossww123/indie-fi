@@ -118,3 +118,13 @@ gateway의 `127.0.0.1:4317`로 전달한다. 정확한 명령은 첫 EC2 연결 
 4. 로컬 Collector·Prometheus·Loki·Tempo·Grafana
 5. dashboard·경보와 로컬 구성 검증
 6. 첫 EC2 세션의 실제 trace·metric·log 연결 확인
+
+## 10. EC2 agent 구성 파일
+
+- `portfolio-observability-agent-compose.yml`: Collector agent, PostgreSQL·Redis exporter와 cAdvisor를 측정 세션 동안만 실행한다. 모두 host network를 사용하지만 수신 주소는 `127.0.0.1`로 제한한다.
+- `otel-agent.yaml`: 앱 OTLP, host metrics와 네 데이터 서비스 scrape를 받아 SSH reverse tunnel의 `127.0.0.1:14317`로 전달한다.
+- `observability-agent.env.example`: exporter 전용 비밀번호 두 개의 형식만 제공하며 실제 값은 `/etc/indiefi/observability.env`의 `root:root 0600` 파일에 둔다.
+- `configure-monitoring-accounts.sh`: PostgreSQL `pg_monitor` 역할과 Redis exporter 공식 최소 ACL을 멱등하게 만든 뒤 로그인·권한을 확인한다.
+- `rabbitmq-enabled-plugins`: 기존 RabbitMQ에 내장 Prometheus endpoint를 켠다. `15692`는 portfolio data Compose에서 loopback에만 게시한다.
+
+이 Compose는 `restart: "no"`다. EC2 재부팅 후 자동으로 관측 부하를 만들지 않으며, 검증 세션에서 명시적으로 올리고 끝날 때 내린다. cAdvisor만 Docker 자원 확인을 위해 privileged 실행이 필요하므로 세션 종료 후 반드시 제거한다.
