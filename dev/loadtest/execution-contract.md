@@ -3,7 +3,7 @@
 ## 파일 경계
 
 - `contract.json`: run id, 대상 Origin, commit, topology, 시나리오·단계·threshold와 결과 경로만 둔다.
-- `credentials.json`: 계정 email pattern과 공통 테스트 비밀번호만 둔다.
+- `credentials.json`: 공통 테스트 비밀번호만 둔다. 계정 pool은 seed manifest에서 읽는다.
 - 두 실제 파일은 `.gitignore` 대상이고, `*.example.json`만 저장소에 둔다.
 - cookie·antiforgery token은 k6 VU의 메모리에만 존재하며 summary·console·HTTP debug에 남기지 않는다.
 

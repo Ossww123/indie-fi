@@ -17,7 +17,7 @@ export const options = {
 export default function () {
     check(contract, {
         'contract run id is available': (value) => value.runId.length > 0,
-        'credentials resolve one account': () => credentials.accountEmail(1).includes('@'),
+        'credentials contain a usable secret': () => credentials.password.length >= 12,
     });
 }
 

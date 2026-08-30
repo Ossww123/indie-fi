@@ -37,25 +37,12 @@ export function loadCredentials(contract) {
     const credentials = readJson(path, 'load-test credentials');
 
     requireEqual(credentials.schemaVersion, 1, 'credentials.schemaVersion');
-    if (typeof credentials.accountEmailPattern !== 'string'
-        || !credentials.accountEmailPattern.includes('{number}')) {
-        throw new Error('credentials.accountEmailPattern must contain {number}.');
-    }
     if (typeof credentials.password !== 'string' || credentials.password.length < 12) {
         throw new Error('credentials.password must contain at least 12 characters.');
     }
 
     return Object.freeze({
-        accountEmailPattern: credentials.accountEmailPattern,
         password: credentials.password,
-        accountEmail(number) {
-            if (!Number.isInteger(number) || number <= 0) {
-                throw new Error('account number must be a positive integer.');
-            }
-            return credentials.accountEmailPattern
-                .replaceAll('{runId}', contract.runId)
-                .replaceAll('{number}', String(number).padStart(5, '0'));
-        },
     });
 }
 
