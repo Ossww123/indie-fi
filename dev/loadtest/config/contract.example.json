@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "runId": "opv-20260830T120000Z-00000000-local",
+  "purpose": "calibration",
+  "baseUrl": "https://127.0.0.1",
+  "scenario": "contract-check",
+  "stage": "smoke",
+  "topology": "single",
+  "commit": "0000000000000000000000000000000000000000",
+  "outputDirectory": "dev/loadtest/results",
+  "thresholds": {
+    "httpReqFailedRate": 0.01,
+    "httpReqDurationP95Ms": 750
+  },
+  "parameters": {}
+}
