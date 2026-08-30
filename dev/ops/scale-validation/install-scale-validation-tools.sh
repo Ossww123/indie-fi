@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if (( EUID != 0 )); then
+  echo 'Run this installer with sudo.' >&2
+  exit 1
+fi
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+target_dir=/usr/local/lib/indiefi/scale-validation
+
+install -d -o root -g root -m 0755 "$target_dir"
+install -o root -g root -m 0755 \
+  "$script_dir/manage-scale-processes.sh" \
+  "$target_dir/manage-scale-processes.sh"
+install -o root -g root -m 0644 \
+  "$script_dir/systemd/indiefi-scale-web@.service" \
+  /etc/systemd/system/indiefi-scale-web@.service
+install -o root -g root -m 0644 \
+  "$script_dir/systemd/indiefi-scale-worker@.service" \
+  /etc/systemd/system/indiefi-scale-worker@.service
+
+systemctl daemon-reload
+for unit in \
+  indiefi-scale-web@1.service indiefi-scale-web@2.service \
+  indiefi-scale-worker@1.service indiefi-scale-worker@2.service; do
+  systemctl is-enabled --quiet "$unit" \
+    && { echo "$unit unexpectedly became enabled." >&2; exit 1; }
+done
+"$target_dir/manage-scale-processes.sh" --plan >/dev/null
+echo 'Scale-validation templates and tools are installed; no instance was started or enabled.'
