@@ -24,3 +24,7 @@
 
 검증 header와 Nginx 변경은 topology stop에서 제거된다. 45분보다 긴 검증은 허용하지 않고
 필요하면 완전히 원복한 새 run으로 나눈다.
+
+## 공유 경계
+
+- `shared-boundaries-runbook.md`: cookie·cursor, SignalR Redis backplane과 Web 공통 upload 제한
