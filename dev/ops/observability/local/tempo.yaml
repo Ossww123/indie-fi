@@ -16,11 +16,11 @@ storage:
   trace:
     backend: local
     wal:
-      path: /data/tempo/wal
+      path: /var/tempo/wal
     local:
-      path: /data/tempo/blocks
+      path: /var/tempo/blocks
 
-compactor:
+backend_worker:
   compaction:
     block_retention: 72h
 

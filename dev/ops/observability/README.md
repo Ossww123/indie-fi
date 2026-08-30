@@ -73,6 +73,7 @@ gateway의 `127.0.0.1:4317`로 전달한다. 정확한 명령은 첫 EC2 연결 
 | 주소 | 용도 |
 |---|---|
 | `127.0.0.1:4317` | Collector gateway OTLP/gRPC |
+| `127.0.0.1:4318` | 로컬 smoke 전용 Collector gateway OTLP/HTTP |
 | `127.0.0.1:3000` | Grafana |
 | `127.0.0.1:9090` | Prometheus 점검용 |
 | `127.0.0.1:3100` | Loki 점검용 |
@@ -167,3 +168,16 @@ Prometheus는 `local/prometheus-rules/indiefi-recording-and-alerts.yaml`에서 H
 PostgreSQL exporter의 기본 `pg_locks_count`는 현재 lock 보유 수만 제공하고 실제 대기 여부를 구분하지 않는다. 따라서 dashboard는 lock mode를 표시하고 경보는 5초가 넘은 transaction과 write/exclusive lock이 함께 존재하는 **lock 위험**을 판정한다. 경보 발생 시 실제 waiter는 `pg_stat_activity.wait_event_type = 'Lock'`으로 확인한다.
 
 경보는 외부 알림을 발송하지 않는다. 측정 세션 동안 Prometheus와 Grafana에서 판정 근거를 보고 run 증거로 남기기 위한 로컬 기준이다. 최초 EC2 연결에서는 실제 exporter metric 이름과 label을 조회해 모든 panel과 rule이 데이터를 반환하는지 확인한 뒤 기준선을 확정한다.
+
+## 13. 로컬 검증
+
+```powershell
+Set-Location dev/ops/observability
+./validate-observability-config.ps1
+./validate-observability-config.ps1 -Runtime
+./manage-local-observability.ps1 Up
+./smoke-local-observability.ps1
+./manage-local-observability.ps1 Down
+```
+
+첫 명령은 Docker daemon 없이 Compose, loopback 게시 정책, dashboard uid와 PowerShell 문법을 검사한다. `-Runtime`은 Docker image의 Prometheus rule·Collector·Loki parser까지 실행한다. smoke는 로컬 합성 신호 하나씩을 OTLP/HTTP로 보낸 뒤 Prometheus·Loki·Tempo API에서 다시 읽어 전체 경로를 검증한다. 실제 EC2 신호 연결과 agent 부하는 별도 13-2-8-2에서 확인한다.

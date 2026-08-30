@@ -10,6 +10,7 @@ services:
     cpus: 0.50
     ports:
       - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
       - "127.0.0.1:13133:13133"
     volumes:
       - ./local/otel-gateway.yaml:/etc/otelcol-contrib/config.yaml:ro
@@ -62,7 +63,7 @@ services:
       - "127.0.0.1:3200:3200"
     volumes:
       - ./local/tempo.yaml:/etc/tempo/tempo.yaml:ro
-      - tempo-data:/data/tempo
+      - tempo-data:/var/tempo
 
   grafana:
     image: grafana/grafana:13.2.0
@@ -76,6 +77,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
