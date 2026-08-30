@@ -45,3 +45,4 @@ dashboard를 본다. SSH가 끊기거나 Ctrl+C를 눌러도 trap이 원복을 �
 ## 시나리오 runbook
 
 - `web-restart-runbook.md`: Nginx 응답, readiness, 기존 로그인 쿠키와 SignalR·폴링 회복
+- `worker-restart-runbook.md`: SIGKILL 뒤 systemd 재시작, RabbitMQ 재전달·Inbox와 media lease 수렴

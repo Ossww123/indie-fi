@@ -68,7 +68,7 @@ describe_plan() {
     "$scenario" "$run_id" "$duration_seconds"
   case "$scenario" in
     web-restart) echo 'action=restart systemd unit indiefi-web.service once' ;;
-    worker-restart) echo 'action=restart systemd unit indiefi-worker.service once' ;;
+    worker-restart) echo 'action=SIGKILL Worker main process once and await systemd on-failure restart with a new PID' ;;
     postgresql-outage) echo 'action=stop exact container indiefi-db, wait, then start and await healthy' ;;
     redis-outage) echo 'action=stop exact container indiefi-redis, wait, then start and await healthy' ;;
     rabbitmq-outage) echo 'action=stop exact container indiefi-rabbitmq, wait, then start and await healthy' ;;
@@ -89,6 +89,20 @@ wait_for_unit() {
   until systemctl is-active --quiet "$unit"; do
     (( SECONDS < deadline )) || fail "$unit did not become active within 60 seconds."
     sleep 2
+  done
+}
+
+wait_for_restarted_unit() {
+  local unit="$1"
+  local previous_pid="$2"
+  local deadline=$((SECONDS + 60))
+  local current_pid
+  until systemctl is-active --quiet "$unit" \
+      && current_pid="$(systemctl show --property=MainPID --value "$unit")" \
+      && [[ "$current_pid" =~ ^[1-9][0-9]*$ ]] \
+      && [[ "$current_pid" != "$previous_pid" ]]; do
+    (( SECONDS < deadline )) || fail "$unit did not restart with a new process within 60 seconds."
+    sleep 1
   done
 }
 
@@ -188,8 +202,11 @@ apply_fault() {
       wait_for_unit indiefi-web.service
       ;;
     worker-restart)
-      systemctl restart indiefi-worker.service
-      wait_for_unit indiefi-worker.service
+      previous_pid="$(systemctl show --property=MainPID --value indiefi-worker.service)"
+      [[ "$previous_pid" =~ ^[1-9][0-9]*$ ]] \
+        || fail "indiefi-worker.service has no running main process."
+      systemctl kill --kill-who=main --signal=SIGKILL indiefi-worker.service
+      wait_for_restarted_unit indiefi-worker.service "$previous_pid"
       ;;
     postgresql-outage)
       fault_applied=true

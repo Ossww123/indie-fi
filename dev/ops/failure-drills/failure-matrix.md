@@ -15,7 +15,7 @@
 | 시나리오 | 통제된 주입 | 예상 사용자 영향 | 반드시 보존할 것 | 기대 관측 | 자동 원복·완료 기준 |
 |---|---|---|---|---|---|
 | `web-restart` | `indiefi-web.service` 1회 restart | 진행 중 요청 일부 실패, Nginx 502/503 가능 | 로그인 쿠키를 해독하는 공유 Data Protection key, 확정 DB 데이터 | systemd 상태 전이, HTTP 오류, readiness 회복 | Web active, `/health/ready` 200, 기존 로그인 재사용 |
-| `worker-restart` | `indiefi-worker.service` 1회 restart | 웹 요청은 유지, 비동기 알림·미디어 일시 지연 | RabbitMQ durable message, Inbox 멱등성, DB media lease | consumer 일시 0, queue 또는 due 증가, Worker 재연결 | Worker active, consumer 복귀, queue·lease 최종 수렴 |
+| `worker-restart` | Worker main process를 1회 SIGKILL하고 systemd 자동 재시작 대기 | 웹 요청은 유지, 비동기 알림·미디어 일시 지연 | RabbitMQ durable message, Inbox 멱등성, DB media lease | PID 교체, consumer 일시 0, queue 또는 due 증가, Worker 재연결 | 새 PID의 Worker active, consumer 복귀, queue·lease 최종 수렴 |
 | `postgresql-outage` | `indiefi-db`를 제한 시간 stop | DB가 필요한 readiness와 쓰기·조회 실패 | PostgreSQL volume, 확정 원장·키 지급·Outbox | `pg_up=0`, readiness 실패, DB 오류 trace | DB healthy, migration 일치, 원장·Outbox 감사 통과 |
 | `redis-outage` | `indiefi-redis`를 제한 시간 stop | 대기실·SignalR backplane·공유 제한 기능 제한 | Redis AOF와 PostgreSQL의 최종 키 지급 | `redis_up=0`, 대기실 실패/제한, 재연결 | Redis healthy, AOF 순번 확인, 키 지급 정합성 유지 |
 | `rabbitmq-outage` | `indiefi-rabbitmq`를 제한 시간 stop | 확정 요청은 유지하되 알림·미디어 전달 지연 | PostgreSQL Outbox, RabbitMQ volume, Message-ID | broker readiness 0, Outbox 증가, consumer 0 | broker healthy, consumer 복귀, Outbox·queue 0 수렴 |
