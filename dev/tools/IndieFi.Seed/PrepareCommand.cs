@@ -179,7 +179,11 @@ internal static class PrepareCommand
             marker,
             new SeedAccountManifest(
                 pools.Sum(pool => pool.Count), pools[0], pools[1], pools[2], pools[3]),
-            new SeedCatalogManifest(options.GameCount, games.Min(game => game.Id), games.Max(game => game.Id)),
+            new SeedCatalogManifest(
+                options.GameCount,
+                games.Min(game => game.Id),
+                games.Max(game => game.Id),
+                games.Select(game => game.Id).Order().ToArray()),
             new SeedDropManifest(drop.Id, drop.GameId, drop.OpensAt, options.KeyCount));
 
         try

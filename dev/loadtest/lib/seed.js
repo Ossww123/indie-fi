@@ -28,6 +28,12 @@ export function loadSeedManifest(contract) {
     }
     equal(manifest.accounts.total, accountTotal, 'seed.accounts.total');
     positiveInteger(manifest.catalog?.gameCount, 'seed.catalog.gameCount');
+    if (!Array.isArray(manifest.catalog.gameIds)
+        || manifest.catalog.gameIds.length !== manifest.catalog.gameCount
+        || new Set(manifest.catalog.gameIds).size !== manifest.catalog.gameCount
+        || manifest.catalog.gameIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+        throw new Error('seed.catalog.gameIds must contain each seeded game id exactly once.');
+    }
     positiveInteger(manifest.drop?.id, 'seed.drop.id');
     positiveInteger(manifest.drop?.gameId, 'seed.drop.gameId');
     positiveInteger(manifest.drop?.keyCount, 'seed.drop.keyCount');
@@ -60,7 +66,11 @@ export function publicSeedMetadata(manifest) {
             latecomers: manifest.accounts.latecomers.count,
             retries: manifest.accounts.retries.count,
         },
-        catalog: manifest.catalog,
+        catalog: {
+            gameCount: manifest.catalog.gameCount,
+            firstGameId: manifest.catalog.firstGameId,
+            lastGameId: manifest.catalog.lastGameId,
+        },
         drop: manifest.drop,
     };
 }

@@ -25,7 +25,8 @@ internal sealed record SeedAccountPool(string Name, int Count, string EmailPrefi
 internal sealed record SeedCatalogManifest(
     int GameCount,
     long FirstGameId,
-    long LastGameId);
+    long LastGameId,
+    IReadOnlyList<long> GameIds);
 
 internal sealed record SeedDropManifest(
     long Id,
