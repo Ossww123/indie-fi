@@ -303,3 +303,83 @@ commit과 13-6-8의 단일 개선 commit을 비교한다.
 - 다음 단계는 직전 단계가 중단 조건 없이 끝나고 정합성 감사에 통과했을 때만 실행한다.
 - 최초 중단 단계 이후 더 높은 단계는 실행하지 않고 cool-down과 복구를 확인한다.
 - stress 실패는 제품 결함과 동일하지 않다. 직전 안정 단계와 실패 원인을 함께 기록한다.
+
+## 14. 테스트 데이터와 실행 격리 계약
+
+### 14.1. run id와 manifest
+
+run id는 `opv-<UTC yyyyMMddTHHmmssZ>-<commit 8자>-<난수 6자>` 형식을 사용한다.
+파일명, k6 tag와 Grafana annotation에는 전체 run id를 사용하고, 사용자에게 보이는
+제목에는 뒤 12자 이내의 short id만 표시한다.
+
+각 run manifest에는 다음 값만 저장한다.
+
+- 전체 commit SHA, topology, target URL과 UTC 시작·종료 시각
+- seed tool과 k6 버전, 시나리오·단계·threshold
+- 생성한 사용자·게임·드롭·키의 DB id 범위와 정확한 개수
+- 드롭별 오픈 시각, 키 수, claimer·retry 계정 범위
+- 실행 전후 DB·Redis·RabbitMQ·R2 감사 결과와 증거 파일 경로
+
+비밀번호, 쿠키, antiforgery token, 이메일·게임 키 원문, R2 서명 URL과 운영 비밀은
+manifest와 k6 결과에 기록하지 않는다.
+
+### 14.2. 식별 규칙
+
+제품 스키마에 부하 테스트 전용 `run_id` 컬럼을 추가하지 않는다. 대신 manifest가
+생성된 DB id를 소유하고, 사람이 확인할 수 있는 값에는 다음 표식을 사용한다.
+
+| 데이터 | 표식 |
+|---|---|
+| 사용자 이메일 | `opv-<short>-uNNNN@example.test` |
+| 사용자 표시 이름 | `OPV <short> U-NNNN` |
+| 게임 제목 | `[OPV:<short>] Game NNNNN` |
+| 게임 소개 | 첫 줄에 `operational-validation:<run id>` |
+| 키 배포 | manifest의 game id·drop id·UTC 오픈 시각으로 식별 |
+| operation id | run id와 사용자·행동 번호에서 결정적으로 생성한 UUID |
+
+표식만 보고 삭제하지 않는다. 삭제·감사는 manifest의 id와 표식을 함께 만족하는지
+확인한다. 기존 사용자·게임 또는 manifest 밖의 행은 운영 검증 도구가 변경하지 않는다.
+
+### 14.3. 기준 seed 규모
+
+| 데이터 묶음 | 초기 규모 | 용도 |
+|---|---:|---|
+| 공개 게임 catalog | 5,000개 | 목록·상세·cursor·검색 |
+| 게임 소유자 | 20명 | 게임·드롭 생성 주체 분산 |
+| 대기실·claim 계정 | 2,200명 | 최대 2,000명 cohort와 준비 실패 여유 |
+| 의도적 retry 계정 | 100명 | `AlreadyClaimed` 멱등 결과 분리 |
+| 장르·태그·플랫폼 | 현재 제품 catalog 재사용 | 결정적 조합으로 검색 분포 생성 |
+| claim 드롭 | 측정 단계마다 새로 1개 | 이전 지급·Redis 상태 격리 |
+| 키 수 | 해당 claimer의 초기 60% | `Granted`와 `SoldOut` 동시 관측 |
+
+catalog 규모는 13-6-6 calibration에서 seed 시간과 DB 크기를 확인해 조정할 수 있다.
+조정하면 최초 기준 측정과 개선 재측정에는 같은 snapshot 또는 같은 seed 인자를 쓴다.
+
+### 14.4. 계정 pool과 준비
+
+- owner, waiting-room, claimer와 retry pool을 겹치지 않게 할당한다.
+- 각 VU는 자기 계정 하나만 사용하고 병렬 VU가 쿠키 저장소를 공유하지 않는다.
+- 로그인 GET·POST와 CSRF·쿠키 준비는 measurement 전에 끝낸다.
+- 준비 실패 계정은 다른 계정으로 조용히 대체하지 않고 실패 수와 제외 id를 남긴다.
+- 같은 비밀번호를 사용하더라도 저장된 password hash는 정상 가입과 같은 salt·정책으로 만든다.
+
+### 14.5. 반복 실행 초기 상태
+
+반복 측정의 기본 초기화는 삭제가 아니라 **새 run id와 새 drop 생성**이다.
+
+1. 이전 run의 Outbox·RabbitMQ queue·미디어 작업이 terminal 상태인지 감사한다.
+2. 새 run manifest와 새 drop·키·전용 operation id를 만든다.
+3. Redis에는 새 drop id namespace만 사용한다.
+4. 실행 종료 뒤 지급·원장·queue와 미디어 정합성을 감사한다.
+5. 이전 run이 수렴하지 않았으면 다음 run을 시작하지 않는다.
+
+catalog와 계정 pool은 생성 비용을 줄이기 위해 같은 기준 측정 묶음 안에서 재사용할
+수 있지만, 이미 지급에 참여한 계정은 다른 claim run에 재사용하지 않는다.
+
+### 14.6. 정리와 파괴적 동작 경계
+
+- 일반 `prepare`, `run`, `audit` 명령은 DELETE·TRUNCATE·volume 제거를 하지 않는다.
+- cleanup은 manifest 경로, 환경 fingerprint와 명시적인 확인 문자열을 모두 요구한다.
+- cleanup 전 대상 행 수와 FK 영향을 dry-run으로 출력하고 예상 수가 다르면 중단한다.
+- 측정 중인 기준 snapshot은 개선 재측정이 끝날 때까지 보존한다.
+- 최종 cleanup 뒤에도 사용자당 지급, key fingerprint와 원장 감사 쿼리를 한 번 실행한다.
