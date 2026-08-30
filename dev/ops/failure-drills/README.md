@@ -41,3 +41,7 @@ dashboard를 본다. SSH가 끊기거나 Ctrl+C를 눌러도 trap이 원복을 �
 - PostgreSQL 복원 검증 전 데이터 의존성 장애 실행
 
 후속 세부 항목에서 시나리오별 준비·관측·정합성 검사 절차를 이 문서에 추가한다.
+
+## 시나리오 runbook
+
+- `web-restart-runbook.md`: Nginx 응답, readiness, 기존 로그인 쿠키와 SignalR·폴링 회복
