@@ -349,7 +349,7 @@ public sealed class KeyDropPageTests
         var formHtml = await formResponse.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, formResponse.StatusCode);
-        Assert.Contains("이미 발급된 키는 그대로 유지됩니다.", formHtml);
+        Assert.Contains("이미 발급된 게임 키는 그대로 유지됩니다.", formHtml);
 
         using var closeForm = new FormUrlEncodedContent(new Dictionary<string, string>
         {
