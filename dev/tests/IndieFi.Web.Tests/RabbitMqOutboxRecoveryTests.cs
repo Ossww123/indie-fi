@@ -736,10 +736,52 @@ public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
         }
     }
 
+    [Fact]
+    public async Task RabbitMq_PermanentConsumerFailure_RetriesThenMovesToErrorQueue()
+    {
+        var settings = BuildMessagingSettings();
+        var recorder = new ProbeDeliveryRecorder();
+        using var consumerHost = BuildHost(
+            settings,
+            recorder,
+            addConsumer: false,
+            addFailureProbeConsumer: true);
+        await consumerHost.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            var prefix = settings["Messaging:RabbitMq:EndpointPrefix"]!;
+            var queueName = $"{prefix}-rabbit-mq-failure-probe";
+            var errorQueueName = $"{queueName}_error";
+            await WaitUntilAsync(
+                async () => await GetQueueValueAsync(queueName, "consumers") == 1,
+                TimeSpan.FromSeconds(30));
+
+            var eventId = Guid.NewGuid();
+            var bus = consumerHost.Services.GetRequiredService<IBus>();
+            await bus.Publish(
+                new RabbitMqFailureProbe(eventId),
+                TestContext.Current.CancellationToken);
+
+            await WaitUntilAsync(
+                async () => await GetQueueValueAsync(
+                    errorQueueName,
+                    "messages_ready") == 1,
+                TimeSpan.FromSeconds(75));
+
+            Assert.Equal(4, recorder.Count(eventId));
+            Assert.Equal(0, await GetQueueValueAsync(queueName, "messages_ready"));
+        }
+        finally
+        {
+            await consumerHost.StopAsync(CancellationToken.None);
+        }
+    }
+
     private IHost BuildHost(
         IReadOnlyDictionary<string, string?> settings,
         ProbeDeliveryRecorder recorder,
-        bool addConsumer)
+        bool addConsumer,
+        bool addFailureProbeConsumer = false)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
@@ -756,6 +798,11 @@ public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
                 {
                     registration.AddConsumer<RabbitMqProbeConsumer>();
                     registration.AddNotificationConsumers();
+                }
+
+                if (addFailureProbeConsumer)
+                {
+                    registration.AddConsumer<RabbitMqFailureProbeConsumer>();
                 }
             });
         builder.Services.AddScoped<ReviewClaimService>();
@@ -862,6 +909,27 @@ public sealed class RabbitMqOutboxRecoveryTests : IClassFixture<RabbitMqFixture>
             return expectedQueues.All(queue =>
                 matching.GetValueOrDefault(queue, -1) == expectedCount);
         }, TimeSpan.FromSeconds(30));
+    }
+
+    private async Task<int> GetQueueValueAsync(string queueName, string column)
+    {
+        var queues = await _rabbitMq.Container.ExecAsync(
+            ["rabbitmqctl", "list_queues", "name", column],
+            TestContext.Current.CancellationToken);
+        if (queues.ExitCode != 0)
+        {
+            return -1;
+        }
+
+        var row = queues.Stdout
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.TrimEnd('\r').Split('\t'))
+            .SingleOrDefault(columns =>
+                columns.Length >= 2
+                && string.Equals(columns[0], queueName, StringComparison.Ordinal));
+        return row is not null && int.TryParse(row[1], out var value)
+            ? value
+            : -1;
     }
 
     private static async Task StageAsync(
@@ -1019,6 +1087,25 @@ public sealed class RabbitMqProbeConsumer :
     {
         _recorder.Record(context.Message.EventId);
         return Task.CompletedTask;
+    }
+}
+
+public sealed record RabbitMqFailureProbe(Guid EventId);
+
+public sealed class RabbitMqFailureProbeConsumer :
+    IConsumer<RabbitMqFailureProbe>
+{
+    private readonly ProbeDeliveryRecorder _recorder;
+
+    public RabbitMqFailureProbeConsumer(ProbeDeliveryRecorder recorder)
+    {
+        _recorder = recorder;
+    }
+
+    public Task Consume(ConsumeContext<RabbitMqFailureProbe> context)
+    {
+        _recorder.Record(context.Message.EventId);
+        throw new InvalidOperationException("Expected isolated consumer failure.");
     }
 }
 
