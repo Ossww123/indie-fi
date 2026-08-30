@@ -13,6 +13,13 @@ install -d -o root -g root -m 0755 "$target_dir"
 install -o root -g root -m 0755 \
   "$script_dir/run-controlled-failure.sh" \
   "$target_dir/run-controlled-failure.sh"
+install -o root -g root -m 0755 \
+  "$script_dir/capture-authoritative-state.sh" \
+  "$target_dir/capture-authoritative-state.sh"
+install -o root -g root -m 0644 \
+  "$script_dir/audit-authoritative-state.sql" \
+  "$target_dir/audit-authoritative-state.sql"
 
 "$target_dir/run-controlled-failure.sh" --plan web-restart 60 install-check >/dev/null
+test -r "$target_dir/audit-authoritative-state.sql"
 echo "Failure drill tools installed in $target_dir."
