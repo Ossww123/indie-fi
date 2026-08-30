@@ -1,0 +1,66 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "id": 1,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (operation, outcome) (rate(indiefi_waiting_room_operations_total[1m]))", "legendFormat": "{{operation}} / {{outcome}}", "refId": "A"}],
+      "title": "Waiting-room operations", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "id": 2,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, operation) (rate(indiefi_waiting_room_redis_duration_milliseconds_bucket[5m])))", "legendFormat": "{{operation}} p95", "refId": "A"}, {"expr": "histogram_quantile(0.99, sum by (le, operation) (rate(indiefi_waiting_room_redis_duration_milliseconds_bucket[5m])))", "legendFormat": "{{operation}} p99", "refId": "B"}],
+      "title": "Waiting-room Redis latency", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}, "id": 3,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (outcome) (rate(indiefi_key_distributions_claims_total[1m]))", "legendFormat": "{{outcome}}", "refId": "A"}],
+      "title": "Key claim outcomes", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "id": 4,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (transition) (rate(indiefi_waiting_room_transitions_total[1m]))", "legendFormat": "{{transition}}", "refId": "A"}, {"expr": "sum by (component, operation) (rate(indiefi_waiting_room_failures_total[1m]))", "legendFormat": "failure {{component}} / {{operation}}", "refId": "B"}],
+      "title": "Transitions and failures", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16}, "id": 5,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "redis_memory_used_bytes", "legendFormat": "used", "refId": "A"}, {"expr": "redis_memory_max_bytes", "legendFormat": "max", "refId": "B"}],
+      "title": "Redis memory", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16}, "id": 6,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "rate(redis_commands_processed_total[1m])", "legendFormat": "commands", "refId": "A"}, {"expr": "rate(redis_rejected_connections_total[1m])", "legendFormat": "rejected", "refId": "B"}],
+      "title": "Redis command rate", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"max": 1, "min": 0, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16}, "id": 7,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "rate(redis_keyspace_hits_total[5m]) / clamp_min(rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]), 0.001)", "legendFormat": "hit ratio", "refId": "A"}],
+      "title": "Redis keyspace hit ratio", "type": "timeseries"
+    }
+  ],
+  "refresh": "15s", "schemaVersion": 42, "tags": ["indiefi", "redis", "waiting-room", "key-claim"],
+  "templating": {"list": []}, "time": {"from": "now-1h", "to": "now"}, "timezone": "utc",
+  "title": "IndieFi / Waiting room and key claims", "uid": "indiefi-keydrop", "version": 1
+}

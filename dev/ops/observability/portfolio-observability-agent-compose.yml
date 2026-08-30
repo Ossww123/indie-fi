@@ -1,0 +1,93 @@
+name: indiefi-observability-agent
+
+services:
+  otel-agent:
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    container_name: indiefi-otel-agent
+    network_mode: host
+    restart: "no"
+    user: "0:0"
+    read_only: true
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    volumes:
+      - ./otel-agent.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /:/hostfs:ro,rslave
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    mem_limit: 256m
+    cpus: 0.35
+    depends_on:
+      - postgres-exporter
+      - redis-exporter
+      - cadvisor
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1
+    container_name: indiefi-postgres-exporter
+    network_mode: host
+    restart: "no"
+    read_only: true
+    env_file:
+      - ${INDIEFI_OBSERVABILITY_ENV_FILE:-/etc/indiefi/observability.env}
+    environment:
+      DATA_SOURCE_URI: 127.0.0.1:5432/indiefi?sslmode=disable
+      DATA_SOURCE_USER: indiefi_monitor
+      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASSWORD:?set POSTGRES_EXPORTER_PASSWORD}
+      PG_EXPORTER_COLLECTION_TIMEOUT: 10s
+    command:
+      - --web.listen-address=127.0.0.1:9187
+      - --collector.long_running_transactions
+      - --collector.process_idle
+      - --collector.stat_checkpointer
+      - --collector.stat_statements
+      - --collector.stat_statements.limit=50
+      - --no-collector.stat_statements.include_query
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 96m
+    cpus: 0.15
+
+  redis-exporter:
+    image: quay.io/oliver006/redis_exporter:v1.90.0
+    container_name: indiefi-redis-exporter
+    network_mode: host
+    restart: "no"
+    read_only: true
+    env_file:
+      - ${INDIEFI_OBSERVABILITY_ENV_FILE:-/etc/indiefi/observability.env}
+    environment:
+      REDIS_ADDR: redis://127.0.0.1:6379
+      REDIS_USER: indiefi_monitor
+      REDIS_PASSWORD: ${REDIS_EXPORTER_PASSWORD:?set REDIS_EXPORTER_PASSWORD}
+      REDIS_EXPORTER_WEB_LISTEN_ADDRESS: 127.0.0.1:9121
+      REDIS_EXPORTER_CONNECTION_TIMEOUT: 5s
+      REDIS_EXPORTER_EXPORT_CLIENT_LIST: "false"
+      REDIS_EXPORTER_REDACT_CONFIG_METRICS: "true"
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 64m
+    cpus: 0.10
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.5
+    container_name: indiefi-cadvisor
+    network_mode: host
+    restart: "no"
+    privileged: true
+    command:
+      - --listen_ip=127.0.0.1
+      - --port=8080
+      - --docker_only=true
+      - --store_container_labels=false
+      - --housekeeping_interval=15s
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    mem_limit: 128m
+    cpus: 0.20

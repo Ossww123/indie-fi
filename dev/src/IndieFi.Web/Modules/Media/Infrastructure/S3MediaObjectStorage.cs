@@ -2,6 +2,7 @@ using System.Net;
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
+using IndieFi.Web.Infrastructure.Observability;
 using IndieFi.Web.Modules.Media.Application;
 using IndieFi.Web.Modules.Media.Domain;
 using Microsoft.Extensions.Options;
@@ -82,6 +83,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         try
         {
             var response = await ExecuteAsync(
+                "get_metadata",
                 token => _client.GetObjectMetadataAsync(
                     new GetObjectMetadataRequest
                     {
@@ -111,6 +113,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         try
         {
             response = await ExecuteCoreAsync(
+                "open_read",
                 token => _client.GetObjectAsync(
                     new GetObjectRequest
                     {
@@ -154,6 +157,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         };
         putRequest.Headers.ContentLength = request.ContentLength;
         await ExecuteAsync(
+            "write",
             token => _client.PutObjectAsync(putRequest, token),
             ObjectNotFoundBehavior.None,
             cancellationToken);
@@ -165,6 +169,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
     {
         MediaObjectAccessPolicy.ValidateSourceCopyRequest(request);
         await ExecuteAsync(
+            "copy",
             token => _client.CopyObjectAsync(
                 new CopyObjectRequest
                 {
@@ -189,6 +194,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         try
         {
             await ExecuteAsync(
+                "delete",
                 token => _client.DeleteObjectAsync(
                     new DeleteObjectRequest
                     {
@@ -211,6 +217,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         CancellationToken cancellationToken = default)
     {
         await ExecuteAsync(
+            "check_ready",
             token => _client.HeadBucketAsync(
                 new HeadBucketRequest
                 {
@@ -225,17 +232,29 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         GetPreSignedUrlRequest request,
         CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var value = await _client.GetPreSignedURLAsync(request);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        var operation = request.Verb == HttpVerb.PUT
+            ? "presign_upload"
+            : "presign_download";
+        using var activity = ExternalOperationTelemetry.Start("r2", operation);
+        try
         {
-            throw Failure(
-                MediaObjectStorageFailureCode.InvalidResponse,
-                "Media object storage returned an invalid response.");
-        }
+            cancellationToken.ThrowIfCancellationRequested();
+            var value = await _client.GetPreSignedURLAsync(request);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            {
+                throw Failure(
+                    MediaObjectStorageFailureCode.InvalidResponse,
+                    "Media object storage returned an invalid response.");
+            }
 
-        return uri;
+            return uri;
+        }
+        catch (Exception exception)
+        {
+            ExternalOperationTelemetry.RecordFailure(activity, exception);
+            throw;
+        }
     }
 
     private DateTime ExpiresAt(TimeSpan lifetime)
@@ -274,12 +293,14 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
     }
 
     private async Task<TResponse> ExecuteAsync<TResponse>(
+        string operationName,
         Func<CancellationToken, Task<TResponse>> operation,
         ObjectNotFoundBehavior objectNotFoundBehavior,
         CancellationToken cancellationToken)
     {
         using var timeout = CreateOperationCancellation(cancellationToken);
         return await ExecuteCoreAsync(
+            operationName,
             operation,
             objectNotFoundBehavior,
             cancellationToken,
@@ -287,11 +308,15 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
     }
 
     private async Task<TResponse> ExecuteCoreAsync<TResponse>(
+        string operationName,
         Func<CancellationToken, Task<TResponse>> operation,
         ObjectNotFoundBehavior objectNotFoundBehavior,
         CancellationToken cancellationToken,
         CancellationToken operationCancellationToken)
     {
+        using var activity = ExternalOperationTelemetry.Start(
+            "r2",
+            operationName);
         cancellationToken.ThrowIfCancellationRequested();
 
         try
@@ -301,6 +326,7 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         catch (OperationCanceledException exception)
             when (!cancellationToken.IsCancellationRequested)
         {
+            ExternalOperationTelemetry.RecordFailure(activity, exception);
             throw Failure(
                 MediaObjectStorageFailureCode.TimedOut,
                 "Media object storage did not respond before the operation timeout.",
@@ -308,11 +334,13 @@ public sealed class S3MediaObjectStorage : IMediaObjectStorage
         }
         catch (AmazonS3Exception exception)
         {
+            ExternalOperationTelemetry.RecordFailure(activity, exception);
             throw MapS3Failure(exception, objectNotFoundBehavior);
         }
         catch (Exception exception)
             when (exception is HttpRequestException or IOException)
         {
+            ExternalOperationTelemetry.RecordFailure(activity, exception);
             throw Failure(
                 MediaObjectStorageFailureCode.Unavailable,
                 "Media object storage is unavailable.",

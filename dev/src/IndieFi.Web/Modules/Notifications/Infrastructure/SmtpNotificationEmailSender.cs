@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using IndieFi.Web.Infrastructure.Observability;
 using IndieFi.Web.Modules.Notifications.Application;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +23,9 @@ public sealed class SmtpNotificationEmailSender : INotificationEmailSender
         NotificationEmailSendRequest request,
         CancellationToken cancellationToken)
     {
+        using var activity = ExternalOperationTelemetry.Start(
+            "ses_smtp",
+            "send_notification");
         using var message = _messageFactory.Create(request);
         using var client = new SmtpClient(
             _options.Smtp.Host,
@@ -42,6 +46,14 @@ public sealed class SmtpNotificationEmailSender : INotificationEmailSender
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken);
         timeout.CancelAfter(_options.Smtp.Timeout);
-        await client.SendMailAsync(message, timeout.Token);
+        try
+        {
+            await client.SendMailAsync(message, timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            ExternalOperationTelemetry.RecordFailure(activity, exception);
+            throw;
+        }
     }
 }
