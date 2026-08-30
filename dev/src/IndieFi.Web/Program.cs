@@ -3,6 +3,7 @@ using System.Net;
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Infrastructure.Authentication;
+using IndieFi.Web.Infrastructure.Observability;
 using IndieFi.Web.Infrastructure.Realtime;
 using IndieFi.Web.Modules.Accounts;
 using IndieFi.Web.Modules.Accounts.Domain;
@@ -37,6 +38,11 @@ builder.Logging.AddFilter(
 builder.Logging.AddFilter(
     "Microsoft.EntityFrameworkCore.Database.Command",
     LogLevel.Warning);
+builder.Services.AddIndieFiObservability(
+    builder.Logging,
+    builder.Configuration,
+    builder.Environment,
+    ObservabilityServiceNames.Web);
 
 // Add services to the container.
 builder.Services.AddRazorPages();

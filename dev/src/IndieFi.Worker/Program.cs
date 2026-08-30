@@ -1,4 +1,5 @@
 using IndieFi.Web.Data;
+using IndieFi.Web.Infrastructure.Observability;
 using IndieFi.Web.Infrastructure.Realtime;
 using IndieFi.Web.Modules.Accounts;
 using IndieFi.Web.Modules.Media;
@@ -8,6 +9,11 @@ using IndieFi.Web.Modules.Notifications.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddIndieFiObservability(
+    builder.Logging,
+    builder.Configuration,
+    builder.Environment,
+    ObservabilityServiceNames.Worker);
 var databaseConnectionString =
     builder.Configuration.GetConnectionString("Database");
 if (string.IsNullOrWhiteSpace(databaseConnectionString))
