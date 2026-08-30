@@ -50,7 +50,7 @@ public sealed class GameDetailPageTests
             queuedRequestId = queuedRequest.Id;
             queuedCreatedAt = queuedRequest.CreatedAt
                 .ToLocalTime()
-                .ToString("yyyy-MM-dd HH:mm");
+                .ToString("yyyy.MM.dd HH:mm");
             var assignedRequest = await ReviewTestData.CreateQueuedRequestAsync(
                 arrangeDb,
                 ownerId,
@@ -70,7 +70,7 @@ public sealed class GameDetailPageTests
             completedRequest.CompletedAt = completedRequest.CreatedAt.AddMinutes(1);
             completedAt = completedRequest.CompletedAt.Value
                 .ToLocalTime()
-                .ToString("yyyy-MM-dd HH:mm");
+                .ToString("yyyy.MM.dd HH:mm");
             cancelledRequest.Status = ReviewRequestStatus.Cancelled;
             cancelledRequest.CancelledAt = DateTimeOffset.UtcNow;
             await arrangeDb.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -187,7 +187,7 @@ public sealed class GameDetailPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("플레이하기", html);
-        Assert.Contains("외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.", html);
+        Assert.Contains("외부 사이트로 이동합니다.", html);
         Assert.Contains("로그인 후 관심 게임 추가", html);
         Assert.Contains("개발자 사이트", html);
         Assert.Contains("Web", html);
@@ -224,9 +224,9 @@ public sealed class GameDetailPageTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("등록된 외부 플레이 링크 없음", html);
+        Assert.Contains("등록된 외부 플레이 링크가 없습니다.", html);
         Assert.Contains("로그인 후 관심 게임 추가", html);
-        Assert.DoesNotContain("외부 사이트의 안전성이나 이용 가능 여부를 보증하지 않습니다.", html);
+        Assert.DoesNotContain("외부 사이트로 이동합니다.", html);
         Assert.DoesNotContain("target=\"_blank\"", html);
     }
 
@@ -258,7 +258,7 @@ public sealed class GameDetailPageTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("게임 정보", html);
+        Assert.Contains("게임 상세 정보", html);
         Assert.Contains("롤플레잉(RPG)", html);
         AssertInOrder(html, "싱글플레이", "픽셀 아트");
         AssertInOrder(html, "Windows", "Linux");

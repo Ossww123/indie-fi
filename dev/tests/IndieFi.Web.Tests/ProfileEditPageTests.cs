@@ -97,7 +97,7 @@ public sealed class ProfileEditPageTests
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         Assert.Contains("프로필이 저장되었습니다.", html);
         Assert.Contains($"value=\"Page{suffix} 게이머\"", html);
-        Assert.Contains($"Page{suffix} 게이머 님", html);
+        Assert.Contains($"<span>Page{suffix} 게이머</span>", html);
         Assert.Contains("첫 줄\n둘째 줄", html);
     }
 

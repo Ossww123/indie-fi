@@ -7,6 +7,14 @@ const navigationContainer = getRequiredElement<HTMLElement>("[data-navigation-co
 const accountContainer = document.querySelector<HTMLElement>("[data-account-container]");
 const accountToggle = accountContainer?.querySelector<HTMLButtonElement>("[data-account-toggle]");
 const accountMenu = accountContainer?.querySelector<HTMLElement>("[data-account-menu]");
+const skipLink = getRequiredElement<HTMLAnchorElement>(".site-skip-link");
+const mainContent = getRequiredElement<HTMLElement>("#main-content");
+
+skipLink.addEventListener("click", (event) => {
+  event.preventDefault();
+  mainContent.focus({ preventScroll: true });
+  mainContent.scrollIntoView({ block: "start" });
+});
 
 const setAccountExpanded = (isExpanded: boolean): void => {
   if (!accountToggle || !accountMenu) {

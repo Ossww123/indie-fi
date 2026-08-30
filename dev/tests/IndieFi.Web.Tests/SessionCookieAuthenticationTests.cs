@@ -130,7 +130,7 @@ public sealed class SessionCookieAuthenticationTests
         {
             var html = await firstResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken);
-            Assert.Contains($"{firstNickname} 님", WebUtility.HtmlDecode(html));
+            Assert.Contains($"<span>{firstNickname}</span>", WebUtility.HtmlDecode(html));
             Assert.DoesNotContain(UserDisplayIdentifier.Format(account.UserId), html);
             AssertCookieRenewed(factory, firstResponse);
         }
@@ -153,7 +153,7 @@ public sealed class SessionCookieAuthenticationTests
         {
             var html = await secondResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken);
-            Assert.Contains($"{secondNickname} 님", WebUtility.HtmlDecode(html));
+            Assert.Contains($"<span>{secondNickname}</span>", WebUtility.HtmlDecode(html));
             Assert.DoesNotContain(firstNickname, html);
             AssertCookieRenewed(factory, secondResponse);
         }

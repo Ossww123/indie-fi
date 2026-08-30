@@ -71,9 +71,9 @@ public sealed class LoginPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("최근 2개 주요 버전", decodedHtml);
-        Assert.Contains("Chrome, Edge, Firefox, Safari", decodedHtml);
-        Assert.Contains("쿠키를 허용", decodedHtml);
-        Assert.Contains("JavaScript가 필요", decodedHtml);
+        Assert.Contains("Chrome · Edge · Firefox · Safari", decodedHtml);
+        Assert.Contains("쿠키 허용", decodedHtml);
+        Assert.Contains("JavaScript 사용", decodedHtml);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public sealed class LoginPageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains($"{nickname} 님", WebUtility.HtmlDecode(html));
+        Assert.Contains($"<span>{nickname}</span>", WebUtility.HtmlDecode(html));
         Assert.Contains($"href=\"/Profiles/{userId}\"", html);
         Assert.Contains("data-account-toggle", html);
         Assert.Contains("data-account-menu", html);

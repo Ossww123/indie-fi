@@ -43,6 +43,10 @@ public sealed class FrontendInteractionBrowserTests : PageTest
     public async Task SkipLink_MovesKeyboardFocusToTheMainContent()
     {
         await LoadPageAsync("/BrowserSupport", viewportWidth: 1440);
+        await FrontendBrowserTestSupport.LoadProductionScriptAsync(
+            Page,
+            "layout",
+            "navigation.js");
 
         await Page.Keyboard.PressAsync("Tab");
 
