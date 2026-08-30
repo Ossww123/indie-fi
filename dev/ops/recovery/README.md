@@ -125,3 +125,13 @@ restore 도구가 object count·총 byte를 S3 API로 따로 검증한다. 복�
 `Purge`는 고정 Compose volume을 내린 뒤 marker의 절대 경로가 일치하고 reparse
 point가 아닌 workspace만 삭제한다. 운영 또는 평소 개발 volume 이름과 겹치지
 않는다.
+
+실제 EC2 세션의 쓰기 통제·RPO/RTO·사용자 흐름·서비스 복귀 순서는
+`recovery-drill-runbook.md`를 따른다. 검증된 backup 보존 상태는 먼저 preview한다.
+
+```powershell
+./prune-recovery-runs.ps1 -BackupRoot D:\indiefi-recovery-backups
+```
+
+도구는 최근 3개와 14일 조건을 모두 만족하지 못하는 검증 성공 run만 후보로
+표시한다. 불완전·미검증·marker 불일치 directory는 자동 삭제하지 않는다.

@@ -143,6 +143,12 @@ try {
         throw "Recovery run already exists: $runDirectory"
     }
     [void](New-Item -ItemType Directory -Path $runDirectory)
+    Write-Utf8Json ([ordered]@{
+        formatVersion = 1
+        runId = $runId
+        runDirectory = [System.IO.Path]::GetFullPath($runDirectory)
+        createdUtc = $captureStarted.ToString('o')
+    }) (Join-Path $runDirectory '.indiefi-recovery-run')
 
     $temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "$runId-$([Guid]::NewGuid().ToString('N'))"
     $bundleRoot = Join-Path $temporaryDirectory 'bundle'
