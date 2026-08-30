@@ -22,6 +22,12 @@ install -o root -g root -m 0755 \
 install -o root -g root -m 0755 \
   "$script_dir/render-scale-nginx.sh" \
   "$target_dir/render-scale-nginx.sh"
+install -o root -g root -m 0755 \
+  "$script_dir/capture-key-drop-state.sh" \
+  "$target_dir/capture-key-drop-state.sh"
+install -o root -g root -m 0644 \
+  "$script_dir/audit-key-drop.sql" \
+  "$target_dir/audit-key-drop.sql"
 install -o root -g root -m 0644 \
   "$script_dir/systemd/indiefi-scale-web@.service" \
   /etc/systemd/system/indiefi-scale-web@.service
@@ -38,4 +44,5 @@ for unit in \
 done
 "$target_dir/manage-scale-processes.sh" --plan >/dev/null
 "$target_dir/manage-scale-topology.sh" --plan >/dev/null
+test -r "$target_dir/audit-key-drop.sql"
 echo 'Scale-validation templates and tools are installed; no instance was started or enabled.'
