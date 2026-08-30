@@ -50,7 +50,7 @@ public sealed class NotificationPreferencePageTests
         Assert.Contains("리뷰 작업 배정", html);
         Assert.Contains("팔로우한 사용자의 새 공개 게임", html);
         Assert.Contains("계정 정지 및 해제", html);
-        Assert.Contains("해제할 수 없는 계정 알림입니다.", html);
+        Assert.Contains("해제할 수 없는 계정 알림", html);
         Assert.Contains("Preferences[8].WebEnabled", html);
         Assert.Contains("disabled=\"disabled\"", html);
     }

@@ -57,7 +57,7 @@ public sealed class NotificationInboxPageTests
         Assert.Contains("data-notification-badge", html);
         Assert.Contains("data-notification-live-state", html);
         Assert.Contains("최신 알림 확인 중", WebUtility.HtmlDecode(html));
-        Assert.Contains("surface-item-emphasis", html);
+        Assert.Contains("ivory-inbox-item-unread", html);
         Assert.Contains("읽지 않은 알림 1개", WebUtility.HtmlDecode(html));
     }
 

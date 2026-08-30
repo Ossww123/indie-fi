@@ -48,7 +48,7 @@ public sealed class ReceivedFeedbackPageTests
         Assert.DoesNotContain(
             UserDisplayIdentifier.Format(feedback.ReviewerId),
             decodedHtml);
-        Assert.Contains("· 제출 ", decodedHtml);
+        Assert.Contains(" 제출", decodedHtml);
         Assert.DoesNotContain(feedback.ReviewerEmail, decodedHtml);
     }
 
@@ -223,8 +223,11 @@ public sealed class ReceivedFeedbackPageTests
 
         var createdHtml = await GetFeedbackHtmlAsync(client, feedback.GameId);
         Assert.Contains("평가를 저장했습니다.", WebUtility.HtmlDecode(createdHtml));
-        Assert.Contains("현재 평가:", WebUtility.HtmlDecode(createdHtml));
-        Assert.Contains(">5점</strong>", WebUtility.HtmlDecode(createdHtml));
+        Assert.Contains(
+            $"data-current-feedback-rating=\"{feedback.FeedbackId}\"",
+            createdHtml);
+        Assert.Contains("<strong>5</strong>", WebUtility.HtmlDecode(createdHtml));
+        Assert.Contains("5점 만점", WebUtility.HtmlDecode(createdHtml));
         Assert.Contains("실제로 도움이 된 이유", WebUtility.HtmlDecode(createdHtml));
         Assert.Matches(
             "<option value=\"5\" selected(?:=\"selected\")?>5점",
@@ -326,7 +329,8 @@ public sealed class ReceivedFeedbackPageTests
         var decodedPageHtml = WebUtility.HtmlDecode(pageHtml);
 
         Assert.Contains("평가 기간이 종료되었습니다.", decodedPageHtml);
-        Assert.Contains(">4점</strong>", decodedPageHtml);
+        Assert.Contains("<strong>4</strong>", decodedPageHtml);
+        Assert.Contains("5점 만점", decodedPageHtml);
         Assert.Contains("기한 종료 뒤에도 보이는 평가 사유", decodedPageHtml);
         Assert.DoesNotContain(
             $"data-feedback-rating-form=\"{feedback.FeedbackId}\"",
@@ -404,7 +408,8 @@ public sealed class ReceivedFeedbackPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("다른 요청에서 평가가 변경되었습니다.", html);
-        Assert.Contains(">4점</strong>", html);
+        Assert.Contains("<strong>4</strong>", html);
+        Assert.Contains("5점 만점", html);
         Assert.Contains("다른 요청의 평가", html);
         Assert.DoesNotContain("뒤늦게 도착한 평가", html);
     }

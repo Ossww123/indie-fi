@@ -67,9 +67,9 @@ public sealed class PublicProfilePageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Public Gamer", html);
         Assert.Contains("게임을 만들고 리뷰합니다.", html);
-        Assert.Contains("완료한 리뷰", html);
-        Assert.Contains("5개", html);
-        Assert.Contains("리뷰어 등급", html);
+        Assert.Contains("REVIEWS WRITTEN", html);
+        Assert.Contains("<dd>5</dd>", html);
+        Assert.Contains("REVIEWER GRADE", html);
         Assert.Contains("골드", html);
         Assert.DoesNotContain("신뢰도 점수", html);
         Assert.DoesNotContain("품질 점수", html);
@@ -92,7 +92,7 @@ public sealed class PublicProfilePageTests
             await gameResponse.Content.ReadAsStringAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, gameResponse.StatusCode);
-        Assert.Contains("개발자", gameHtml);
+        Assert.Contains("by ", gameHtml);
         Assert.Contains("Public Gamer", gameHtml);
         Assert.Contains($"href=\"/Profiles/{userId}\"", gameHtml);
     }
@@ -122,9 +122,9 @@ public sealed class PublicProfilePageTests
         Assert.Contains($"user#{userId}", html);
         Assert.Contains("아직 소개가 없습니다.", html);
         Assert.Contains("아직 등록한 게임이 없습니다.", html);
-        Assert.Contains("완료한 리뷰", html);
-        Assert.Contains("0개", html);
-        Assert.Contains("리뷰어 등급", html);
+        Assert.Contains("REVIEWS WRITTEN", html);
+        Assert.Contains("<dd>0</dd>", html);
+        Assert.Contains("REVIEWER GRADE", html);
         Assert.Contains("등급 산정 전", html);
     }
 

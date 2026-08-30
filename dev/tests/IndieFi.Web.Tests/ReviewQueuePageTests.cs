@@ -311,7 +311,8 @@ public sealed class ReviewQueuePageTests
             TestContext.Current.CancellationToken));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("내 작업 이력 2개", html);
+        Assert.Contains("내 작업 이력", html);
+        Assert.Contains(">2개</span>", html);
         Assert.Contains(CompletedGameTitle, html);
         Assert.Contains(ExpiredGameTitle, html);
         Assert.Contains("완료", html);

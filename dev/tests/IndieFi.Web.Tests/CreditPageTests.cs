@@ -105,7 +105,7 @@ public sealed class CreditPageTests
         // Razor can write non-Latin expression values as numeric character references,
         // so decoding consistently compares the text that the reader sees.
         var decodedHtml = WebUtility.HtmlDecode(html);
-        Assert.Contains("현재 3 크레딧", decodedHtml);
+        Assert.Contains("<strong>3</strong> 크레딧", decodedHtml);
         Assert.Contains("+3", decodedHtml);
         Assert.Contains("가입 축하 지급", decodedHtml);
     }
