@@ -12,6 +12,7 @@ readonly nginx_drop_in="${nginx_drop_in_directory}/90-indiefi-scale-emergency-re
 readonly process_tool=/usr/local/lib/indiefi/scale-validation/manage-scale-processes.sh
 readonly emergency_tool=/usr/local/lib/indiefi/scale-validation/emergency-restore-nginx.sh
 readonly render_tool=/usr/local/lib/indiefi/scale-validation/render-scale-nginx.sh
+readonly verify_tool=/usr/local/lib/indiefi/scale-validation/verify-single-topology.sh
 readonly rollback_timer=indiefi-scale-auto-rollback.timer
 readonly rollback_service=indiefi-scale-auto-rollback.service
 readonly lock_file=/run/lock/indiefi-scale-validation-topology.lock
@@ -164,6 +165,7 @@ rollback() {
   systemctl stop "$rollback_timer" 2>/dev/null || true
   systemctl reset-failed "$rollback_timer" 2>/dev/null || true
   remove_runtime_state
+  "$verify_tool"
   echo "scale-topology: rollback finished reason=$reason"
 }
 
