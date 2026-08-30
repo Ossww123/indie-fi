@@ -128,3 +128,27 @@ gateway의 `127.0.0.1:4317`로 전달한다. 정확한 명령은 첫 EC2 연결 
 - `rabbitmq-enabled-plugins`: 기존 RabbitMQ에 내장 Prometheus endpoint를 켠다. `15692`는 portfolio data Compose에서 loopback에만 게시한다.
 
 이 Compose는 `restart: "no"`다. EC2 재부팅 후 자동으로 관측 부하를 만들지 않으며, 검증 세션에서 명시적으로 올리고 끝날 때 내린다. cAdvisor만 Docker 자원 확인을 위해 privileged 실행이 필요하므로 세션 종료 후 반드시 제거한다.
+
+## 11. 로컬 관측 저장소
+
+`portfolio-observability-local-compose.yml`은 로컬 PC에 다음 구성요소를 함께 띄운다.
+
+- Collector gateway: EC2 agent 또는 로컬 애플리케이션의 OTLP를 받아 신호별 저장소로 전달한다.
+- Prometheus: 메트릭을 15초마다 수집하며 시간 3일과 크기 2GB 중 먼저 도달한 제한을 적용한다.
+- Loki: OTLP 로그를 로컬 filesystem에 저장하고 72시간 뒤 Compactor로 제거한다.
+- Tempo: trace를 단일 프로세스 local backend에 저장하고 72시간 뒤 제거한다.
+- Grafana: 세 저장소를 자동 등록하며 익명 접근과 사용자 가입을 막는다.
+
+모든 호스트 publish는 `127.0.0.1`에만 바인딩한다. Loki와 Tempo의 named volume은 Docker Desktop에서 이식 가능한 크기 quota를 지원하지 않으므로 시간 보존과 Compose 메모리 제한을 적용하고 측정 중 `df`와 Docker Desktop 디스크 사용량을 함께 확인한다.
+
+```powershell
+Set-Location dev/ops/observability
+Copy-Item local-observability.env.example local-observability.env
+# local-observability.env의 Grafana 비밀번호를 로컬 전용 긴 값으로 변경한다.
+./manage-local-observability.ps1 Up
+./manage-local-observability.ps1 Status
+./manage-local-observability.ps1 Down
+./manage-local-observability.ps1 Purge -ConfirmPurge
+```
+
+`Down`은 컨테이너만 종료해 다음 실행에서도 데이터를 유지한다. `Purge`는 로컬 관측 named volume까지 삭제하므로 필요한 run 증거를 먼저 반출한 뒤에만 명시적으로 실행한다. `local-observability.env`는 커밋하지 않는다.

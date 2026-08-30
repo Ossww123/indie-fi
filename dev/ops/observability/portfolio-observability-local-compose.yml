@@ -1,0 +1,94 @@
+name: indiefi-observability
+
+services:
+  otel-gateway:
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    command:
+      - --config=/etc/otelcol-contrib/config.yaml
+    restart: "no"
+    mem_limit: 512m
+    cpus: 0.50
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:13133:13133"
+    volumes:
+      - ./local/otel-gateway.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - loki
+      - tempo
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=3d
+      - --storage.tsdb.retention.size=2GB
+      - --web.enable-lifecycle
+    restart: "no"
+    mem_limit: 768m
+    cpus: 0.75
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./local/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./local/prometheus-rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - otel-gateway
+
+  loki:
+    image: grafana/loki:3.7.7
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+    restart: "no"
+    mem_limit: 768m
+    cpus: 0.75
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./local/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+
+  tempo:
+    image: grafana/tempo:3.0.3
+    command:
+      - -config.file=/etc/tempo/tempo.yaml
+      - -target=all
+    restart: "no"
+    mem_limit: 768m
+    cpus: 0.75
+    ports:
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./local/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/data/tempo
+
+  grafana:
+    image: grafana/grafana:13.2.0
+    restart: "no"
+    mem_limit: 512m
+    cpus: 0.50
+    environment:
+      GF_SECURITY_ADMIN_USER: indiefi-admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in local-observability.env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./local/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./local/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+volumes:
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
