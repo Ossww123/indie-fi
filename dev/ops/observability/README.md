@@ -152,3 +152,18 @@ Copy-Item local-observability.env.example local-observability.env
 ```
 
 `Down`은 컨테이너만 종료해 다음 실행에서도 데이터를 유지한다. `Purge`는 로컬 관측 named volume까지 삭제하므로 필요한 run 증거를 먼저 반출한 뒤에만 명시적으로 실행한다. `local-observability.env`는 커밋하지 않는다.
+
+## 12. 자동 dashboard와 경보
+
+Grafana는 시작할 때 `local/grafana/dashboards`의 다음 화면을 읽는다.
+
+1. `Service overview`: HTTP RPS·오류율·p95, 의존성 health, host CPU·memory와 queue를 함께 본다.
+2. `HTTP and PostgreSQL`: route별 요청과 p95·5xx, DB span 지연, 연결·lock·transaction·cache hit를 본다.
+3. `Waiting room and key claims`: Redis 작업 지연과 대기실 전이·실패, 키 수령 결과를 본다.
+4. `Async worker and media`: RabbitMQ·Outbox·알림·이메일과 media 처리량·적체·실패를 본다.
+
+Prometheus는 `local/prometheus-rules/indiefi-recording-and-alerts.yaml`에서 HTTP 오류율·p95, host CPU·memory·disk, PostgreSQL·Redis health와 연결·lock 위험, RabbitMQ consumer·queue, 알림·media 적체를 15초마다 평가한다. `warning`은 다음 부하 단계로 올리지 않고 원인을 확인하는 선이며 `critical`은 현재 부하를 중단하고 cool-down과 정합성 감사를 시작하는 선이다.
+
+PostgreSQL exporter의 기본 `pg_locks_count`는 현재 lock 보유 수만 제공하고 실제 대기 여부를 구분하지 않는다. 따라서 dashboard는 lock mode를 표시하고 경보는 5초가 넘은 transaction과 write/exclusive lock이 함께 존재하는 **lock 위험**을 판정한다. 경보 발생 시 실제 waiter는 `pg_stat_activity.wait_event_type = 'Lock'`으로 확인한다.
+
+경보는 외부 알림을 발송하지 않는다. 측정 세션 동안 Prometheus와 Grafana에서 판정 근거를 보고 run 증거로 남기기 위한 로컬 기준이다. 최초 EC2 연결에서는 실제 exporter metric 이름과 label을 조회해 모든 panel과 rule이 데이터를 반환하는지 확인한 뒤 기준선을 확정한다.
