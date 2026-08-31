@@ -10,6 +10,9 @@
 제외한다. 오픈 뒤 snapshot·late Join·claim만 `phase=measurement`로 측정한다. 준비 실패는 별도
 counter가 0이어야 하므로 성능 집계에서 제외했다고 조용히 무시되지는 않는다.
 
+`preparationSpreadSeconds`는 k6 실행 시각이 아니라 UTC 오픈 시각 직전 구간에 고정한다. 실행기를
+일찍 시작해도 로그인·사전 Join이 오픈보다 지나치게 일찍 끝나 유휴 연결이 한꺼번에 재연결되지 않는다.
+
 ## 결과 판정
 
 - fresh claim은 ASCII `data-claim-result="granted"` marker로 분류한다.

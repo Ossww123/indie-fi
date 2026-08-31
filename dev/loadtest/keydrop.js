@@ -306,7 +306,15 @@ function spreadPreparation(number) {
         return;
     }
     const fraction = ((number * 7919) % 1000) / 1000;
-    sleep(fraction * parameters.preparationSpreadSeconds);
+    const preparationWindowMilliseconds =
+        parameters.preparationSpreadSeconds * 1000;
+    const scheduledAtMilliseconds = opensAtMilliseconds
+        - preparationWindowMilliseconds
+        + (fraction * preparationWindowMilliseconds);
+    const delayMilliseconds = scheduledAtMilliseconds - Date.now();
+    if (delayMilliseconds > 0) {
+        sleep(delayMilliseconds / 1000);
+    }
 }
 
 function lateDelaySeconds(number) {
