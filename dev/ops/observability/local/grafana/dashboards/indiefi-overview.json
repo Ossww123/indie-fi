@@ -50,7 +50,7 @@
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4},
       "id": 5,
       "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
-      "targets": [{"expr": "1 - avg(system_cpu_utilization_ratio{state=\"idle\"})", "legendFormat": "host CPU", "refId": "A"}],
+      "targets": [{"expr": "1 - (sum(rate(system_cpu_time_seconds_total{state=\"idle\"}[5m])) / sum(rate(system_cpu_time_seconds_total[5m])))", "legendFormat": "host CPU", "refId": "A"}],
       "title": "Host CPU utilization",
       "type": "timeseries"
     },

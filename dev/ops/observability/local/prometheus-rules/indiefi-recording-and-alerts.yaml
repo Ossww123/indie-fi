@@ -51,7 +51,7 @@ groups:
     interval: 15s
     rules:
       - alert: IndieFiHostCpuWarning
-        expr: 1 - avg(system_cpu_utilization_ratio{state="idle"}) > 0.90
+        expr: 1 - (sum(rate(system_cpu_time_seconds_total{state="idle"}[5m])) / sum(rate(system_cpu_time_seconds_total[5m]))) > 0.90
         for: 60s
         labels:
           severity: warning
@@ -59,7 +59,7 @@ groups:
           summary: Host CPU utilization is above 90%
           action: Hold the current stage and compare CPU with latency and queue growth.
       - alert: IndieFiHostCpuCritical
-        expr: 1 - avg(system_cpu_utilization_ratio{state="idle"}) > 0.95
+        expr: 1 - (sum(rate(system_cpu_time_seconds_total{state="idle"}[5m])) / sum(rate(system_cpu_time_seconds_total[5m]))) > 0.95
         for: 120s
         labels:
           severity: critical

@@ -42,6 +42,7 @@ receivers:
             - targets: [127.0.0.1:9121]
         - job_name: rabbitmq
           scrape_interval: 15s
+          metrics_path: /metrics/per-object
           static_configs:
             - targets: [127.0.0.1:15692]
 
