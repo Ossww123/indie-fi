@@ -36,7 +36,11 @@ internal static class PrepareCommand
         var accountConfirmedAt = DateTimeOffset.UtcNow;
 
         await using var db = new AppDbContext(dbOptions);
-        var keyProvider = new ConfigurationKeyProvider(configuration);
+        var keyFilePath = configuration[
+            $"{AccountProtectionKeyFileOptions.SectionName}:Path"];
+        IKeyProvider keyProvider = string.IsNullOrWhiteSpace(keyFilePath)
+            ? new ConfigurationKeyProvider(configuration)
+            : new FileKeyProvider(keyFilePath);
         var emailProtection = new EmailProtectionService(keyProvider);
         var gameKeyProtection = new GameKeyProtectionService(keyProvider);
         var passwordHasher = new PasswordHasher<User>();
