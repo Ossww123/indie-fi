@@ -94,7 +94,7 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:8080
       AllowedHosts: 127.0.0.1;localhost
       ConnectionStrings__Database: Host=db;Port=5432;Database=${RESTORE_POSTGRES_DB};Username=${RESTORE_POSTGRES_USER};Password=${RESTORE_POSTGRES_PASSWORD}
-      ReverseProxy__KnownProxies__0: 127.0.0.1
+      ReverseProxy__KnownProxies__0: 172.30.255.10
       Observability__Enabled: "false"
       Authentication__Google__Enabled: "false"
       AuthenticationEmail__Enabled: "false"
@@ -135,6 +135,9 @@ services:
     restart: "no"
     ports:
       - "127.0.0.1:55443:8443"
+    networks:
+      default:
+        ipv4_address: 172.30.255.10
     volumes:
       - ./restore-nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - recovery-tls-data:/etc/nginx/tls:ro
@@ -143,6 +146,12 @@ services:
         condition: service_started
       tls-init:
         condition: service_completed_successfully
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.255.0/24
 
 volumes:
   recovery-postgres-data:

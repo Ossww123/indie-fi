@@ -17,6 +17,7 @@ RUN dotnet publish src/IndieFi.Web/IndieFi.Web.csproj \
     --output /app/publish \
     --no-restore \
     -p:ClientBuildEnabled=false \
+    -p:ClientAssetsPrepared=true \
     -p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
@@ -24,4 +25,3 @@ WORKDIR /app
 COPY --from=build /app/publish/ ./
 USER $APP_UID
 ENTRYPOINT ["dotnet", "IndieFi.Web.dll"]
-
