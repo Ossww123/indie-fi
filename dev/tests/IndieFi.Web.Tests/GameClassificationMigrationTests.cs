@@ -2,6 +2,7 @@ using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Games.Application;
 using IndieFi.Web.Modules.Games.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
@@ -98,7 +99,8 @@ public sealed class GameClassificationMigrationTests
         CancellationToken cancellationToken)
     {
         await using var db = _fixture.NewApplicationDbContext(database);
-        var catalog = await new GameClassificationCatalogQueryService(db)
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var catalog = await new GameClassificationCatalogQueryService(db, cache)
             .GetActiveAsync(cancellationToken);
 
         Assert.Equal(20, catalog.Genres.Count);

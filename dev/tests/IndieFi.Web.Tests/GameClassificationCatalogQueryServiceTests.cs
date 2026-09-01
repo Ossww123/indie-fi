@@ -1,14 +1,17 @@
+using IndieFi.Web.Data;
 using IndieFi.Web.Modules.Games.Application;
 using IndieFi.Web.Modules.Games.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Xunit;
 
 namespace IndieFi.Web.Tests;
 
 [Collection(PostgreSqlCollection.Name)]
-public sealed class GameClassificationCatalogQueryServiceTests
+public sealed class GameClassificationCatalogQueryServiceTests : IDisposable
 {
     private readonly PostgreSqlFixture _fixture;
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public GameClassificationCatalogQueryServiceTests(PostgreSqlFixture fixture)
     {
@@ -19,12 +22,46 @@ public sealed class GameClassificationCatalogQueryServiceTests
     public async Task GetActiveAsync_ReturnsOnlyActiveOptionsInCatalogOrder()
     {
         await using var db = _fixture.NewDbContext();
-        var result = await new GameClassificationCatalogQueryService(db)
+        var result = await CreateService(db)
             .GetActiveAsync(TestContext.Current.CancellationToken);
 
         AssertOptionsMatchActiveDefinitions(result.Genres, GameClassificationCatalog.Genres);
         AssertOptionsMatchActiveDefinitions(result.Tags, GameClassificationCatalog.Tags);
         AssertOptionsMatchActiveDefinitions(result.Platforms, GameClassificationCatalog.Platforms);
+    }
+
+    [Fact]
+    public async Task GetActiveAsync_AfterFirstRead_DoesNotQueryDatabaseAgain()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var firstRoundTrips = new RoundTripCountingInterceptor();
+        await using var firstDb = _fixture.NewDbContext(firstRoundTrips);
+        var first = await CreateService(firstDb).GetActiveAsync(cancellationToken);
+
+        var secondRoundTrips = new RoundTripCountingInterceptor();
+        await using var secondDb = _fixture.NewDbContext(secondRoundTrips);
+        var second = await CreateService(secondDb).GetActiveAsync(cancellationToken);
+
+        Assert.Equal(3, firstRoundTrips.Count);
+        Assert.Equal(0, secondRoundTrips.Count);
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public async Task GetActiveAsync_WhenCacheMissesConcurrently_QueriesOnlyOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var firstRoundTrips = new RoundTripCountingInterceptor();
+        var secondRoundTrips = new RoundTripCountingInterceptor();
+        await using var firstDb = _fixture.NewDbContext(firstRoundTrips);
+        await using var secondDb = _fixture.NewDbContext(secondRoundTrips);
+
+        var results = await Task.WhenAll(
+            CreateService(firstDb).GetActiveAsync(cancellationToken),
+            CreateService(secondDb).GetActiveAsync(cancellationToken));
+
+        Assert.Equal(3, firstRoundTrips.Count + secondRoundTrips.Count);
+        Assert.Same(results[0], results[1]);
     }
 
     [Fact]
@@ -60,7 +97,7 @@ public sealed class GameClassificationCatalogQueryServiceTests
         });
         await db.SaveChangesAsync(cancellationToken);
 
-        var result = await new GameClassificationCatalogQueryService(db)
+        var result = await CreateService(db)
             .GetForGameAsync(game.Id, cancellationToken);
 
         Assert.NotNull(result);
@@ -107,7 +144,7 @@ public sealed class GameClassificationCatalogQueryServiceTests
         }
 
         await using var db = _fixture.NewDbContext();
-        var result = await new GameClassificationCatalogQueryService(db)
+        var result = await CreateService(db)
             .GetDetailAsync(gameId, TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
@@ -129,11 +166,16 @@ public sealed class GameClassificationCatalogQueryServiceTests
     public async Task GetForGameAsync_WhenGameIsUnavailable_ReturnsNull(long gameId)
     {
         await using var db = _fixture.NewDbContext();
-        var result = await new GameClassificationCatalogQueryService(db)
+        var result = await CreateService(db)
             .GetForGameAsync(gameId, TestContext.Current.CancellationToken);
 
         Assert.Null(result);
     }
+
+    public void Dispose() => _cache.Dispose();
+
+    private GameClassificationCatalogQueryService CreateService(AppDbContext db) =>
+        new(db, _cache);
 
     private static void AssertOptionsMatchActiveDefinitions(
         IReadOnlyList<GameClassificationOption> actual,

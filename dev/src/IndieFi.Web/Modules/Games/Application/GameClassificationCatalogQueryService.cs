@@ -1,5 +1,6 @@
 using IndieFi.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace IndieFi.Web.Modules.Games.Application;
 
@@ -27,20 +28,58 @@ public sealed record GameClassificationDetailCatalog(
 
 public sealed class GameClassificationCatalogQueryService
 {
-    private readonly AppDbContext _db;
+    private static readonly object ActiveCatalogCacheKey = new();
+    private static readonly SemaphoreSlim ActiveCatalogCacheGate = new(1, 1);
+    private static readonly TimeSpan ActiveCatalogCacheLifetime = TimeSpan.FromMinutes(5);
 
-    public GameClassificationCatalogQueryService(AppDbContext db)
+    private readonly AppDbContext _db;
+    private readonly IMemoryCache _cache;
+
+    public GameClassificationCatalogQueryService(
+        AppDbContext db,
+        IMemoryCache cache)
     {
         _db = db;
+        _cache = cache;
     }
 
     public async Task<GameClassificationSelectionCatalog> GetActiveAsync(
         CancellationToken cancellationToken = default)
     {
-        return new GameClassificationSelectionCatalog(
-            await QueryGenresAsync(null, cancellationToken),
-            await QueryTagsAsync([], cancellationToken),
-            await QueryPlatformsAsync([], cancellationToken));
+        if (_cache.TryGetValue(
+                ActiveCatalogCacheKey,
+                out GameClassificationSelectionCatalog? cached)
+            && cached is not null)
+        {
+            return cached;
+        }
+
+        await ActiveCatalogCacheGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_cache.TryGetValue(
+                    ActiveCatalogCacheKey,
+                    out cached)
+                && cached is not null)
+            {
+                return cached;
+            }
+
+            var loaded = new GameClassificationSelectionCatalog(
+                (await QueryGenresAsync(null, cancellationToken)).AsReadOnly(),
+                (await QueryTagsAsync([], cancellationToken)).AsReadOnly(),
+                (await QueryPlatformsAsync([], cancellationToken)).AsReadOnly());
+
+            _cache.Set(
+                ActiveCatalogCacheKey,
+                loaded,
+                ActiveCatalogCacheLifetime);
+            return loaded;
+        }
+        finally
+        {
+            ActiveCatalogCacheGate.Release();
+        }
     }
 
     public async Task<GameClassificationEditorCatalog?> GetForGameAsync(

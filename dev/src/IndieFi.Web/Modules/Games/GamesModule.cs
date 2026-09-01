@@ -8,6 +8,7 @@ public static class GamesModule
     public static IServiceCollection AddGamesModule(this IServiceCollection services)
     {
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddMemoryCache();
         services.AddSingleton<PublicGameDiscoveryCursorCodec>();
         services.AddScoped<PublicGameDiscoveryQueryService>();
         services.AddScoped<GameManagementService>();
