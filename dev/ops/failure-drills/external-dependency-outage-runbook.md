@@ -22,12 +22,21 @@ Outbox가 0 또는 설명 가능한 기준선이어야 한다. 실제 endpoint·
 
 ## R2 실패 run
 
-정상 R2에서 테스트 이미지 하나를 업로드하고 완료 요청을 보낼 준비를 한다. 너무 빨리
-처리되어 fault와 겹치지 않으면 억지로 DB 상태를 바꾸지 않고 `retry not observed`로 남긴다.
+정상 R2에서 staging 업로드와 완료 요청까지 성공시키되 Worker가 먼저 처리하지 못하도록
+Worker를 완전히 중지한다. 중지 전에는 별도 systemd timer로 제한시간 뒤 Worker를 다시
+시작하는 안전장치를 건다. 테스트 이미지 하나를 업로드한 뒤 media가
+`ProcessingPending`이고 RabbitMQ media queue의 ready와 unacknowledged 합이 1 이상인지
+확인한다. 확인 뒤 준비 timer를 해제하고 `PREPARED-WORKER-STOPPED` 모드로 fault를 시작한다.
+
+`SIGSTOP`은 사용하지 않는다. systemd가 restart 과정에서 멈춘 프로세스를 종료하기 위해
+`SIGCONT`로 깨우면 기존 정상 R2 설정의 Worker가 fault 설치 전에 lease를 획득할 수 있다.
+준비 모드는 Worker가 실제 `inactive`가 아니면 실행을 거부하고, fault 환경 파일을 먼저
+설치한 뒤에만 Worker를 시작한다. 오류나 신호로 중단되어도 Worker와 원래 설정을 복구한다.
 
 ```bash
-"$TOOL" --plan r2-outage 60 "$RUN_ID"
-sudo "$TOOL" r2-outage 60 "$RUN_ID" "RUN-${RUN_ID}-r2-outage"
+"$TOOL" --plan r2-outage 180 "$RUN_ID" PREPARED-WORKER-STOPPED
+sudo "$TOOL" r2-outage 180 "$RUN_ID" \
+  "RUN-${RUN_ID}-r2-outage" PREPARED-WORKER-STOPPED
 ```
 
 관찰 창에서 다음을 한 번씩 확인한다.

@@ -10,9 +10,11 @@ scenario="${1:-}"
 duration_seconds="${2:-60}"
 run_id="${3:-}"
 confirmation="${4:-}"
+prepared_mode="${5:-}"
 plan_only=false
 restored=false
 fault_applied=false
+prepared_worker_stopped=false
 
 if [[ "${1:-}" == "--plan" ]]; then
   plan_only=true
@@ -29,8 +31,8 @@ fail() {
 usage() {
   cat <<'EOF'
 Usage:
-  run-controlled-failure.sh --plan <scenario> [duration-seconds] [run-id]
-  sudo run-controlled-failure.sh <scenario> <duration-seconds> <run-id> RUN-<run-id>-<scenario>
+  run-controlled-failure.sh --plan <scenario> [duration-seconds] [run-id] [PREPARED-WORKER-STOPPED]
+  sudo run-controlled-failure.sh <scenario> <duration-seconds> <run-id> RUN-<run-id>-<scenario> [PREPARED-WORKER-STOPPED]
 
 Scenarios:
   web-restart worker-restart postgresql-outage redis-outage
@@ -57,6 +59,16 @@ validate_inputs() {
   [[ "$run_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] \
     || fail "run id must contain only letters, digits, dot, underscore, or hyphen."
 
+  case "$prepared_mode" in
+    '') ;;
+    PREPARED-WORKER-STOPPED)
+      [[ "$scenario" == "r2-outage" ]] \
+        || fail "PREPARED-WORKER-STOPPED is only valid for r2-outage."
+      prepared_worker_stopped=true
+      ;;
+    *) fail "unknown prepared mode '$prepared_mode'." ;;
+  esac
+
   if ! $plan_only; then
     (( EUID == 0 )) || fail "actual execution requires root."
     [[ "$confirmation" == "RUN-${run_id}-${scenario}" ]] \
@@ -76,6 +88,9 @@ describe_plan() {
     r2-outage) echo 'action=inject /run systemd drop-ins for Web and Worker, wait, then remove and restart' ;;
     ses-outage) echo 'action=inject /run systemd drop-in for Worker, wait, then remove and restart' ;;
   esac
+  if $prepared_worker_stopped; then
+    echo 'prepared_worker_state=inactive until the R2 fault environment is installed'
+  fi
   echo 'automatic_recovery=enabled'
   echo 'persistent_configuration_changes=none'
 }
@@ -122,8 +137,13 @@ require_baseline() {
   local container
   systemctl is-active --quiet indiefi-web.service \
     || fail "indiefi-web.service must be active before the drill."
-  systemctl is-active --quiet indiefi-worker.service \
-    || fail "indiefi-worker.service must be active before the drill."
+  if $prepared_worker_stopped; then
+    [[ "$(systemctl show --property=ActiveState --value indiefi-worker.service)" == "inactive" ]] \
+      || fail "indiefi-worker.service must be inactive for PREPARED-WORKER-STOPPED."
+  else
+    systemctl is-active --quiet indiefi-worker.service \
+      || fail "indiefi-worker.service must be active before the drill."
+  fi
   for container in indiefi-db indiefi-redis indiefi-rabbitmq; do
     [[ "$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)" == "running" ]] \
       || fail "$container must be running before the drill."
@@ -267,6 +287,7 @@ apply_fault() {
       wait_observation_window
       ;;
     r2-outage)
+      fault_applied=true
       write_environment_drop_in indiefi-web.service \
         'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
         'Media__ObjectStorage__ForcePathStyle=true' \
@@ -275,7 +296,6 @@ apply_fault() {
         'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
         'Media__ObjectStorage__ForcePathStyle=true' \
         'Media__ObjectStorage__OperationTimeout=00:00:03'
-      fault_applied=true
       systemctl daemon-reload
       systemctl restart indiefi-web.service indiefi-worker.service
       wait_for_unit indiefi-web.service
@@ -291,6 +311,7 @@ apply_fault() {
       wait_observation_window
       ;;
     ses-outage)
+      fault_applied=true
       write_environment_drop_in indiefi-worker.service \
         'AuthenticationEmail__Smtp__Host=127.0.0.1' \
         'AuthenticationEmail__Smtp__Port=1' \
@@ -300,7 +321,6 @@ apply_fault() {
         'NotificationEmail__Smtp__Port=1' \
         'NotificationEmail__Smtp__EnableSsl=false' \
         'NotificationEmail__Smtp__Timeout=00:00:03'
-      fault_applied=true
       systemctl daemon-reload
       systemctl restart indiefi-worker.service
       wait_for_unit indiefi-worker.service
@@ -329,6 +349,11 @@ done
 exec 9>"$LOCK_FILE"
 flock -n 9 || fail "another failure drill is already running."
 require_baseline
+if $prepared_worker_stopped; then
+  # From this point onward every exit path must start the intentionally stopped
+  # Worker again, even if fault installation fails before apply_fault completes.
+  fault_applied=true
+fi
 trap restore EXIT
 trap 'handle_signal 129' HUP
 trap 'handle_signal 130' INT
