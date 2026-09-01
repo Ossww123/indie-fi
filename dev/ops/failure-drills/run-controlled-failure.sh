@@ -4,6 +4,7 @@ set -Eeuo pipefail
 readonly MAX_DURATION_SECONDS=180
 readonly LOCK_FILE=/run/lock/indiefi-failure-drill.lock
 readonly DROP_IN_NAME=90-indiefi-failure-drill.conf
+readonly FAULT_ENV_DIRECTORY=/run/indiefi-failure-drill
 
 scenario="${1:-}"
 duration_seconds="${2:-60}"
@@ -131,25 +132,54 @@ require_baseline() {
   done
 }
 
-write_drop_in() {
+write_environment_drop_in() {
   local unit="$1"
   shift
   local directory="/run/systemd/system/${unit}.d"
+  local environment_file="${FAULT_ENV_DIRECTORY}/${unit}.env"
+  install -d -m 0700 "$FAULT_ENV_DIRECTORY"
+  printf '%s\n' "$@" >"$environment_file"
+  chmod 0600 "$environment_file"
   install -d -m 0755 "$directory"
-  {
-    echo '[Service]'
-    local setting
-    for setting in "$@"; do
-      printf 'Environment="%s"\n' "$setting"
-    done
-  } >"${directory}/${DROP_IN_NAME}"
+  printf '%s\n' \
+    '[Service]' \
+    "EnvironmentFile=${environment_file}" \
+    >"${directory}/${DROP_IN_NAME}"
   chmod 0644 "${directory}/${DROP_IN_NAME}"
 }
 
 remove_drop_in() {
   local unit="$1"
   rm -f "/run/systemd/system/${unit}.d/${DROP_IN_NAME}"
+  rm -f "${FAULT_ENV_DIRECTORY}/${unit}.env"
   rmdir "/run/systemd/system/${unit}.d" 2>/dev/null || true
+  rmdir "$FAULT_ENV_DIRECTORY" 2>/dev/null || true
+}
+
+require_process_environment() {
+  local unit="$1"
+  shift
+  local deadline=$((SECONDS + 15))
+  local main_pid setting
+  local all_settings_present
+
+  while (( SECONDS < deadline )); do
+    main_pid="$(systemctl show --property=MainPID --value "$unit")"
+    if [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] \
+        && [[ -r "/proc/${main_pid}/environ" ]]; then
+      all_settings_present=true
+      for setting in "$@"; do
+        if ! grep -Fzqx -- "$setting" "/proc/${main_pid}/environ"; then
+          all_settings_present=false
+          break
+        fi
+      done
+      $all_settings_present && return 0
+    fi
+    sleep 1
+  done
+
+  fail "$unit did not receive the expected temporary fault environment within 15 seconds."
 }
 
 restore() {
@@ -237,11 +267,11 @@ apply_fault() {
       wait_observation_window
       ;;
     r2-outage)
-      write_drop_in indiefi-web.service \
+      write_environment_drop_in indiefi-web.service \
         'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
         'Media__ObjectStorage__ForcePathStyle=true' \
         'Media__ObjectStorage__OperationTimeout=00:00:03'
-      write_drop_in indiefi-worker.service \
+      write_environment_drop_in indiefi-worker.service \
         'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
         'Media__ObjectStorage__ForcePathStyle=true' \
         'Media__ObjectStorage__OperationTimeout=00:00:03'
@@ -250,10 +280,18 @@ apply_fault() {
       systemctl restart indiefi-web.service indiefi-worker.service
       wait_for_unit indiefi-web.service
       wait_for_unit indiefi-worker.service
+      require_process_environment indiefi-web.service \
+        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
+        'Media__ObjectStorage__ForcePathStyle=true' \
+        'Media__ObjectStorage__OperationTimeout=00:00:03'
+      require_process_environment indiefi-worker.service \
+        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
+        'Media__ObjectStorage__ForcePathStyle=true' \
+        'Media__ObjectStorage__OperationTimeout=00:00:03'
       wait_observation_window
       ;;
     ses-outage)
-      write_drop_in indiefi-worker.service \
+      write_environment_drop_in indiefi-worker.service \
         'AuthenticationEmail__Smtp__Host=127.0.0.1' \
         'AuthenticationEmail__Smtp__Port=1' \
         'AuthenticationEmail__Smtp__EnableSsl=false' \
@@ -266,6 +304,15 @@ apply_fault() {
       systemctl daemon-reload
       systemctl restart indiefi-worker.service
       wait_for_unit indiefi-worker.service
+      require_process_environment indiefi-worker.service \
+        'AuthenticationEmail__Smtp__Host=127.0.0.1' \
+        'AuthenticationEmail__Smtp__Port=1' \
+        'AuthenticationEmail__Smtp__EnableSsl=false' \
+        'AuthenticationEmail__Smtp__Timeout=00:00:03' \
+        'NotificationEmail__Smtp__Host=127.0.0.1' \
+        'NotificationEmail__Smtp__Port=1' \
+        'NotificationEmail__Smtp__EnableSsl=false' \
+        'NotificationEmail__Smtp__Timeout=00:00:03'
       wait_observation_window
       ;;
   esac
@@ -275,7 +322,7 @@ validate_inputs
 describe_plan
 $plan_only && exit 0
 
-for command_name in docker flock install systemctl; do
+for command_name in docker flock grep install systemctl; do
   require_command "$command_name"
 done
 
