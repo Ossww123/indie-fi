@@ -144,6 +144,17 @@ public sealed class GameMediaQueryService
             return null;
         }
 
+        return await GetPublicDetailForExistingGameAsync(
+            gameId,
+            cancellationToken);
+    }
+
+    public async Task<PublicGameMedia> GetPublicDetailForExistingGameAsync(
+        long gameId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(gameId);
+
         var media = await _db.MediaAssets
             .AsNoTracking()
             .Where(item => item.GameId == gameId
