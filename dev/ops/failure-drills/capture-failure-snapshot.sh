@@ -51,10 +51,19 @@ capture_or_mark_unavailable() {
     -name '90-indiefi-failure-drill.conf' -print 2>/dev/null || true
 } >"${phase_directory}/system.txt" 2>&1
 
+readiness_host="$({
+  awk '$1 == "server_name" { gsub(/;/, "", $2); print $2; exit }' \
+    /etc/nginx/sites-enabled/indiefi 2>/dev/null
+} || true)"
+if [[ -z "$readiness_host" ]]; then
+  readiness_host=127.0.0.1
+fi
+
 {
   printf 'captured_at_utc\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   curl --insecure --silent --show-error --output /dev/null \
     --connect-timeout 3 --max-time 10 \
+    --header "Host: $readiness_host" \
     --write-out 'https_status\t%{http_code}\nresponse_seconds\t%{time_total}\n' \
     https://127.0.0.1/health/ready
 } >"${phase_directory}/readiness.tsv" 2>&1 || true

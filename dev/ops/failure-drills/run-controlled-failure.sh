@@ -153,7 +153,7 @@ remove_drop_in() {
 }
 
 restore() {
-  local exit_code=$?
+  local exit_code="${1:-$?}"
   $restored && return "$exit_code"
   restored=true
   trap - EXIT HUP INT TERM
@@ -194,6 +194,19 @@ restore() {
   return "$exit_code"
 }
 
+handle_signal() {
+  local exit_code="$1"
+  restore "$exit_code" || true
+  exit "$exit_code"
+}
+
+wait_observation_window() {
+  local deadline=$((SECONDS + duration_seconds))
+  while (( SECONDS < deadline )); do
+    sleep 1
+  done
+}
+
 apply_fault() {
   echo "failure-drill: applying scenario=$scenario run_id=$run_id at $(date -Is)"
   case "$scenario" in
@@ -211,17 +224,17 @@ apply_fault() {
     postgresql-outage)
       fault_applied=true
       docker stop --time 20 indiefi-db >/dev/null
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
     redis-outage)
       fault_applied=true
       docker stop --time 20 indiefi-redis >/dev/null
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
     rabbitmq-outage)
       fault_applied=true
       docker stop --time 20 indiefi-rabbitmq >/dev/null
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
     r2-outage)
       write_drop_in indiefi-web.service \
@@ -237,7 +250,7 @@ apply_fault() {
       systemctl restart indiefi-web.service indiefi-worker.service
       wait_for_unit indiefi-web.service
       wait_for_unit indiefi-worker.service
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
     ses-outage)
       write_drop_in indiefi-worker.service \
@@ -253,7 +266,7 @@ apply_fault() {
       systemctl daemon-reload
       systemctl restart indiefi-worker.service
       wait_for_unit indiefi-worker.service
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
   esac
 }
@@ -269,6 +282,9 @@ done
 exec 9>"$LOCK_FILE"
 flock -n 9 || fail "another failure drill is already running."
 require_baseline
-trap restore EXIT HUP INT TERM
+trap restore EXIT
+trap 'handle_signal 129' HUP
+trap 'handle_signal 130' INT
+trap 'handle_signal 143' TERM
 apply_fault
 echo "failure-drill: observation window complete at $(date -Is)"
