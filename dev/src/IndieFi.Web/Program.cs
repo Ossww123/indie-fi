@@ -84,6 +84,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         options.EnableDetailedErrors(false);
     }
 });
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseReadinessHealthCheck>("postgresql");
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders =
