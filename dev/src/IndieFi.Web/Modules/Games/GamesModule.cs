@@ -11,6 +11,7 @@ public static class GamesModule
         services.AddMemoryCache();
         services.AddSingleton<PublicGameDiscoveryCursorCodec>();
         services.AddScoped<PublicGameDiscoveryQueryService>();
+        services.AddScoped<PublicGameDetailQueryService>();
         services.AddScoped<GameManagementService>();
         services.AddScoped<GamePlayLinkManagementService>();
         services.AddScoped<GameClassificationCatalogQueryService>();

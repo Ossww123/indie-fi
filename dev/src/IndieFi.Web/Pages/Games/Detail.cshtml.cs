@@ -52,33 +52,27 @@ public class DetailModel : PageModel
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly ReviewRequestService _reviewRequestService;
-    private readonly UserDisplayNameResolver _displayNames;
     private readonly FavoriteGameService _favoriteGameService;
-    private readonly PublicKeyDropReader _publicKeyDropReader;
-    private readonly GameClassificationCatalogQueryService _classificationCatalog;
+    private readonly PublicGameDetailQueryService _detailQuery;
     private readonly MediaObjectStorageOptions _mediaStorageOptions;
 
     public DetailModel(
         AppDbContext db,
         ICurrentUser currentUser,
         ReviewRequestService reviewRequestService,
-        UserDisplayNameResolver displayNames,
         FavoriteGameService favoriteGameService,
-        PublicKeyDropReader publicKeyDropReader,
-        GameClassificationCatalogQueryService classificationCatalog,
+        PublicGameDetailQueryService detailQuery,
         IOptions<MediaObjectStorageOptions> mediaStorageOptions)
     {
         _db = db;
         _currentUser = currentUser;
         _reviewRequestService = reviewRequestService;
-        _displayNames = displayNames;
         _favoriteGameService = favoriteGameService;
-        _publicKeyDropReader = publicKeyDropReader;
-        _classificationCatalog = classificationCatalog;
+        _detailQuery = detailQuery;
         _mediaStorageOptions = mediaStorageOptions.Value;
     }
 
-    public Game Game { get; private set; } = null!;
+    public PublicGameDetailGame Game { get; private set; } = null!;
     public string OwnerDisplayName { get; private set; } = string.Empty;
     public bool IsOwner { get; private set; }
     public bool CanManageMedia => IsOwner && _mediaStorageOptions.Enabled;
@@ -86,7 +80,7 @@ public class DetailModel : PageModel
     public bool CanManageFavorite { get; private set; }
     public bool IsFavorite { get; private set; }
     public string? FavoriteMessage { get; private set; }
-    public List<PlayLinkListItem> PlayLinks { get; private set; } = [];
+    public IReadOnlyList<PublicGamePlayLink> PlayLinks { get; private set; } = [];
     public GameClassificationDetailCatalog Classifications { get; private set; } = null!;
     public IReadOnlyList<PublicKeyDropDetail> Drops { get; private set; } = [];
     public int PendingRequestCount { get; private set; }
@@ -115,9 +109,11 @@ public class DetailModel : PageModel
             _ => null,
         };
 
-        var game = await _db.Games.FindAsync(id);
-
-        if (game is null)
+        var detail = await _detailQuery.GetAsync(
+            id,
+            _currentUser.UserId,
+            HttpContext.RequestAborted);
+        if (detail is null)
         {
             return NotFound();
         }
@@ -125,59 +121,31 @@ public class DetailModel : PageModel
         // The game detail page is public: any signed-in user may view any game,
         // because feedback added later is left by other people. Ownership is only
         // enforced when editing a game.
-        Game = game;
+        Game = detail.Game;
         if (_mediaStorageOptions.Enabled)
         {
-            var publicMedia = await HttpContext.RequestServices
+            PublicMedia = await HttpContext.RequestServices
                 .GetRequiredService<GameMediaQueryService>()
-                .GetPublicDetailAsync(
-                    game.Id,
+                .GetPublicDetailForExistingGameAsync(
+                    detail.Game.Id,
                     HttpContext.RequestAborted);
-            if (publicMedia is null)
-            {
-                return NotFound();
-            }
-
-            PublicMedia = publicMedia;
         }
-
-        var classifications = await _classificationCatalog.GetDetailAsync(
-            game.Id,
-            HttpContext.RequestAborted);
-        if (classifications is null)
-        {
-            return NotFound();
-        }
-
-        Classifications = classifications;
-        OwnerDisplayName = await _displayNames.ResolveAsync(
-            game.OwnerId,
-            HttpContext.RequestAborted);
-        IsOwner = _currentUser.UserId is long ownerId && game.OwnerId == ownerId;
+        Classifications = detail.Classifications;
+        OwnerDisplayName = detail.OwnerDisplayName;
+        PlayLinks = detail.PlayLinks;
+        Drops = detail.Drops;
+        PendingRequestCount = detail.PendingRequestCount;
+        IsOwner = _currentUser.UserId is long ownerId
+            && detail.Game.OwnerId == ownerId;
         CanManageFavorite = _currentUser.UserId is long;
-        if (CanManageFavorite)
-        {
-            IsFavorite = await _favoriteGameService.IsFavoriteAsync(
-                _currentUser.UserId!.Value,
-                game.Id,
-                HttpContext.RequestAborted);
-        }
-        PlayLinks = await _db.GamePlayLinks
-            .Where(link => link.GameId == game.Id)
-            .OrderBy(link => link.SortOrder)
-            .Select(link => new PlayLinkListItem(
-                link.DisplayName,
-                link.Provider,
-                link.TargetPlatform,
-                link.Url))
-            .ToListAsync(HttpContext.RequestAborted);
+        IsFavorite = detail.IsFavorite;
 
         if (IsOwner)
         {
             RequestOperationId = Guid.NewGuid();
             Requests = await _db.ReviewRequests
                 .Where(reviewRequest =>
-                    reviewRequest.GameId == game.Id
+                    reviewRequest.GameId == detail.Game.Id
                     && reviewRequest.Status != ReviewRequestStatus.Cancelled)
                 .OrderByDescending(reviewRequest => reviewRequest.Id)
                 .Select(reviewRequest => new RequestListItem(
@@ -187,18 +155,6 @@ public class DetailModel : PageModel
                     reviewRequest.CompletedAt))
                 .ToListAsync();
         }
-        else
-        {
-            PendingRequestCount = await _db.ReviewRequests
-                .CountAsync(reviewRequest =>
-                    reviewRequest.GameId == game.Id
-                    && reviewRequest.Status == ReviewRequestStatus.Queued);
-        }
-
-        Drops = await _publicKeyDropReader.ListForGameAsync(
-            game.Id,
-            HttpContext.RequestAborted);
-
         return Page();
     }
 
@@ -324,31 +280,4 @@ public class DetailModel : PageModel
         };
     }
 
-    public sealed record PlayLinkListItem(
-        string DisplayName,
-        GamePlayLinkProvider Provider,
-        GamePlayLinkPlatform? TargetPlatform,
-        string Url)
-    {
-        public string ProviderText => Provider switch
-        {
-            GamePlayLinkProvider.Steam => "Steam",
-            GamePlayLinkProvider.ItchIo => "itch.io",
-            GamePlayLinkProvider.DeveloperWebsite => "개발자 사이트",
-            _ => "기타",
-        };
-
-        public string? TargetPlatformText => TargetPlatform switch
-        {
-            GamePlayLinkPlatform.Windows => "Windows",
-            GamePlayLinkPlatform.MacOS => "macOS",
-            GamePlayLinkPlatform.Linux => "Linux",
-            GamePlayLinkPlatform.Web => "Web",
-            GamePlayLinkPlatform.Android => "Android",
-            GamePlayLinkPlatform.Ios => "iOS",
-            GamePlayLinkPlatform.Multiple => "복수 플랫폼",
-            GamePlayLinkPlatform.Other => "기타 플랫폼",
-            _ => null,
-        };
-    }
 }
