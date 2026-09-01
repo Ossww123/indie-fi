@@ -1,4 +1,5 @@
 using IndieFi.Web.Application.Abstractions;
+using IndieFi.Web.Application.Time;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.KeyDistributions.Application;
@@ -31,7 +32,7 @@ public class NewModel : PageModel
     // the rule as an annotation would fail model binding first and return before the
     // service ever runs, hiding every other problem with the form.
     [BindProperty]
-    public DateTimeOffset? OpensAt { get; set; }
+    public DateTime? OpensAt { get; set; }
 
     [BindProperty]
     public string? KeysText { get; set; }
@@ -62,7 +63,9 @@ public class NewModel : PageModel
         var result = await _keyDropSchedulingService.ScheduleAsync(
             gameId,
             ownerId,
-            OpensAt,
+            OpensAt is DateTime localOpensAt
+                ? KoreanStandardTime.FromLocal(localOpensAt)
+                : null,
             KeysText,
             MinimumAccountAgeDays,
             MinimumCompletedReviewCount);
