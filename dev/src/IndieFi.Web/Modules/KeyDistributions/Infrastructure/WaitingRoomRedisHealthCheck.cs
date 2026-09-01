@@ -35,7 +35,8 @@ public sealed class WaitingRoomRedisHealthCheck : IHealthCheck
         catch (Exception exception)
             when (exception is WaitingRoomUnavailableException
                 or RedisConnectionException
-                or RedisTimeoutException)
+                or RedisTimeoutException
+                or ObjectDisposedException)
         {
             return HealthCheckResult.Unhealthy(
                 "Virtual waiting-room Redis is unavailable.",
