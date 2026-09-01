@@ -220,7 +220,12 @@ SELECT jsonb_build_object(
         '--no-cli-pager', '--endpoint-url', $R2Endpoint,
         's3api', 'list-objects-v2', '--bucket', $R2Bucket, '--output', 'json')
     $inventory = $inventoryText | ConvertFrom-Json
-    $objects = @($inventory.Contents)
+    $objects = if ($null -eq $inventory.Contents) {
+        @()
+    }
+    else {
+        @($inventory.Contents)
+    }
     foreach ($object in $objects) {
         $key = [string]$object.Key
         $valid = $key -match '^staging/[0-9a-f]{32}/[0-9a-f]{32}$' -or
