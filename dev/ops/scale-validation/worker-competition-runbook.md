@@ -16,6 +16,15 @@
 
 ## 증거 수집과 재시작
 
+실제 batch는 `loadtest/worker-competition.js`로 만든다. 전용 claimer 계정의 선택 알림 이메일을 먼저 끄고
+드롭 오픈 알림을 구독한 뒤, 지정 계정만 1×1 PNG profile image를 4개 파동으로 올린다. 실제 사용자,
+cookie·비밀번호·antiforgery token·presigned URL은 결과에 남기지 않는다. R2 PUT metric도 URL system tag를
+제외하고 고정된 request name만 사용한다.
+
+드롭 오픈 worker가 fan-out을 staged한 직후 Worker 1을 관리 도구로 한 번 재시작한다. 선택 알림 이메일을
+끄는 이유는 `example.test` 합성 계정으로 SES 전송을 만들지 않고 in-app notification 경쟁 소비만 검증하기
+위해서다. `AccountStatusChanged`는 필수 이메일이지만 이번 batch에서 해당 사건을 만들지 않는다.
+
 ```bash
 RUN_ID=<run-id>
 EVIDENCE="$HOME/indiefi-validation/runs/$RUN_ID/scale/workers"
