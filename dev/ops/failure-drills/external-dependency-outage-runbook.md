@@ -10,6 +10,7 @@ Worker의 인증·알림 SMTP endpoint만 loopback의 닫힌 port로 바꾼다. 
 RUN_ID=<run-id>
 EVIDENCE="$HOME/indiefi-validation/runs/$RUN_ID/failures/<scenario>"
 TOOL=/usr/local/lib/indiefi/failure-drills/run-controlled-failure.sh
+LAUNCHER=/usr/local/lib/indiefi/failure-drills/launch-controlled-failure.sh
 RETRY_AUDIT=/usr/local/lib/indiefi/failure-drills/capture-external-retry-state.sh
 DB_AUDIT=/usr/local/lib/indiefi/failure-drills/capture-authoritative-state.sh
 "$RETRY_AUDIT" "$EVIDENCE/before-retry.tsv"
@@ -35,7 +36,7 @@ Worker를 완전히 중지한다. 중지 전에는 별도 systemd timer로 제�
 
 ```bash
 "$TOOL" --plan r2-outage 180 "$RUN_ID" PREPARED-WORKER-STOPPED
-sudo "$TOOL" r2-outage 180 "$RUN_ID" \
+sudo "$LAUNCHER" r2-outage 180 "$RUN_ID" \
   "RUN-${RUN_ID}-r2-outage" PREPARED-WORKER-STOPPED
 ```
 
@@ -57,7 +58,7 @@ run id로 시작한다.
 
 ```bash
 "$TOOL" --plan ses-outage 60 "$RUN_ID"
-sudo "$TOOL" ses-outage 60 "$RUN_ID" "RUN-${RUN_ID}-ses-outage"
+sudo "$LAUNCHER" ses-outage 60 "$RUN_ID" "RUN-${RUN_ID}-ses-outage"
 ```
 
 관찰 창에서 가입 확인 메일 한 건과 일반 알림 이메일 한 건을 만든다.
