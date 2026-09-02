@@ -61,6 +61,15 @@ wait_for_unit() {
     || fail "$unit did not become active within 60 seconds."
 }
 
+wait_for_listener_bounded() {
+  local port="$1"
+  local deadline=$((SECONDS + 60))
+  until ss -lnt | awk '{print $4}' | grep -Eq "(^|:)${port}$"; do
+    (( SECONDS < deadline )) || return 1
+    sleep 1
+  done
+}
+
 require_baseline() {
   local container
   systemctl is-active --quiet indiefi-web.service \
@@ -148,6 +157,8 @@ rollback() {
   systemctl start indiefi-web.service indiefi-worker.service || true
   wait_for_unit_bounded indiefi-web.service || true
   wait_for_unit_bounded indiefi-worker.service || true
+  wait_for_listener_bounded 5000 \
+    || echo 'scale-topology: original Web did not open port 5000 within 60 seconds.' >&2
 
   if [[ -r "$original_config" ]]; then
     install -o root -g root -m 0644 "$original_config" "$nginx_config"
