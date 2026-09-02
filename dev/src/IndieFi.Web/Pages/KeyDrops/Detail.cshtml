@@ -1,4 +1,5 @@
 @page "{id:long}"
+@using IndieFi.Web.Application.Time
 @using IndieFi.Web.Modules.KeyDistributions.Application
 @using IndieFi.Web.Modules.KeyDistributions.Domain
 @model DetailModel
@@ -62,7 +63,9 @@
     <dl class="drop-metrics">
         <div class="drop-metric">
             <dt class="text-meta">오픈 시각</dt>
-            <dd class="drop-metric-value">@Model.Drop.OpensAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</dd>
+            <dd class="drop-metric-value">
+                @KoreanStandardTime.ToLocal(Model.Drop.OpensAt).ToString("yyyy-MM-dd HH:mm") KST
+            </dd>
         </div>
         <div class="drop-metric">
             <dt class="text-meta">키 재고</dt>
@@ -167,7 +170,7 @@
         {
             <p class="mt-2 text-sm font-medium text-emerald-700">
                 <time data-admission-expires-at="@admissionExpiresAt.ToString("O")">
-                    @admissionExpiresAt.ToLocalTime().ToString("HH:mm:ss")
+                    @KoreanStandardTime.ToLocal(admissionExpiresAt).ToString("HH:mm:ss") KST
                 </time>까지 키를 받아 주세요.
             </p>
             <p class="mt-1 text-sm text-slate-500">

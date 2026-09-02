@@ -91,6 +91,53 @@ public sealed class WaitingRoomRedisRecoveryTests
             repeated.Entry!.AdmissionExpiresUnixTimeMilliseconds);
     }
 
+    [Fact]
+    public async Task ExistingConnection_SurvivesOutageAndReconnectsWithoutReplacement()
+    {
+        var dropId = Random.Shared.NextInt64(1, long.MaxValue);
+        var connection = _fixture.GetConnection();
+        var multiplexer = await connection.GetAsync(
+            TestContext.Current.CancellationToken);
+        var store = _fixture.NewStore();
+        await store.JoinAsync(
+            new WaitingRoomJoinCommand(
+                dropId,
+                1,
+                WaitingRoomJoinMode.PreOpen),
+            TestContext.Current.CancellationToken);
+
+        await _fixture.PauseContainerAsync();
+        try
+        {
+            Assert.Same(
+                multiplexer,
+                await connection.GetAsync(TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<WaitingRoomUnavailableException>(() =>
+                    store.GetSnapshotAsync(
+                        dropId,
+                        1,
+                        TestContext.Current.CancellationToken))
+                .WaitAsync(
+                    TimeSpan.FromSeconds(10),
+                    TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await _fixture.UnpauseContainerWithExistingConnectionAsync();
+        }
+
+        Assert.Same(
+            multiplexer,
+            await connection.GetAsync(TestContext.Current.CancellationToken));
+        var recovered = await store.GetSnapshotAsync(
+            dropId,
+            1,
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(recovered);
+        Assert.NotNull(recovered.Entry);
+        Assert.Equal(WaitingRoomEntryState.PreWaiting, recovered.Entry.State);
+    }
+
     private static async Task<Dictionary<long, WaitingRoomStoredEntry>> ReadEntriesAsync(
         IWaitingRoomStore store,
         long dropId,

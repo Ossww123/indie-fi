@@ -9,6 +9,7 @@
 
 ```powershell
 bash -n ops/failure-drills/run-controlled-failure.sh
+bash -n ops/failure-drills/launch-controlled-failure.sh
 bash -n ops/failure-drills/install-failure-drill-tools.sh
 bash ops/failure-drills/run-controlled-failure.sh --plan redis-outage 60 local-check
 ```
@@ -24,13 +25,15 @@ EC2로 이 디렉터리를 복사한 다음 설치한다.
 sudo ./install-failure-drill-tools.sh
 /usr/local/lib/indiefi/failure-drills/run-controlled-failure.sh \
   --plan redis-outage 60 <run-id>
-sudo /usr/local/lib/indiefi/failure-drills/run-controlled-failure.sh \
+sudo /usr/local/lib/indiefi/failure-drills/launch-controlled-failure.sh \
   redis-outage 60 <run-id> RUN-<run-id>-redis-outage
 ```
 
-실행 명령은 장애 관찰 시간 동안 foreground에 머문다. 별도 SSH 창에서 사용자 흐름과
-dashboard를 본다. SSH가 끊기거나 Ctrl+C를 눌러도 trap이 원복을 시도하지만, 완료 후
-서비스·컨테이너 상태를 다시 확인하기 전에는 다음 시나리오를 시작하지 않는다.
+실제 장애 주입은 transient systemd service로 실행한다. 실행을 시작한 SSH 연결이 끊겨도
+훈련 프로세스는 EC2에서 독립적으로 남고, 제한시간 뒤 `run-controlled-failure.sh`의 trap이
+원복한다. launcher가 출력한 unit 이름으로 journal을 관찰하고, 완료 후 서비스·컨테이너
+상태를 다시 확인하기 전에는 다음 시나리오를 시작하지 않는다. 직접 runner를 실행하는
+형태는 `--plan` 확인과 launcher 내부 호출에만 사용한다.
 
 ## 금지 사항
 

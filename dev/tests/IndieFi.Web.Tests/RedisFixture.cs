@@ -39,6 +39,16 @@ public sealed class RedisFixture : IAsyncLifetime
         await ConnectAsync();
     }
 
+    public Task PauseContainerAsync() =>
+        _container.PauseAsync();
+
+    public async Task UnpauseContainerWithExistingConnectionAsync()
+    {
+        await _container.UnpauseAsync();
+        await WaitUntilDatasetIsReadyAsync(
+            await GetConnection().GetAsync());
+    }
+
     private async Task ConnectAsync()
     {
         _connectionString = _container.GetConnectionString();
@@ -52,7 +62,7 @@ public sealed class RedisFixture : IAsyncLifetime
     private static async Task WaitUntilDatasetIsReadyAsync(
         IConnectionMultiplexer multiplexer)
     {
-        const int MaximumAttempts = 100;
+        const int MaximumAttempts = 300;
         for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
         {
             try
@@ -60,11 +70,7 @@ public sealed class RedisFixture : IAsyncLifetime
                 await multiplexer.GetDatabase().PingAsync();
                 return;
             }
-            catch (RedisServerException exception)
-                when (exception.Message.StartsWith(
-                    "LOADING",
-                    StringComparison.OrdinalIgnoreCase)
-                    && attempt < MaximumAttempts)
+            catch (RedisException) when (attempt < MaximumAttempts)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(100));
             }

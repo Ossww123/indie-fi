@@ -49,13 +49,14 @@ redis_owner_password="$(
 
 for password_spec in \
   "$postgres_monitor_password:POSTGRES_EXPORTER_PASSWORD" \
-  "$redis_monitor_password:REDIS_EXPORTER_PASSWORD" \
   "$redis_owner_password:REDIS_PASSWORD"; do
   password="${password_spec%%:*}"
   label="${password_spec#*:}"
   [[ "$password" =~ ^[A-Za-z0-9+/=]{32,128}$ ]] \
     || fail "$label must be a 32-128 character base64 value."
 done
+[[ "$redis_monitor_password" =~ ^[A-Za-z0-9]{32,128}$ ]] \
+  || fail "REDIS_EXPORTER_PASSWORD must be a 32-128 character alphanumeric value; use 'openssl rand -hex 32'."
 [[ "$postgres_monitor_password" != "$redis_monitor_password" ]] \
   || fail "PostgreSQL and Redis monitoring passwords must differ."
 

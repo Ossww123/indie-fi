@@ -516,7 +516,10 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
                 ? null
                 : WaitingRoomRedisValueCodec.Deserialize(value);
         }
-        catch (RedisException exception)
+        catch (Exception exception)
+            when (exception is RedisException
+                or RedisTimeoutException
+                or ObjectDisposedException)
         {
             activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             RecordRedisFailure("get_entry", exception);
@@ -785,7 +788,10 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
                 values,
                 CommandFlags.DemandMaster);
         }
-        catch (RedisException exception)
+        catch (Exception exception)
+            when (exception is RedisException
+                or RedisTimeoutException
+                or ObjectDisposedException)
         {
             activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             RecordRedisFailure(operation, exception);
@@ -866,7 +872,7 @@ public sealed class RedisWaitingRoomStore : IWaitingRoomStore
     }
 
     private static WaitingRoomUnavailableException Unavailable(
-        RedisException exception) =>
+        Exception exception) =>
         new("The virtual waiting-room Redis operation failed.", exception);
 
     private static class ObservabilityActivity

@@ -36,8 +36,12 @@
             </div>
             <div class="field-group">
                 <label asp-for="OpensAt" class="field-label">오픈 시각</label>
-                <input asp-for="OpensAt" type="datetime-local" class="field-input" />
+                <input asp-for="OpensAt"
+                       asp-format="{0:yyyy-MM-ddTHH:mm}"
+                       type="datetime-local"
+                       class="field-input" />
                 <span asp-validation-for="OpensAt" class="field-error"></span>
+                <p class="field-hint">한국 표준시(KST, UTC+09:00) 기준으로 입력합니다.</p>
             </div>
         </section>
 

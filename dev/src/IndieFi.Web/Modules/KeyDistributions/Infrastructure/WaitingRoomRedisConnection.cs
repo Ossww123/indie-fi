@@ -26,7 +26,10 @@ public sealed class WaitingRoomRedisConnection : IAsyncDisposable
                 "The virtual waiting-room Redis connection is disabled.");
         }
 
-        if (_connection is { IsConnected: true })
+        // ConnectionMultiplexer is designed to live for the process lifetime and
+        // reconnect by itself. Replacing it whenever Redis is briefly disconnected
+        // can dispose the object while another request is still using its database.
+        if (_connection is not null)
         {
             return _connection;
         }
@@ -34,22 +37,19 @@ public sealed class WaitingRoomRedisConnection : IAsyncDisposable
         await _connectionLock.WaitAsync(cancellationToken);
         try
         {
-            if (_connection is { IsConnected: true })
-            {
-                return _connection;
-            }
-
             if (_connection is not null)
             {
-                await _connection.DisposeAsync();
+                return _connection;
             }
 
             var configuration = ConfigurationOptions.Parse(
                 _options.ConnectionString,
                 ignoreUnknown: false);
             configuration.AbortOnConnectFail = false;
+            configuration.BacklogPolicy = BacklogPolicy.FailFast;
             configuration.ConnectTimeout = checked((int)_options.ConnectTimeout.TotalMilliseconds);
             configuration.ConnectRetry = 1;
+            configuration.ReconnectRetryPolicy = new LinearRetry(1_000);
 
             try
             {

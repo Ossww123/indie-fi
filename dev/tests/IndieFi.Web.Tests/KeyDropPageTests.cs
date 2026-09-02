@@ -241,6 +241,7 @@ public sealed class KeyDropPageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("data-key-drop-form", html);
+        Assert.Contains("한국 표준시(KST, UTC+09:00)", WebUtility.HtmlDecode(html));
         Assert.Contains("name=\"MinimumAccountAgeDays\"", html);
         Assert.Contains("name=\"MinimumCompletedReviewCount\"", html);
         Assert.Contains("type=\"module\"", html);
@@ -252,6 +253,57 @@ public sealed class KeyDropPageTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, moduleResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_NewDrop_InterpretsUnzonedOpenTimeAsKoreanStandardTime()
+    {
+        var (email, password) = await PageTestSupport.CreateUserWithKnownPasswordAsync(_fixture);
+        var gameId = await CreateGameOwnedByAsync(email);
+        var expectedUtc = DateTimeOffset.UtcNow
+            .AddHours(1)
+            .ToOffset(TimeSpan.FromHours(9));
+        expectedUtc = new DateTimeOffset(
+            expectedUtc.Year,
+            expectedUtc.Month,
+            expectedUtc.Day,
+            expectedUtc.Hour,
+            expectedUtc.Minute,
+            0,
+            expectedUtc.Offset)
+            .ToUniversalTime();
+
+        await using var factory = new WebAppFactory(_fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        await PageTestSupport.LoginAsync(client, email, password);
+
+        using var formResponse = await client.GetAsync(
+            $"/KeyDrops/New?gameId={gameId}",
+            TestContext.Current.CancellationToken);
+        var formHtml = await formResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var scheduleForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["OpensAt"] = expectedUtc
+                .ToOffset(TimeSpan.FromHours(9))
+                .ToString("yyyy-MM-ddTHH:mm"),
+            ["KeysText"] = $"KST-HTTP-{Guid.NewGuid():N}",
+            ["__RequestVerificationToken"] =
+                PageTestSupport.ExtractAntiforgeryToken(formHtml),
+        });
+
+        using var response = await client.PostAsync(
+            $"/KeyDrops/New?gameId={gameId}",
+            scheduleForm,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        await using var verificationDb = _fixture.NewDbContext();
+        var storedOpensAt = await verificationDb.KeyDrops
+            .Where(drop => drop.GameId == gameId)
+            .Select(drop => drop.OpensAt)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(expectedUtc, storedOpensAt);
     }
 
     [Fact]

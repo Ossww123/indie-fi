@@ -4,14 +4,17 @@ set -Eeuo pipefail
 readonly MAX_DURATION_SECONDS=180
 readonly LOCK_FILE=/run/lock/indiefi-failure-drill.lock
 readonly DROP_IN_NAME=90-indiefi-failure-drill.conf
+readonly FAULT_ENV_DIRECTORY=/run/indiefi-failure-drill
 
 scenario="${1:-}"
 duration_seconds="${2:-60}"
 run_id="${3:-}"
 confirmation="${4:-}"
+prepared_mode="${5:-}"
 plan_only=false
 restored=false
 fault_applied=false
+prepared_worker_stopped=false
 
 if [[ "${1:-}" == "--plan" ]]; then
   plan_only=true
@@ -28,8 +31,8 @@ fail() {
 usage() {
   cat <<'EOF'
 Usage:
-  run-controlled-failure.sh --plan <scenario> [duration-seconds] [run-id]
-  sudo run-controlled-failure.sh <scenario> <duration-seconds> <run-id> RUN-<run-id>-<scenario>
+  run-controlled-failure.sh --plan <scenario> [duration-seconds] [run-id] [PREPARED-WORKER-STOPPED]
+  sudo run-controlled-failure.sh <scenario> <duration-seconds> <run-id> RUN-<run-id>-<scenario> [PREPARED-WORKER-STOPPED]
 
 Scenarios:
   web-restart worker-restart postgresql-outage redis-outage
@@ -56,6 +59,16 @@ validate_inputs() {
   [[ "$run_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] \
     || fail "run id must contain only letters, digits, dot, underscore, or hyphen."
 
+  case "$prepared_mode" in
+    '') ;;
+    PREPARED-WORKER-STOPPED)
+      [[ "$scenario" == "r2-outage" ]] \
+        || fail "PREPARED-WORKER-STOPPED is only valid for r2-outage."
+      prepared_worker_stopped=true
+      ;;
+    *) fail "unknown prepared mode '$prepared_mode'." ;;
+  esac
+
   if ! $plan_only; then
     (( EUID == 0 )) || fail "actual execution requires root."
     [[ "$confirmation" == "RUN-${run_id}-${scenario}" ]] \
@@ -75,6 +88,9 @@ describe_plan() {
     r2-outage) echo 'action=inject /run systemd drop-ins for Web and Worker, wait, then remove and restart' ;;
     ses-outage) echo 'action=inject /run systemd drop-in for Worker, wait, then remove and restart' ;;
   esac
+  if $prepared_worker_stopped; then
+    echo 'prepared_worker_state=inactive until the R2 fault environment is installed'
+  fi
   echo 'automatic_recovery=enabled'
   echo 'persistent_configuration_changes=none'
 }
@@ -121,8 +137,13 @@ require_baseline() {
   local container
   systemctl is-active --quiet indiefi-web.service \
     || fail "indiefi-web.service must be active before the drill."
-  systemctl is-active --quiet indiefi-worker.service \
-    || fail "indiefi-worker.service must be active before the drill."
+  if $prepared_worker_stopped; then
+    [[ "$(systemctl show --property=ActiveState --value indiefi-worker.service)" == "inactive" ]] \
+      || fail "indiefi-worker.service must be inactive for PREPARED-WORKER-STOPPED."
+  else
+    systemctl is-active --quiet indiefi-worker.service \
+      || fail "indiefi-worker.service must be active before the drill."
+  fi
   for container in indiefi-db indiefi-redis indiefi-rabbitmq; do
     [[ "$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)" == "running" ]] \
       || fail "$container must be running before the drill."
@@ -131,29 +152,58 @@ require_baseline() {
   done
 }
 
-write_drop_in() {
+write_environment_drop_in() {
   local unit="$1"
   shift
   local directory="/run/systemd/system/${unit}.d"
+  local environment_file="${FAULT_ENV_DIRECTORY}/${unit}.env"
+  install -d -m 0700 "$FAULT_ENV_DIRECTORY"
+  printf '%s\n' "$@" >"$environment_file"
+  chmod 0600 "$environment_file"
   install -d -m 0755 "$directory"
-  {
-    echo '[Service]'
-    local setting
-    for setting in "$@"; do
-      printf 'Environment="%s"\n' "$setting"
-    done
-  } >"${directory}/${DROP_IN_NAME}"
+  printf '%s\n' \
+    '[Service]' \
+    "EnvironmentFile=${environment_file}" \
+    >"${directory}/${DROP_IN_NAME}"
   chmod 0644 "${directory}/${DROP_IN_NAME}"
 }
 
 remove_drop_in() {
   local unit="$1"
   rm -f "/run/systemd/system/${unit}.d/${DROP_IN_NAME}"
+  rm -f "${FAULT_ENV_DIRECTORY}/${unit}.env"
   rmdir "/run/systemd/system/${unit}.d" 2>/dev/null || true
+  rmdir "$FAULT_ENV_DIRECTORY" 2>/dev/null || true
+}
+
+require_process_environment() {
+  local unit="$1"
+  shift
+  local deadline=$((SECONDS + 15))
+  local main_pid setting
+  local all_settings_present
+
+  while (( SECONDS < deadline )); do
+    main_pid="$(systemctl show --property=MainPID --value "$unit")"
+    if [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] \
+        && [[ -r "/proc/${main_pid}/environ" ]]; then
+      all_settings_present=true
+      for setting in "$@"; do
+        if ! grep -Fzqx -- "$setting" "/proc/${main_pid}/environ"; then
+          all_settings_present=false
+          break
+        fi
+      done
+      $all_settings_present && return 0
+    fi
+    sleep 1
+  done
+
+  fail "$unit did not receive the expected temporary fault environment within 15 seconds."
 }
 
 restore() {
-  local exit_code=$?
+  local exit_code="${1:-$?}"
   $restored && return "$exit_code"
   restored=true
   trap - EXIT HUP INT TERM
@@ -194,6 +244,19 @@ restore() {
   return "$exit_code"
 }
 
+handle_signal() {
+  local exit_code="$1"
+  restore "$exit_code" || true
+  exit "$exit_code"
+}
+
+wait_observation_window() {
+  local deadline=$((SECONDS + duration_seconds))
+  while (( SECONDS < deadline )); do
+    sleep 1
+  done
+}
+
 apply_fault() {
   echo "failure-drill: applying scenario=$scenario run_id=$run_id at $(date -Is)"
   case "$scenario" in
@@ -211,36 +274,45 @@ apply_fault() {
     postgresql-outage)
       fault_applied=true
       docker stop --time 20 indiefi-db >/dev/null
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
     redis-outage)
       fault_applied=true
       docker stop --time 20 indiefi-redis >/dev/null
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
     rabbitmq-outage)
       fault_applied=true
       docker stop --time 20 indiefi-rabbitmq >/dev/null
-      sleep "$duration_seconds"
+      wait_observation_window
       ;;
     r2-outage)
-      write_drop_in indiefi-web.service \
-        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
-        'Media__ObjectStorage__ForcePathStyle=true' \
-        'Media__ObjectStorage__OperationTimeout=00:00:03'
-      write_drop_in indiefi-worker.service \
-        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
-        'Media__ObjectStorage__ForcePathStyle=true' \
-        'Media__ObjectStorage__OperationTimeout=00:00:03'
       fault_applied=true
+      write_environment_drop_in indiefi-web.service \
+        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
+        'Media__ObjectStorage__ForcePathStyle=true' \
+        'Media__ObjectStorage__OperationTimeout=00:00:03'
+      write_environment_drop_in indiefi-worker.service \
+        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
+        'Media__ObjectStorage__ForcePathStyle=true' \
+        'Media__ObjectStorage__OperationTimeout=00:00:03'
       systemctl daemon-reload
       systemctl restart indiefi-web.service indiefi-worker.service
       wait_for_unit indiefi-web.service
       wait_for_unit indiefi-worker.service
-      sleep "$duration_seconds"
+      require_process_environment indiefi-web.service \
+        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
+        'Media__ObjectStorage__ForcePathStyle=true' \
+        'Media__ObjectStorage__OperationTimeout=00:00:03'
+      require_process_environment indiefi-worker.service \
+        'Media__ObjectStorage__ServiceUrl=https://127.0.0.1:1' \
+        'Media__ObjectStorage__ForcePathStyle=true' \
+        'Media__ObjectStorage__OperationTimeout=00:00:03'
+      wait_observation_window
       ;;
     ses-outage)
-      write_drop_in indiefi-worker.service \
+      fault_applied=true
+      write_environment_drop_in indiefi-worker.service \
         'AuthenticationEmail__Smtp__Host=127.0.0.1' \
         'AuthenticationEmail__Smtp__Port=1' \
         'AuthenticationEmail__Smtp__EnableSsl=false' \
@@ -249,11 +321,19 @@ apply_fault() {
         'NotificationEmail__Smtp__Port=1' \
         'NotificationEmail__Smtp__EnableSsl=false' \
         'NotificationEmail__Smtp__Timeout=00:00:03'
-      fault_applied=true
       systemctl daemon-reload
       systemctl restart indiefi-worker.service
       wait_for_unit indiefi-worker.service
-      sleep "$duration_seconds"
+      require_process_environment indiefi-worker.service \
+        'AuthenticationEmail__Smtp__Host=127.0.0.1' \
+        'AuthenticationEmail__Smtp__Port=1' \
+        'AuthenticationEmail__Smtp__EnableSsl=false' \
+        'AuthenticationEmail__Smtp__Timeout=00:00:03' \
+        'NotificationEmail__Smtp__Host=127.0.0.1' \
+        'NotificationEmail__Smtp__Port=1' \
+        'NotificationEmail__Smtp__EnableSsl=false' \
+        'NotificationEmail__Smtp__Timeout=00:00:03'
+      wait_observation_window
       ;;
   esac
 }
@@ -262,13 +342,21 @@ validate_inputs
 describe_plan
 $plan_only && exit 0
 
-for command_name in docker flock install systemctl; do
+for command_name in docker flock grep install systemctl; do
   require_command "$command_name"
 done
 
 exec 9>"$LOCK_FILE"
 flock -n 9 || fail "another failure drill is already running."
 require_baseline
-trap restore EXIT HUP INT TERM
+if $prepared_worker_stopped; then
+  # From this point onward every exit path must start the intentionally stopped
+  # Worker again, even if fault installation fails before apply_fault completes.
+  fault_applied=true
+fi
+trap restore EXIT
+trap 'handle_signal 129' HUP
+trap 'handle_signal 130' INT
+trap 'handle_signal 143' TERM
 apply_fault
 echo "failure-drill: observation window complete at $(date -Is)"
