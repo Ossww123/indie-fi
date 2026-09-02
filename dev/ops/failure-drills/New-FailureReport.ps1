@@ -28,7 +28,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $TechnicalRecoveredAtUtc,
 
-    [Parameter(Mandatory = $true)]
+    [AllowEmptyString()]
     [string] $UserRecoveredAtUtc,
 
     [Parameter(Mandatory = $true)]
@@ -86,14 +86,29 @@ function Get-SecondsBetween {
 $injection = ConvertFrom-UtcTimestamp $InjectionStartedAtUtc
 $detected = ConvertFrom-UtcTimestamp $FirstDetectedAtUtc
 $technical = ConvertFrom-UtcTimestamp $TechnicalRecoveredAtUtc
-$user = ConvertFrom-UtcTimestamp $UserRecoveredAtUtc
 $converged = ConvertFrom-UtcTimestamp $ConvergedAtUtc
+$user = $null
+if (-not [string]::IsNullOrWhiteSpace($UserRecoveredAtUtc)) {
+    $user = ConvertFrom-UtcTimestamp $UserRecoveredAtUtc
+}
 
-if ($detected -lt $injection -or
-    $technical -lt $detected -or
-    $user -lt $technical -or
-    $converged -lt $user) {
-    throw 'Timestamps must be ordered: injection, detection, technical recovery, user recovery, convergence.'
+if ($detected -lt $injection -or $technical -lt $detected) {
+    throw 'Detection and technical recovery must not precede injection, and technical recovery must not precede detection.'
+}
+
+if ($null -ne $user -and ($user -lt $injection -or $user -gt $converged)) {
+    throw 'Measured user recovery must be between injection and final convergence.'
+}
+
+if ($converged -lt $detected -or $converged -lt $technical) {
+    throw 'Final convergence must not precede detection or technical recovery.'
+}
+
+$userTimestamp = $null
+$userRecoverySeconds = $null
+if ($null -ne $user) {
+    $userTimestamp = $user.ToString('o')
+    $userRecoverySeconds = Get-SecondsBetween $injection $user
 }
 
 $resolvedRunDirectory = [IO.Path]::GetFullPath($RunDirectory)
@@ -124,13 +139,13 @@ $report = [ordered]@{
         injectionStartedAtUtc = $injection.ToString('o')
         firstDetectedAtUtc = $detected.ToString('o')
         technicalRecoveredAtUtc = $technical.ToString('o')
-        userRecoveredAtUtc = $user.ToString('o')
+        userRecoveredAtUtc = $userTimestamp
         convergedAtUtc = $converged.ToString('o')
     }
     durationsSeconds = [ordered]@{
         detection = Get-SecondsBetween $injection $detected
         technicalRecovery = Get-SecondsBetween $injection $technical
-        userRecovery = Get-SecondsBetween $injection $user
+        userRecovery = $userRecoverySeconds
         finalConvergence = Get-SecondsBetween $injection $converged
     }
     userImpact = $UserImpact
