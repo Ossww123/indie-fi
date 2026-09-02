@@ -126,7 +126,7 @@ application_database_password="$(
 
 echo "Enter the deployment values below. Hidden inputs are not echoed or stored in shell history."
 prompt_visible public_origin \
-  "Public HTTPS origin (for example https://15.165.159.74): "
+  "Public HTTPS origin (for example https://203.0.113.10): "
 prompt_visible r2_service_url \
   "Cloudflare R2 S3 API service URL: "
 prompt_visible r2_bucket_name \

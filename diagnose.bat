@@ -23,6 +23,6 @@ start "detail poller"  powershell -NoProfile -ExecutionPolicy Bypass -File "%DIA
 call "%~dp0loadtest.bat" %SEED_ARGS%
 
 echo.
-echo [diagnose] load finished. Close the two poller windows when done, then tell Claude.
+echo [diagnose] load finished. Close the two poller windows, then inspect the dumps.
 echo            dumps: %DIAG%\dump-summary.txt  and  %DIAG%\dump-detail.txt
 endlocal
