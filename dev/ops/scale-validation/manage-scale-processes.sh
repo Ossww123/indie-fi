@@ -65,6 +65,22 @@ wait_for_unit() {
   done
 }
 
+wait_for_listener() {
+  local unit="$1"
+  local port="$2"
+  local deadline=$((SECONDS + 60))
+  while true; do
+    if ss -lnt | awk '{print $4}' | grep -Eq "(^|:)${port}$"; then
+      return 0
+    fi
+    systemctl is-active --quiet "$unit" \
+      || fail "$unit stopped before opening port $port."
+    (( SECONDS < deadline )) \
+      || fail "$unit did not open port $port within 60 seconds."
+    sleep 1
+  done
+}
+
 write_instance_environments() {
   install -d -o root -g root -m 0700 "$runtime_directory"
   printf 'ASPNETCORE_URLS=http://127.0.0.1:5101\nObservability__InstanceId=scale-web-1\n' \
@@ -101,10 +117,8 @@ start_processes() {
   for unit in "${web_units[@]}" "${worker_units[@]}"; do
     wait_for_unit "$unit" active
   done
-  ss -lnt | awk '{print $4}' | grep -Eq '(^|:)5101$' \
-    || fail "Web instance 1 is not listening on 5101."
-  ss -lnt | awk '{print $4}' | grep -Eq '(^|:)5102$' \
-    || fail "Web instance 2 is not listening on 5102."
+  wait_for_listener indiefi-scale-web@1.service 5101
+  wait_for_listener indiefi-scale-web@2.service 5102
   echo "Scale validation processes are active for run $run_id."
 }
 
@@ -137,6 +151,10 @@ restart_instance() {
   require_armed_run
   systemctl restart "$unit"
   wait_for_unit "$unit" active
+  case "$unit" in
+    indiefi-scale-web@1.service) wait_for_listener "$unit" 5101 ;;
+    indiefi-scale-web@2.service) wait_for_listener "$unit" 5102 ;;
+  esac
   echo "$unit restarted."
 }
 
@@ -159,6 +177,9 @@ set_web_instance_state() {
     systemctl stop "$unit"
   fi
   wait_for_unit "$unit" "$desired_state"
+  if [[ "$desired_state" == active ]]; then
+    wait_for_listener "$unit" "$((5100 + instance))"
+  fi
   echo "$unit is $desired_state."
 }
 
