@@ -36,7 +36,8 @@ systemctl is-active --quiet indiefi-worker.service || fail 'the original Worker 
 
 for unit in "${scale_units[@]}"; do
   ! systemctl is-active --quiet "$unit" || fail "$unit is still active."
-  ! systemctl is-enabled --quiet "$unit" || fail "$unit is enabled at boot."
+  [[ "$(systemctl show "$unit" --property=UnitFileState --value)" == static ]] \
+    || fail "$unit is not a static, non-boot-enabled template."
 done
 
 ss -lnt | awk '{print $4}' | grep -Eq '(^|:)5000$' \
@@ -47,8 +48,10 @@ ss -lnt | awk '{print $4}' | grep -Eq '(^|:)5000$' \
 [[ -r "$nginx_config" ]] || fail 'the IndieFi Nginx config is missing.'
 [[ -L "$nginx_link" && "$(readlink -f "$nginx_link")" == "$(readlink -f "$nginx_config")" ]] \
   || fail 'the enabled IndieFi Nginx link does not target the expected config.'
-grep -Eq 'proxy_pass[[:space:]]+http://127[.]0[.]0[.]1:5000;' "$nginx_config" \
-  || fail 'Nginx does not proxy to the original Web.'
+[[ "$(grep -Ec '^[[:space:]]*server[[:space:]]+127[.]0[.]0[.]1:5000;' "$nginx_config")" == 1 ]] \
+  || fail 'Nginx does not contain exactly one original Web upstream.'
+grep -Eq 'proxy_pass[[:space:]]+http://indiefi_web;' "$nginx_config" \
+  || fail 'Nginx does not proxy through the IndieFi upstream.'
 ! grep -Eq '127[.]0[.]0[.]1:(5101|5102)|X-IndieFi-Upstream' "$nginx_config" \
   || fail 'the temporary scale upstream or response header remains in Nginx.'
 

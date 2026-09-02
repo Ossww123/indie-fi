@@ -43,6 +43,16 @@ Redis backplane은 socket 자체를 옮기지 않는다. 한 Web이 받은 hub p
 두 upstream에 걸쳐 확인하되 실제 이미지 21개를 R2에 올리지 않는다. EC2 실행 도구가 준비되기
 전에는 기존 multi-Web integration test를 증거로 사용하고 운영 browser에서 수동 반복하지 않는다.
 
+실제 EC2 검증에서는 최근 10분 동안 upload URL을 발급하지 않은 검증 계정으로
+`/Account/Profile`에 로그인하고 개발자 도구 Console에서
+`browser-shared-upload-limit.js` 전체를 실행한다. 스크립트는 현재 browser의 HttpOnly 로그인
+cookie를 직접 읽지 않고 same-origin 요청에만 사용한다. profile replacement 예약 한 건을 만든 뒤
+upload URL만 21회 요청하고 실제 R2 PUT은 하지 않으며, 마지막에 예약을 삭제한다.
+
+성공 결과는 `SHARED_UPLOAD_LIMIT_RESULT`의 `passed: true`, `allowed: 20`, `rejected: 1`,
+upstreams 5101·5102와 `SHARED_UPLOAD_LIMIT_CLEANUP`의 HTTP 202다. Console 표나 증거에는
+antiforgery token, cookie, media id, presigned URL을 출력하지 않는다.
+
 실제 검증에서는 요청별 upstream·결과만 기록하고 presigned URL, antiforgery token·cookie와
 owner/media ID는 저장하지 않는다. Web을 바꿨다는 이유로 21번째가 허용되면 공유 counter 실패다.
 
