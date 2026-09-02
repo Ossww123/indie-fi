@@ -87,8 +87,8 @@ start_processes() {
 
   local unit
   for unit in "${web_units[@]}" "${worker_units[@]}"; do
-    systemctl is-enabled --quiet "$unit" \
-      && fail "$unit must not be enabled."
+    [[ "$(systemctl show "$unit" --property=UnitFileState --value)" == static ]] \
+      || fail "$unit must remain a static, non-boot-enabled template."
     ! systemctl is-active --quiet "$unit" \
       || fail "$unit is already active."
   done
@@ -175,6 +175,7 @@ web_instances=indiefi-scale-web@1:127.0.0.1:5101,indiefi-scale-web@2:127.0.0.1:5
 worker_instances=indiefi-scale-worker@1,indiefi-scale-worker@2
 instance_environment=/run/indiefi-scale/*.env
 requires_armed_marker=true
+unit_file_state=static
 enabled_at_boot=false
 EOF
     ;;

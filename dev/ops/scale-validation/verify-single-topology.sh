@@ -36,7 +36,8 @@ systemctl is-active --quiet indiefi-worker.service || fail 'the original Worker 
 
 for unit in "${scale_units[@]}"; do
   ! systemctl is-active --quiet "$unit" || fail "$unit is still active."
-  ! systemctl is-enabled --quiet "$unit" || fail "$unit is enabled at boot."
+  [[ "$(systemctl show "$unit" --property=UnitFileState --value)" == static ]] \
+    || fail "$unit is not a static, non-boot-enabled template."
 done
 
 ss -lnt | awk '{print $4}' | grep -Eq '(^|:)5000$' \

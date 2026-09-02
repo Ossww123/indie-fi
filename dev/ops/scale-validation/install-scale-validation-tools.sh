@@ -45,8 +45,10 @@ systemctl daemon-reload
 for unit in \
   indiefi-scale-web@1.service indiefi-scale-web@2.service \
   indiefi-scale-worker@1.service indiefi-scale-worker@2.service; do
-  systemctl is-enabled --quiet "$unit" \
-    && { echo "$unit unexpectedly became enabled." >&2; exit 1; }
+  [[ "$(systemctl show "$unit" --property=UnitFileState --value)" == static ]] \
+    || { echo "$unit must remain a static, non-boot-enabled template." >&2; exit 1; }
+  ! systemctl is-active --quiet "$unit" \
+    || { echo "$unit unexpectedly became active." >&2; exit 1; }
 done
 "$target_dir/manage-scale-processes.sh" --plan >/dev/null
 "$target_dir/manage-scale-topology.sh" --plan >/dev/null
