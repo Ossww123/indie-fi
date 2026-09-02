@@ -26,6 +26,8 @@ cookie·비밀번호·antiforgery token·presigned URL은 결과에 남기지 �
 위해서다. `AccountStatusChanged`는 필수 이메일이지만 이번 batch에서 해당 사건을 만들지 않는다.
 `restart-worker-on-drop-fanout.sh`는 DB의 staging timestamp를 읽기 전용으로 감시하고 변경이 확인되면
 `manage-scale-processes.sh restart-worker-1`만 호출해 전후 UTC와 PID를 저장한다.
+`capture-worker-competition-state.sh`는 run marker와 drop id로 구독·알림·전달·미디어·lease·Outbox
+aggregate를 저장한다. 사용자 ID, email과 객체 key는 출력하지 않는다.
 
 ```bash
 RUN_ID=<run-id>

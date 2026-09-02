@@ -34,8 +34,11 @@ const mediaWaveSeconds = integerEnvironment('MEDIA_WAVE_SECONDS', 15, 1, 60);
 const mediaReadyTimeoutSeconds = integerEnvironment(
     'MEDIA_READY_TIMEOUT_SECONDS', 180, 30, 600);
 const actionAtMilliseconds = Date.parse(requiredEnvironment('ACTION_AT_UTC'));
-if (!Number.isFinite(actionAtMilliseconds) || actionAtMilliseconds <= Date.now()) {
-    throw new Error('ACTION_AT_UTC must be a future ISO-8601 timestamp.');
+// k6 evaluates the module again while building handleSummary. The action time
+// is then legitimately in the recent past, so retain a bounded replay window.
+if (!Number.isFinite(actionAtMilliseconds)
+    || actionAtMilliseconds < Date.now() - (15 * 60 * 1000)) {
+    throw new Error('ACTION_AT_UTC must not be more than 15 minutes in the past.');
 }
 
 const png = encoding.b64decode(
@@ -143,10 +146,9 @@ function disableOptionalEmail() {
     const response = http.post(
         `${contract.baseUrl}/Account/Notifications`,
         form,
-        requestOptions('POST /Account/Notifications [worker preparation]', 200));
-    const saved = response.status === 200
-        && typeof response.body === 'string'
-        && response.body.includes('알림 설정을 저장했습니다.');
+        requestOptionsNoRedirect(
+            'POST /Account/Notifications [worker preparation]', 302));
+    const saved = response.status === 302;
     if (saved) {
         preferencesSaved.add(1);
     }
@@ -166,11 +168,12 @@ function subscribeToDrop() {
     const response = http.post(
         `${detailUrl}?handler=SubscribeNotification`,
         { __RequestVerificationToken: token },
-        requestOptions(
+        requestOptionsNoRedirect(
             'POST /KeyDrops/Detail/:id?handler=SubscribeNotification [worker preparation]',
-            200));
-    const subscribed = response.status === 200
-        && response.url.includes('notification=subscribed');
+            302));
+    const location = response.headers.Location ?? response.headers.location ?? '';
+    const subscribed = response.status === 302
+        && location.includes('notification=subscribed');
     if (subscribed) {
         subscriptionsCreated.add(1);
     }
@@ -311,6 +314,14 @@ function sendJson(path, method, body, antiforgery, name, expectedStatus) {
 
 function requestOptions(name, expectedStatus) {
     return {
+        responseCallback: http.expectedStatuses(expectedStatus),
+        tags: { name },
+    };
+}
+
+function requestOptionsNoRedirect(name, expectedStatus) {
+    return {
+        redirects: 0,
         responseCallback: http.expectedStatuses(expectedStatus),
         tags: { name },
     };

@@ -29,6 +29,9 @@ install -o root -g root -m 0755 \
   "$script_dir/capture-scale-runtime.sh" \
   "$target_dir/capture-scale-runtime.sh"
 install -o root -g root -m 0755 \
+  "$script_dir/capture-worker-competition-state.sh" \
+  "$target_dir/capture-worker-competition-state.sh"
+install -o root -g root -m 0755 \
   "$script_dir/restart-worker-on-drop-fanout.sh" \
   "$target_dir/restart-worker-on-drop-fanout.sh"
 install -o root -g root -m 0755 \
@@ -37,6 +40,9 @@ install -o root -g root -m 0755 \
 install -o root -g root -m 0644 \
   "$script_dir/audit-key-drop.sql" \
   "$target_dir/audit-key-drop.sql"
+install -o root -g root -m 0644 \
+  "$script_dir/audit-worker-competition.sql" \
+  "$target_dir/audit-worker-competition.sql"
 install -o root -g root -m 0644 \
   "$script_dir/systemd/indiefi-scale-web@.service" \
   /etc/systemd/system/indiefi-scale-web@.service
@@ -57,12 +63,17 @@ done
 "$target_dir/manage-scale-topology.sh" --plan >/dev/null
 "$target_dir/verify-single-topology.sh" --plan >/dev/null
 test -r "$target_dir/audit-key-drop.sql"
+test -r "$target_dir/audit-worker-competition.sql"
 if "$target_dir/capture-scale-runtime.sh" >/dev/null 2>&1; then
   echo 'capture-scale-runtime.sh unexpectedly accepted a missing output path.' >&2
   exit 1
 fi
 if "$target_dir/restart-worker-on-drop-fanout.sh" >/dev/null 2>&1; then
   echo 'restart-worker-on-drop-fanout.sh unexpectedly accepted missing arguments.' >&2
+  exit 1
+fi
+if "$target_dir/capture-worker-competition-state.sh" >/dev/null 2>&1; then
+  echo 'capture-worker-competition-state.sh unexpectedly accepted missing arguments.' >&2
   exit 1
 fi
 echo 'Scale-validation templates and tools are installed; no instance was started or enabled.'
