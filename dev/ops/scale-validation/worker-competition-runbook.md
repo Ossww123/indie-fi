@@ -24,6 +24,8 @@ cookie·비밀번호·antiforgery token·presigned URL은 결과에 남기지 �
 드롭 오픈 worker가 fan-out을 staged한 직후 Worker 1을 관리 도구로 한 번 재시작한다. 선택 알림 이메일을
 끄는 이유는 `example.test` 합성 계정으로 SES 전송을 만들지 않고 in-app notification 경쟁 소비만 검증하기
 위해서다. `AccountStatusChanged`는 필수 이메일이지만 이번 batch에서 해당 사건을 만들지 않는다.
+`restart-worker-on-drop-fanout.sh`는 DB의 staging timestamp를 읽기 전용으로 감시하고 변경이 확인되면
+`manage-scale-processes.sh restart-worker-1`만 호출해 전후 UTC와 PID를 저장한다.
 
 ```bash
 RUN_ID=<run-id>
