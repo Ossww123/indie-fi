@@ -1,14 +1,13 @@
-# ── 개인 문서/지침 (커밋 제외 — 실제 프로젝트 코드만 올림) ──
-# 커밋 대상은 dev/ 아래 코드뿐. 기획·설계 문서와 Claude 작업 지침은 로컬 개인 파일.
+# ── 개인 문서/에이전트 설정 (커밋 제외) ──
+# 기획·설계·작업 기록과 로컬 AI 도구 설정은 공개 저장소에 올리지 않는다.
 CLAUDE.md
 **/CLAUDE.md
 docs/
+.agents/
+.claude/
 
 # 1차 시도 보관함 (2026-07-21). 참고용으로만 남김 — 커밋하지 않는다.
 _archive/
-
-# Claude Code / 에이전트 로컬 설정 (개인)
-.claude/settings.local.json
 
 # ── .NET / ASP.NET Core ──
 # Build results
@@ -63,6 +62,18 @@ TestResults/
 .env.*
 appsettings.*.local.json
 secrets.json
+*.pem
+*.pfx
+*.p12
+*.key
+*.crt
+*.jks
+*.age
+*.dump
+*.backup
+*.bak
+*.sqlite
+*.sqlite3
 # 예시 파일은 값이 비어 있으므로 커밋한다 (무엇을 채워야 하는지 알려주는 용도)
 !dev/.env.example
 
