@@ -38,4 +38,3 @@ trap 'rm -f -- "$temporary_file"' EXIT
 mv -- "$temporary_file" "$output_file"
 chmod 0600 "$output_file"
 echo "Worker competition aggregate audit saved to $output_file."
-
