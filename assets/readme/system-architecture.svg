@@ -1,50 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
-  <title id="title">IndieFi system architecture</title>
-  <desc id="desc">A browser reaches an ASP.NET Core web application through Nginx. The web and worker processes use PostgreSQL, Redis, RabbitMQ, R2 object storage, and SES. OpenTelemetry signals flow to Prometheus, Loki, Tempo, and Grafana.</desc>
+  <title id="title">IndieFi 시스템 아키텍처</title>
+  <desc id="desc">브라우저 요청은 Nginx를 거쳐 ASP.NET Core 웹 애플리케이션에 도달한다. Web과 Worker는 PostgreSQL, Redis, RabbitMQ, R2 객체 스토리지, SES를 사용하며 OpenTelemetry 신호는 Prometheus, Loki, Tempo, Grafana로 흐른다.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b8175"/>
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9586a0"/>
     </marker>
     <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c94332"/>
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6937b8"/>
     </marker>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#2d241d" flood-opacity="0.10"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#251c2d" flood-opacity="0.10"/>
     </filter>
     <style>
-      .title{font:700 30px Inter,Segoe UI,sans-serif;fill:#241d18}.subtitle{font:14px Inter,Segoe UI,sans-serif;fill:#75695e}
-      .zone{fill:#fbf5e9;stroke:#dfd1bc;stroke-width:1.5}.zone-title{font:700 13px Inter,Segoe UI,sans-serif;letter-spacing:1.6px;fill:#8b6b52}
-      .box{fill:#fffdf8;stroke:#d7c7b0;stroke-width:1.5;rx:14;filter:url(#shadow)}.accent{fill:#c94332;stroke:#a62d20}.dark{fill:#27221e;stroke:#27221e}
-      .box-title{font:700 17px Inter,Segoe UI,sans-serif;fill:#2b231d}.box-copy{font:13px Inter,Segoe UI,sans-serif;fill:#75695e}.light-title{font:700 17px Inter,Segoe UI,sans-serif;fill:#fffaf1}.light-copy{font:13px Inter,Segoe UI,sans-serif;fill:#f3d8cc}
-      .line{fill:none;stroke:#8b8175;stroke-width:2;marker-end:url(#arrow)}.line-accent{fill:none;stroke:#c94332;stroke-width:2.5;marker-end:url(#arrow-accent)}.dash{stroke-dasharray:7 6}
-      .tag{fill:#f0e3ce;rx:8}.tag-text{font:700 11px Inter,Segoe UI,sans-serif;letter-spacing:.7px;fill:#735c49}
+      .title{font:700 30px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#251c2d}.subtitle{font:14px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#74677e}
+      .zone{fill:#faf8fc;stroke:#d4bde9;stroke-width:1.5}.zone-title{font:700 13px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;letter-spacing:1px;fill:#6937b8}
+      .box{fill:#fffefe;stroke:#dbd2e3;stroke-width:1.5;rx:14;filter:url(#shadow)}.accent{fill:#6937b8;stroke:#512693}.dark{fill:#21172a;stroke:#21172a}
+      .box-title{font:700 17px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#251c2d}.box-copy{font:13px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#74677e}.light-title{font:700 17px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#fffefe}.light-copy{font:13px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#d4bde9}
+      .line{fill:none;stroke:#9586a0;stroke-width:2;marker-end:url(#arrow)}.line-accent{fill:none;stroke:#6937b8;stroke-width:2.5;marker-end:url(#arrow-accent)}.dash{stroke-dasharray:7 6}
+      .tag{fill:#eee7f5;rx:8}.tag-text{font:700 11px Inter,Segoe UI,sans-serif;letter-spacing:.7px;fill:#6937b8}
     </style>
   </defs>
 
-  <rect width="1400" height="820" fill="#f6ecdc"/>
-  <text x="56" y="58" class="title">IndieFi system architecture</text>
-  <text x="56" y="84" class="subtitle">Single-node portfolio deployment · durable writes, asynchronous work, and end-to-end observability</text>
+  <rect width="1400" height="820" fill="#f5f2f8"/>
+  <text x="56" y="58" class="title">IndieFi 시스템 아키텍처</text>
+  <text x="56" y="84" class="subtitle">단일 EC2 포트폴리오 배포 · 영속적 저장 · 비동기 작업 · 전체 구간 관측</text>
 
   <rect x="42" y="112" width="1010" height="650" rx="22" class="zone"/>
   <text x="66" y="143" class="zone-title">AWS EC2 · T3.MEDIUM</text>
 
   <rect x="78" y="185" width="174" height="92" class="box"/>
-  <text x="165" y="221" text-anchor="middle" class="box-title">Browser</text>
+  <text x="165" y="221" text-anchor="middle" class="box-title">브라우저</text>
   <text x="165" y="247" text-anchor="middle" class="box-copy">Razor Pages · SignalR</text>
 
   <rect x="322" y="185" width="184" height="92" class="dark" rx="14" filter="url(#shadow)"/>
   <text x="414" y="221" text-anchor="middle" class="light-title">Nginx</text>
-  <text x="414" y="247" text-anchor="middle" class="light-copy">TLS · reverse proxy</text>
+  <text x="414" y="247" text-anchor="middle" class="light-copy">TLS · 리버스 프록시</text>
 
   <rect x="576" y="164" width="214" height="118" class="accent" rx="14" filter="url(#shadow)"/>
   <text x="683" y="205" text-anchor="middle" class="light-title">IndieFi.Web</text>
   <text x="683" y="231" text-anchor="middle" class="light-copy">ASP.NET Core · .NET 10</text>
-  <text x="683" y="252" text-anchor="middle" class="light-copy">modular monolith</text>
+  <text x="683" y="252" text-anchor="middle" class="light-copy">모듈러 모놀리스</text>
 
   <rect x="838" y="164" width="180" height="118" class="box"/>
   <text x="928" y="205" text-anchor="middle" class="box-title">IndieFi.Worker</text>
-  <text x="928" y="231" text-anchor="middle" class="box-copy">email · media</text>
-  <text x="928" y="252" text-anchor="middle" class="box-copy">notification consumers</text>
+  <text x="928" y="231" text-anchor="middle" class="box-copy">이메일 · 미디어</text>
+  <text x="928" y="252" text-anchor="middle" class="box-copy">알림 소비자</text>
 
   <path d="M252 231 H322" class="line-accent"/>
   <path d="M506 231 H576" class="line-accent"/>
@@ -52,28 +52,28 @@
 
   <rect x="92" y="372" width="178" height="104" class="box"/>
   <text x="181" y="409" text-anchor="middle" class="box-title">PostgreSQL 18</text>
-  <text x="181" y="435" text-anchor="middle" class="box-copy">source of truth</text>
-  <text x="181" y="456" text-anchor="middle" class="box-copy">constraints · ledger</text>
+  <text x="181" y="435" text-anchor="middle" class="box-copy">최종 데이터 원본</text>
+  <text x="181" y="456" text-anchor="middle" class="box-copy">제약조건 · 원장</text>
 
   <rect x="310" y="372" width="178" height="104" class="box"/>
   <text x="399" y="409" text-anchor="middle" class="box-title">Redis</text>
-  <text x="399" y="435" text-anchor="middle" class="box-copy">waiting room</text>
-  <text x="399" y="456" text-anchor="middle" class="box-copy">leases · SignalR</text>
+  <text x="399" y="435" text-anchor="middle" class="box-copy">대기실</text>
+  <text x="399" y="456" text-anchor="middle" class="box-copy">임대 · SignalR</text>
 
   <rect x="528" y="372" width="178" height="104" class="box"/>
   <text x="617" y="409" text-anchor="middle" class="box-title">RabbitMQ</text>
-  <text x="617" y="435" text-anchor="middle" class="box-copy">durable messages</text>
+  <text x="617" y="435" text-anchor="middle" class="box-copy">내구성 메시지</text>
   <text x="617" y="456" text-anchor="middle" class="box-copy">MassTransit</text>
 
   <rect x="746" y="372" width="130" height="104" class="box"/>
   <text x="811" y="409" text-anchor="middle" class="box-title">R2</text>
-  <text x="811" y="435" text-anchor="middle" class="box-copy">S3-compatible</text>
-  <text x="811" y="456" text-anchor="middle" class="box-copy">media objects</text>
+  <text x="811" y="435" text-anchor="middle" class="box-copy">S3 호환</text>
+  <text x="811" y="456" text-anchor="middle" class="box-copy">미디어 객체</text>
 
   <rect x="916" y="372" width="102" height="104" class="box"/>
   <text x="967" y="409" text-anchor="middle" class="box-title">SES</text>
-  <text x="967" y="435" text-anchor="middle" class="box-copy">transactional</text>
-  <text x="967" y="456" text-anchor="middle" class="box-copy">email</text>
+  <text x="967" y="435" text-anchor="middle" class="box-copy">트랜잭션</text>
+  <text x="967" y="456" text-anchor="middle" class="box-copy">이메일</text>
 
   <path d="M650 282 C620 319 330 314 181 372" class="line"/>
   <path d="M677 282 C650 325 480 322 399 372" class="line"/>
@@ -82,20 +82,20 @@
   <path d="M928 282 C918 326 848 330 811 372" class="line"/>
   <path d="M956 282 C973 326 970 345 967 372" class="line"/>
 
-  <rect x="78" y="552" width="940" height="166" rx="17" fill="#efe2cf" stroke="#dac8ae" stroke-width="1.5"/>
-  <text x="102" y="584" class="zone-title">OBSERVABILITY PATH</text>
+  <rect x="78" y="552" width="940" height="166" rx="17" fill="#eee7f5" stroke="#d4bde9" stroke-width="1.5"/>
+  <text x="102" y="584" class="zone-title">관측 데이터 경로</text>
   <rect x="105" y="615" width="160" height="72" class="box"/>
   <text x="185" y="644" text-anchor="middle" class="box-title">OpenTelemetry</text>
-  <text x="185" y="666" text-anchor="middle" class="box-copy">agent + gateway</text>
+  <text x="185" y="666" text-anchor="middle" class="box-copy">에이전트 + 게이트웨이</text>
   <rect x="326" y="615" width="132" height="72" class="box"/>
-  <text x="392" y="644" text-anchor="middle" class="box-title">Prometheus</text><text x="392" y="666" text-anchor="middle" class="box-copy">metrics</text>
+  <text x="392" y="644" text-anchor="middle" class="box-title">Prometheus</text><text x="392" y="666" text-anchor="middle" class="box-copy">메트릭</text>
   <rect x="483" y="615" width="110" height="72" class="box"/>
-  <text x="538" y="644" text-anchor="middle" class="box-title">Loki</text><text x="538" y="666" text-anchor="middle" class="box-copy">logs</text>
+  <text x="538" y="644" text-anchor="middle" class="box-title">Loki</text><text x="538" y="666" text-anchor="middle" class="box-copy">로그</text>
   <rect x="618" y="615" width="110" height="72" class="box"/>
-  <text x="673" y="644" text-anchor="middle" class="box-title">Tempo</text><text x="673" y="666" text-anchor="middle" class="box-copy">traces</text>
+  <text x="673" y="644" text-anchor="middle" class="box-title">Tempo</text><text x="673" y="666" text-anchor="middle" class="box-copy">트레이스</text>
   <rect x="789" y="604" width="188" height="94" class="dark" rx="14" filter="url(#shadow)"/>
   <text x="883" y="643" text-anchor="middle" class="light-title">Grafana</text>
-  <text x="883" y="668" text-anchor="middle" class="light-copy">correlated dashboards</text>
+  <text x="883" y="668" text-anchor="middle" class="light-copy">연관 대시보드</text>
   <path d="M265 651 H326" class="line-accent"/>
   <path d="M458 651 H483" class="line"/>
   <path d="M593 651 H618" class="line"/>
@@ -103,24 +103,24 @@
   <path d="M683 282 V522 C683 542 185 530 185 615" class="line dash"/>
   <path d="M928 282 V515 C928 535 230 522 230 615" class="line dash"/>
 
-  <rect x="1086" y="112" width="272" height="650" rx="22" fill="#2a241f"/>
-  <text x="1114" y="151" class="zone-title" fill="#ddb99e">DEPLOYMENT BOUNDARY</text>
-  <text x="1114" y="198" class="light-title">Public</text>
-  <text x="1114" y="226" class="light-copy">80 / 443 · Nginx only</text>
-  <line x1="1114" y1="252" x2="1330" y2="252" stroke="#51473f"/>
-  <text x="1114" y="295" class="light-title">Loopback only</text>
+  <rect x="1086" y="112" width="272" height="650" rx="22" fill="#21172a"/>
+  <text x="1114" y="151" class="zone-title" fill="#d4bde9">배포 경계</text>
+  <text x="1114" y="198" class="light-title">외부 공개</text>
+  <text x="1114" y="226" class="light-copy">80 / 443 · Nginx만 허용</text>
+  <line x1="1114" y1="252" x2="1330" y2="252" stroke="#51465b"/>
+  <text x="1114" y="295" class="light-title">루프백 전용</text>
   <text x="1114" y="323" class="light-copy">Web :5000</text>
   <text x="1114" y="347" class="light-copy">PostgreSQL · Redis · RabbitMQ</text>
-  <line x1="1114" y1="376" x2="1330" y2="376" stroke="#51473f"/>
-  <text x="1114" y="419" class="light-title">Process supervision</text>
-  <text x="1114" y="447" class="light-copy">systemd · immutable releases</text>
-  <text x="1114" y="471" class="light-copy">manual CD with rollback</text>
-  <line x1="1114" y1="500" x2="1330" y2="500" stroke="#51473f"/>
-  <text x="1114" y="543" class="light-title">External services</text>
+  <line x1="1114" y1="376" x2="1330" y2="376" stroke="#51465b"/>
+  <text x="1114" y="419" class="light-title">프로세스 관리</text>
+  <text x="1114" y="447" class="light-copy">systemd · 불변 릴리스</text>
+  <text x="1114" y="471" class="light-copy">롤백 가능한 수동 CD</text>
+  <line x1="1114" y1="500" x2="1330" y2="500" stroke="#51465b"/>
+  <text x="1114" y="543" class="light-title">외부 서비스</text>
   <text x="1114" y="571" class="light-copy">Cloudflare R2 · AWS SES</text>
-  <line x1="1114" y1="600" x2="1330" y2="600" stroke="#51473f"/>
-  <text x="1114" y="643" class="light-title">Design goal</text>
-  <text x="1114" y="671" class="light-copy">Protect correctness at the DB,</text>
-  <text x="1114" y="695" class="light-copy">absorb bursts before claiming,</text>
-  <text x="1114" y="719" class="light-copy">and make failures observable.</text>
+  <line x1="1114" y1="600" x2="1330" y2="600" stroke="#51465b"/>
+  <text x="1114" y="643" class="light-title">설계 목표</text>
+  <text x="1114" y="671" class="light-copy">DB에서 정합성을 지키고,</text>
+  <text x="1114" y="695" class="light-copy">선점 전 요청 폭주를 흡수하며,</text>
+  <text x="1114" y="719" class="light-copy">실패를 관측 가능하게 만든다.</text>
 </svg>

@@ -1,21 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
-  <title id="title">Game-detail latency before and after query reduction</title>
-  <desc id="desc">At 50 requests per second, p95 latency fell from 46.49 to 23.44 milliseconds. At 100 requests per second, p95 latency fell from 84.57 to 36.54 milliseconds after sequential SQL commands were reduced from approximately ten to four.</desc>
+  <title id="title">게임 상세 조회 쿼리 감소 전후 지연시간</title>
+  <desc id="desc">순차 SQL 명령을 약 10회에서 4회로 줄인 뒤 p95 지연시간은 50 RPS에서 46.49ms에서 23.44ms로, 100 RPS에서 84.57ms에서 36.54ms로 감소했다.</desc>
   <defs>
     <filter id="chart-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity=".10"/></filter>
     <style>
-      .title{font:700 30px Inter,Segoe UI,sans-serif;fill:#241d18}.subtitle{font:14px Inter,Segoe UI,sans-serif;fill:#75695e}
-      .card{fill:#fffdf8;stroke:#d9c8b2;stroke-width:1.5;filter:url(#chart-shadow)}.label{font:700 16px Inter,Segoe UI,sans-serif;fill:#342b24}.copy{font:13px Inter,Segoe UI,sans-serif;fill:#74685e}
-      .axis{stroke:#cfc0ae;stroke-width:1}.grid{stroke:#e8ddcc;stroke-width:1}.tick{font:12px Inter,Segoe UI,sans-serif;fill:#8a7d71}.value{font:700 15px Inter,Segoe UI,sans-serif;fill:#332921}
-      .before{fill:#9c9085}.after{fill:#c94332}.accent{font:700 30px Inter,Segoe UI,sans-serif;fill:#c94332}.small{font:12px Inter,Segoe UI,sans-serif;fill:#8a7a6d}
+      .title{font:700 30px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#251c2d}.subtitle{font:14px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#74677e}
+      .card{fill:#fffefe;stroke:#dbd2e3;stroke-width:1.5;filter:url(#chart-shadow)}.label{font:700 16px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#251c2d}.copy{font:13px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#74677e}
+      .axis{stroke:#cbbddd;stroke-width:1}.grid{stroke:#eee7f5;stroke-width:1}.tick{font:12px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#9586a0}.value{font:700 15px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#251c2d}
+      .before{fill:#9586a0}.after{fill:#6937b8}.accent{font:700 30px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#6937b8}.small{font:12px "Noto Sans KR","Malgun Gothic",Inter,Segoe UI,sans-serif;fill:#9586a0}
     </style>
   </defs>
-  <rect width="1400" height="760" fill="#f6ecdc"/>
-  <text x="58" y="58" class="title">Game-detail query optimization</text>
-  <text x="58" y="84" class="subtitle">Same single t3.medium deployment and workload profile · p95 HTTP latency · lower is better</text>
+  <rect width="1400" height="760" fill="#f5f2f8"/>
+  <text x="58" y="58" class="title">게임 상세 조회 쿼리 최적화</text>
+  <text x="58" y="84" class="subtitle">동일한 단일 t3.medium 배포와 부하 조건 · HTTP p95 지연시간 · 낮을수록 좋음</text>
 
   <rect x="50" y="120" width="870" height="570" rx="20" class="card"/>
-  <text x="82" y="160" class="label">Measured p95 response latency</text>
+  <text x="82" y="160" class="label">측정된 p95 응답 지연시간</text>
   <line x1="160" y1="205" x2="160" y2="610" class="axis"/><line x1="160" y1="610" x2="860" y2="610" class="axis"/>
   <g>
     <line x1="160" y1="610" x2="860" y2="610" class="grid"/><text x="140" y="614" text-anchor="end" class="tick">0</text>
@@ -23,7 +23,7 @@
     <line x1="160" y1="430" x2="860" y2="430" class="grid"/><text x="140" y="434" text-anchor="end" class="tick">40</text>
     <line x1="160" y1="340" x2="860" y2="340" class="grid"/><text x="140" y="344" text-anchor="end" class="tick">60</text>
     <line x1="160" y1="250" x2="860" y2="250" class="grid"/><text x="140" y="254" text-anchor="end" class="tick">80</text>
-    <text x="94" y="410" transform="rotate(-90 94 410)" text-anchor="middle" class="tick">p95 latency (ms)</text>
+    <text x="94" y="410" transform="rotate(-90 94 410)" text-anchor="middle" class="tick">p95 지연시간 (ms)</text>
   </g>
   <!-- 50 RPS: 4.5px per ms -->
   <rect x="248" y="400.8" width="110" height="209.2" rx="7" class="before"/>
@@ -37,26 +37,26 @@
   <text x="629" y="216" text-anchor="middle" class="value">84.57 ms</text>
   <text x="756" y="432" text-anchor="middle" class="value">36.54 ms</text>
   <text x="692" y="643" text-anchor="middle" class="label">100 RPS</text>
-  <rect x="632" y="150" width="16" height="16" rx="3" class="before"/><text x="656" y="163" class="copy">Before</text>
-  <rect x="730" y="150" width="16" height="16" rx="3" class="after"/><text x="754" y="163" class="copy">After</text>
+  <rect x="632" y="150" width="16" height="16" rx="3" class="before"/><text x="656" y="163" class="copy">개선 전</text>
+  <rect x="730" y="150" width="16" height="16" rx="3" class="after"/><text x="754" y="163" class="copy">개선 후</text>
 
   <rect x="952" y="120" width="398" height="264" rx="20" class="card"/>
-  <text x="984" y="162" class="label">What changed</text>
+  <text x="984" y="162" class="label">변경 내용</text>
   <text x="984" y="215" class="accent">≈10 → 4</text>
-  <text x="984" y="242" class="copy">sequential SQL commands per detail request</text>
+  <text x="984" y="242" class="copy">상세 요청당 순차 SQL 명령 수</text>
   <line x1="984" y1="270" x2="1318" y2="270" class="grid"/>
-  <text x="984" y="306" class="copy">• projected related data in fewer round trips</text>
-  <text x="984" y="334" class="copy">• preserved response shape and correctness</text>
-  <text x="984" y="362" class="copy">• compared identical load profiles</text>
+  <text x="984" y="306" class="copy">• 연관 데이터를 더 적은 왕복으로 조회</text>
+  <text x="984" y="334" class="copy">• 응답 구조와 정합성 유지</text>
+  <text x="984" y="362" class="copy">• 동일한 부하 조건으로 비교</text>
 
   <rect x="952" y="410" width="398" height="280" rx="20" class="card"/>
-  <text x="984" y="452" class="label">Observed improvement</text>
-  <text x="984" y="508" class="accent">−49.6%</text><text x="1142" y="507" class="copy">at 50 RPS</text>
-  <text x="984" y="562" class="accent">−56.8%</text><text x="1142" y="561" class="copy">at 100 RPS</text>
+  <text x="984" y="452" class="label">관측된 개선 폭</text>
+  <text x="984" y="508" class="accent">−49.6%</text><text x="1142" y="507" class="copy">50 RPS에서</text>
+  <text x="984" y="562" class="accent">−56.8%</text><text x="1142" y="561" class="copy">100 RPS에서</text>
   <line x1="984" y1="592" x2="1318" y2="592" class="grid"/>
-  <text x="984" y="625" class="small">Boundary: this is a controlled portfolio benchmark,</text>
-  <text x="984" y="648" class="small">not a general capacity claim. At 200 RPS the single</text>
-  <text x="984" y="671" class="small">instance still saturated and produced timeouts.</text>
+  <text x="984" y="625" class="small">범위: 통제된 포트폴리오 벤치마크이며</text>
+  <text x="984" y="648" class="small">일반적인 처리 용량을 뜻하지 않는다. 200 RPS에서는</text>
+  <text x="984" y="671" class="small">단일 인스턴스가 포화되어 timeout이 발생했다.</text>
 
-  <text x="58" y="724" class="small">Evidence source: fixed-rate k6 runs correlated with OpenTelemetry traces and PostgreSQL spans.</text>
+  <text x="58" y="724" class="small">근거: 고정 요청률 k6 실행 결과를 OpenTelemetry 트레이스와 PostgreSQL span에 연결해 확인했다.</text>
 </svg>
