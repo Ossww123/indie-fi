@@ -1,9 +1,12 @@
 using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Modules.KeyDistributions.Application;
 using IndieFi.Web.Modules.KeyDistributions.Domain;
+using IndieFi.Web.Modules.Media.Application;
+using IndieFi.Web.Modules.Media.Infrastructure;
 using IndieFi.Web.Modules.Notifications.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages.KeyDrops;
 
@@ -44,6 +47,7 @@ public class DetailModel : PageModel
     private readonly GrantedGameKeyReader _grantedGameKeyReader;
     private readonly WaitingRoomParticipationService _waitingRoomParticipationService;
     private readonly KeyDropSubscriptionService _keyDropSubscriptions;
+    private readonly MediaObjectStorageOptions _mediaStorageOptions;
 
     public DetailModel(
         PublicKeyDropReader publicKeyDropReader,
@@ -51,7 +55,8 @@ public class DetailModel : PageModel
         KeyClaimService keyClaimService,
         GrantedGameKeyReader grantedGameKeyReader,
         WaitingRoomParticipationService waitingRoomParticipationService,
-        KeyDropSubscriptionService keyDropSubscriptions)
+        KeyDropSubscriptionService keyDropSubscriptions,
+        IOptions<MediaObjectStorageOptions> mediaStorageOptions)
     {
         _publicKeyDropReader = publicKeyDropReader;
         _currentUser = currentUser;
@@ -59,6 +64,7 @@ public class DetailModel : PageModel
         _grantedGameKeyReader = grantedGameKeyReader;
         _waitingRoomParticipationService = waitingRoomParticipationService;
         _keyDropSubscriptions = keyDropSubscriptions;
+        _mediaStorageOptions = mediaStorageOptions.Value;
     }
 
     public PublicKeyDropDetail Drop { get; private set; } = null!;
@@ -70,6 +76,7 @@ public class DetailModel : PageModel
     public WaitingRoomParticipationResult? WaitingRoom { get; private set; }
     public bool IsOpenNotificationSubscribed { get; private set; }
     public string? OpenNotificationMessage { get; private set; }
+    public PublicGameMediaImage? GameCover { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(
         long id,
@@ -114,6 +121,17 @@ public class DetailModel : PageModel
         }
 
         Drop = drop;
+
+        if (_mediaStorageOptions.Enabled)
+        {
+            Response.Headers["Referrer-Policy"] = "no-referrer";
+            GameCover = (await HttpContext.RequestServices
+                    .GetRequiredService<GameMediaQueryService>()
+                    .GetPublicDetailForExistingGameAsync(
+                        drop.GameId,
+                        HttpContext.RequestAborted))
+                .Cover;
+        }
 
         if (_currentUser.IsAuthenticated)
         {

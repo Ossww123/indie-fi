@@ -9,6 +9,7 @@ const accountToggle = accountContainer?.querySelector<HTMLButtonElement>("[data-
 const accountMenu = accountContainer?.querySelector<HTMLElement>("[data-account-menu]");
 const skipLink = getRequiredElement<HTMLAnchorElement>(".site-skip-link");
 const mainContent = getRequiredElement<HTMLElement>("#main-content");
+const headerSearch = document.querySelector<HTMLInputElement>("[data-header-search]");
 
 skipLink.addEventListener("click", (event) => {
   event.preventDefault();
@@ -61,6 +62,13 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && headerSearch) {
+    event.preventDefault();
+    headerSearch.focus();
+    headerSearch.select();
+    return;
+  }
+
   if (event.key !== "Escape") {
     return;
   }

@@ -6,265 +6,352 @@
 @{
     ViewData["Title"] = "드롭 상세";
     ViewData["MainClass"] = "site-main-key-drop";
+    var untilOpen = Model.Drop.OpensAt - DateTimeOffset.UtcNow;
+    var statusClass = Model.Drop.Status switch
+    {
+        KeyDropStatus.Active => "badge-success",
+        KeyDropStatus.Scheduled => "drop-v2-status-scheduled",
+        KeyDropStatus.SoldOut => "badge-neutral",
+        KeyDropStatus.ClosedEarly => "badge-warning",
+        _ => "badge-neutral",
+    };
 }
 
-<nav class="ivory-breadcrumb" aria-label="현재 위치">
+<nav class="drop-v2-breadcrumb" aria-label="현재 위치">
+    <a asp-page="/Index">홈</a><span aria-hidden="true">›</span><span>드롭</span><span aria-hidden="true">›</span>
     <a asp-page="/Games/Detail" asp-route-id="@Model.Drop.GameId">@Model.Drop.GameTitle</a>
-    <span aria-hidden="true">/</span>
-    <span>키 배포</span>
 </nav>
 
-<header class="ivory-page-heading ivory-drop-heading">
-    <div>
-        <p class="ivory-heading-label">KEY DROP</p>
-        <h1>드롭 상세</h1>
-        <p>오픈 일정과 참여 조건을 확인하고 대기실을 통해 게임 키를 요청합니다.</p>
-    </div>
-    @if (Model.Drop.CanClaim)
+<div class="drop-v2-notices">
+    @if (Model.ClaimMessage is string claimMessage)
     {
-        <span class="badge-success">@Model.Drop.StatusText</span>
+        <div class="alert-warning" role="alert">@claimMessage</div>
     }
-    else
+    @if (Model.InventoryMessage is string inventoryMessage)
     {
-        <span class="badge-neutral">@Model.Drop.StatusText</span>
+        <div class="alert-success" role="status">@inventoryMessage</div>
     }
-</header>
+    @if (Model.ClosureMessage is string closureMessage)
+    {
+        <div class="alert-success" role="status">@closureMessage</div>
+    }
+    @if (Model.WaitingRoomMessage is string waitingRoomMessage)
+    {
+        <div class="alert-warning" role="status">@waitingRoomMessage</div>
+    }
+    @if (Model.OpenNotificationMessage is string openNotificationMessage)
+    {
+        <div class="alert-success" role="status">@openNotificationMessage</div>
+    }
+</div>
 
-@if (Model.ClaimMessage is string claimMessage)
-{
-    <div class="alert-warning" role="alert">@claimMessage</div>
-}
-@if (Model.InventoryMessage is string inventoryMessage)
-{
-    <div class="alert-success" role="status">@inventoryMessage</div>
-}
-@if (Model.ClosureMessage is string closureMessage)
-{
-    <div class="alert-success" role="status">@closureMessage</div>
-}
-@if (Model.WaitingRoomMessage is string waitingRoomMessage)
-{
-    <div class="alert-warning" role="status">@waitingRoomMessage</div>
-}
-@if (Model.OpenNotificationMessage is string openNotificationMessage)
-{
-    <div class="alert-success" role="status">@openNotificationMessage</div>
-}
-
-<section class="drop-overview ivory-drop-overview" aria-labelledby="drop-overview-heading">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <p class="ivory-card-label">DROP STATUS</p>
-            <h2 id="drop-overview-heading" class="section-title mt-2 mb-0">배포 현황</h2>
-        </div>
-        <span class="text-meta">현재 상태와 참여 조건을 확인하세요.</span>
-    </div>
-
-    <dl class="drop-metrics">
-        <div class="drop-metric">
-            <dt class="text-meta">오픈 시각</dt>
-            <dd class="drop-metric-value">
-                @KoreanStandardTime.ToLocal(Model.Drop.OpensAt).ToString("yyyy-MM-dd HH:mm") KST
-            </dd>
-        </div>
-        <div class="drop-metric">
-            <dt class="text-meta">키 재고</dt>
-            <dd class="drop-metric-value" data-key-drop-inventory>총 @(Model.Drop.TotalKeys)개 중 @(Model.Drop.RemainingKeys)개 남음</dd>
-        </div>
-        <div class="drop-metric">
-            <dt class="text-meta">참여 자격</dt>
-            <dd class="drop-metric-value">
-                @if (Model.Drop.MinimumAccountAgeDays is null
-                    && Model.Drop.MinimumCompletedReviewCount is null)
+<div class="drop-v2-layout">
+    <div class="drop-v2-main">
+        <article class="drop-v2-game-hero">
+            <div class="drop-v2-hero-media">
+                @if (Model.GameCover is { } cover)
                 {
-                    <span>제한 없음</span>
+                    <img src="@cover.Url"
+                         alt="@Model.Drop.GameTitle 대표 이미지"
+                         width="1600"
+                         height="900"
+                         fetchpriority="high"
+                         referrerpolicy="no-referrer" />
+                }
+                else
+                {
+                    <div class="drop-v2-hero-fallback" role="img" aria-label="@Model.Drop.GameTitle 대표 이미지 없음"><span>KEY DROP</span></div>
+                }
+                <div class="drop-v2-hero-overlay">
+                    <div class="drop-v2-hero-thumbnail" aria-hidden="true">
+                        @if (Model.GameCover is { } thumbnail)
+                        {
+                            <img src="@thumbnail.Url" alt="" width="320" height="200" referrerpolicy="no-referrer" />
+                        }
+                        else
+                        {
+                            <span>DROP</span>
+                        }
+                    </div>
+                    <div>
+                        <span class="drop-v2-eyebrow">LIMITED KEY DROP</span>
+                        <h1>@Model.Drop.GameTitle</h1>
+                        <a asp-page="/Games/Detail" asp-route-id="@Model.Drop.GameId">게임 상세 보기 <span aria-hidden="true">→</span></a>
+                    </div>
+                </div>
+            </div>
+            <div class="drop-v2-hero-summary">
+                <div>
+                    <span class="@statusClass">@Model.Drop.StatusText</span>
+                    @if (Model.Drop.Status == KeyDropStatus.Scheduled && untilOpen > TimeSpan.Zero)
+                    {
+                        <span class="drop-v2-countdown-label">드롭 오픈까지</span>
+                        <p class="drop-v2-countdown" aria-label="드롭 오픈까지 남은 시간">
+                            <strong>@((int)untilOpen.TotalDays)</strong><small>일</small>
+                            <strong>@untilOpen.Hours.ToString("00")</strong><small>시간</small>
+                            <strong>@untilOpen.Minutes.ToString("00")</strong><small>분</small>
+                        </p>
+                    }
+                    else if (Model.Drop.Status == KeyDropStatus.Active)
+                    {
+                        <p class="drop-v2-live-copy">지금 대기실을 통해 참여할 수 있습니다.</p>
+                    }
+                    else
+                    {
+                        <p class="drop-v2-live-copy">현재 이 드롭은 @Model.Drop.StatusText 상태입니다.</p>
+                    }
+                    <time datetime="@Model.Drop.OpensAt.ToString("O")">@KoreanStandardTime.ToLocal(Model.Drop.OpensAt).ToString("yyyy.MM.dd HH:mm") (KST) 오픈</time>
+                </div>
+                <p>한정된 게임 키를 정해진 순서에 따라 배포합니다. 참여 조건과 대기실 상태를 확인한 뒤 키를 요청해 주세요.</p>
+            </div>
+        </article>
+
+        @if (Model.Drop.Status == KeyDropStatus.Scheduled)
+        {
+            <section class="drop-v2-panel drop-v2-notification" aria-labelledby="open-notification-heading">
+                <div>
+                    <span class="drop-v2-section-label">OPEN ALERT</span>
+                    <h2 id="open-notification-heading">오픈 알림 신청 <small>선택 사항</small></h2>
+                    <p>드롭 오픈 전에 알림을 보내드립니다. 알림이 늦게 도착할 수 있으며, 게임 키 수령 기회를 보장하지 않습니다.</p>
+                </div>
+                @if (User.Identity?.IsAuthenticated != true)
+                {
+                    <div class="drop-v2-notification-action">
+                        <span><small>신청 상태</small><strong>로그인 필요</strong></span>
+                        <a asp-page="/Login" asp-route-returnUrl="@Url.Page("/KeyDrops/Detail", new { id = Model.Drop.Id })" class="button-primary">로그인 후 신청</a>
+                    </div>
+                }
+                else if (Model.IsOpenNotificationSubscribed)
+                {
+                    <div class="drop-v2-notification-action">
+                        <span><small>신청 상태</small><strong>신청 완료</strong></span>
+                        <form method="post" asp-page-handler="UnsubscribeNotification"><button type="submit" class="button-outline">오픈 알림 신청 취소</button></form>
+                    </div>
+                }
+                else
+                {
+                    <div class="drop-v2-notification-action">
+                        <span><small>신청 상태</small><strong>미신청</strong></span>
+                        <form method="post" asp-page-handler="SubscribeNotification"><button type="submit" class="button-primary">알림 신청하기</button></form>
+                    </div>
+                }
+            </section>
+        }
+
+        <section class="drop-v2-panel drop-v2-waiting-room" aria-labelledby="waiting-room-heading">
+            <div class="drop-v2-section-heading">
+                <div><span class="drop-v2-section-label">WAITING ROOM</span><h2 id="waiting-room-heading">가상 대기실</h2></div>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <span class="drop-v2-live-pill">실시간 상태 확인</span>
+                }
+            </div>
+            <p>오픈 30분 전부터 참여할 수 있습니다. 대기실 진입은 게임 키 예약이나 지급을 보장하지 않습니다.</p>
+
+            <ol class="drop-v2-flow" aria-label="대기실 진행 단계">
+                <li class="@(Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.PreWaiting ? "is-current" : null)"><span>1</span><strong>사전 대기</strong><small>오픈 전 참여</small></li>
+                <li class="@(Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.Waiting ? "is-current" : null)"><span>2</span><strong>대기</strong><small>순서 기다리기</small></li>
+                <li class="@(Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.Admitted ? "is-current" : null)"><span>3</span><strong>입장 가능</strong><small>제한 시간 동안 요청</small></li>
+                <li class="@(Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.Completed ? "is-current" : null)"><span>4</span><strong>완료</strong><small>키 지급 또는 종료</small></li>
+            </ol>
+
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <div class="drop-v2-live-status"
+                     data-waiting-room-client
+                     data-drop-id="@Model.Drop.Id"
+                     data-total-keys="@Model.Drop.TotalKeys"
+                     data-snapshot-url="@Url.Page("/KeyDrops/Detail", "WaitingRoomSnapshot", new { id = Model.Drop.Id })"
+                     data-hub-url="@Url.Content("~/hubs/waiting-room")"
+                     data-client-state="starting">
+                    <p class="dynamic-status dynamic-status-loading" data-live-state aria-live="polite">최신 대기실 상태 확인 중…</p>
+                    <p data-live-position hidden></p>
+                    <p data-live-counts hidden></p>
+                    <p class="drop-v2-admission-time" data-live-admission hidden></p>
+                </div>
+            }
+
+            <div class="drop-v2-waiting-action">
+            @if (User.Identity?.IsAuthenticated != true)
+            {
+                <p>로그인하면 대기실에 참여할 수 있습니다.</p>
+                <a asp-page="/Login" asp-route-returnUrl="@Url.Page("/KeyDrops/Detail", new { id = Model.Drop.Id })" class="button-primary">로그인 후 대기실 참여</a>
+            }
+            else if (Model.WaitingRoom?.Entry is not null)
+            {
+                <div>
+                    <strong data-waiting-room-state>@Model.GetWaitingRoomStateText()</strong>
+                    @if (Model.WaitingRoom.Snapshot?.Position is int position && Model.WaitingRoom.Snapshot.AheadCount is int aheadCount)
+                    {
+                        <p data-waiting-room-position>현재 @(position)번 · 앞에 @(aheadCount)명</p>
+                    }
+                    else if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.PreWaiting)
+                    {
+                        <p>오픈 시 사전 대기자의 순서를 한 번 무작위로 확정합니다.</p>
+                    }
+                    @if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.Admitted && Model.GetAdmissionExpiresAt() is DateTimeOffset admissionExpiresAt)
+                    {
+                        <p class="drop-v2-admission-time"><time data-admission-expires-at="@admissionExpiresAt.ToString("O")">@KoreanStandardTime.ToLocal(admissionExpiresAt).ToString("HH:mm:ss") (KST)</time>까지 키를 받아 주세요.</p>
+                        <small>재접속해도 입장 가능 시간은 연장되지 않으며, 이 상태만으로 키가 예약되지는 않습니다.</small>
+                    }
+                    else if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.Expired)
+                    {
+                        <p>입장 가능 시간이 지났습니다. 다시 참여하면 현재 대기열의 마지막 순서로 들어갑니다.</p>
+                    }
+                    @if (Model.WaitingRoom.Snapshot is { } waitingSnapshot)
+                    {
+                        <small>대기 @(waitingSnapshot.WaitingCount)명 · 사전 대기 @(waitingSnapshot.PreWaitingCount)명 · 입장 중 @(waitingSnapshot.AdmittedCount)명</small>
+                    }
+                </div>
+                <form method="post" asp-page-handler="Join">
+                    @if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.Expired)
+                    {
+                        <button type="submit" class="button-primary">대기열 마지막으로 다시 참여</button>
+                    }
+                    else
+                    {
+                        <button type="submit" class="button-outline">현재 상태 다시 확인</button>
+                    }
+                </form>
+            }
+            else if (Model.WaitingRoom?.CanJoin == true)
+            {
+                <p>참여 조건을 충족했습니다. 대기실에 들어가 순서를 확인하세요.</p>
+                <form method="post" asp-page-handler="Join"><button type="submit" class="button-primary">대기실 입장하기</button></form>
+            }
+            else if (Model.WaitingRoom?.Outcome == WaitingRoomParticipationOutcome.NotYetOpen)
+            {
+                <p>오픈 30분 전부터 입장할 수 있습니다.</p>
+            }
+            else if (Model.WaitingRoom?.Outcome == WaitingRoomParticipationOutcome.NotEligible)
+            {
+                <p>현재 참여 자격을 충족하지 못했습니다.</p>
+            }
+            else if (Model.WaitingRoom?.Outcome == WaitingRoomParticipationOutcome.Unavailable)
+            {
+                <p>현재 대기실에 연결할 수 없습니다.</p>
+            }
+            </div>
+        </section>
+
+        <section class="drop-v2-claim" aria-labelledby="drop-action-heading">
+            <div>
+                <span class="drop-v2-section-label">CLAIM</span>
+                <h2 id="drop-action-heading">게임 키 받기</h2>
+                <p>입장 가능 상태가 된 뒤 재고가 남아 있을 때 요청할 수 있습니다.</p>
+            </div>
+            <div class="drop-v2-claim-action">
+                @if (Model.ClaimedKey is not null)
+                {
+                    <div class="drop-v2-key-result" role="alert" data-claim-result="granted"><small>받은 게임 키</small><strong>@Model.ClaimedKey</strong></div>
+                }
+                else if (!Model.Drop.CanClaim)
+                {
+                    <button type="button" class="button-primary" disabled>@Model.Drop.StatusText</button>
+                }
+                else if (User.Identity?.IsAuthenticated != true)
+                {
+                    <a asp-page="/Login" asp-route-returnUrl="@Url.Page("/KeyDrops/Detail", new { id = Model.Drop.Id })" class="button-primary">로그인 후 참여</a>
+                }
+                else
+                {
+                    <form method="post" asp-page-handler="Claim">
+                        @if (Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.Admitted)
+                        {
+                            <button type="submit" class="button-primary" data-waiting-room-claim>키 받기</button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="button-primary" data-waiting-room-claim disabled>대기실 입장 후 키 받기</button>
+                        }
+                    </form>
+                }
+            </div>
+        </section>
+
+        <section class="drop-v2-panel drop-v2-guide" aria-labelledby="drop-guide-heading">
+            <div class="drop-v2-section-heading"><div><span class="drop-v2-section-label">HOW IT WORKS</span><h2 id="drop-guide-heading">드롭 안내</h2></div></div>
+            <dl>
+                <div><dt><span aria-hidden="true">◷</span> 대기실 입장</dt><dd>오픈 30분 전부터 대기실에 참여할 수 있습니다.</dd></div>
+                <div><dt><span aria-hidden="true">⌛</span> 키 요청 기간</dt><dd>입장 가능 상태가 되면 표시된 제한 시간 안에 키를 요청해야 합니다.</dd></div>
+                <div><dt><span aria-hidden="true">▣</span> 중복 참여 제한</dt><dd>한 계정은 같은 드롭에서 게임 키 하나만 받을 수 있습니다.</dd></div>
+                <div><dt><span aria-hidden="true">✓</span> 키 지급</dt><dd>지급이 완료되면 받은 키를 이 화면에서 다시 확인할 수 있습니다.</dd></div>
+            </dl>
+        </section>
+    </div>
+
+    <aside class="drop-v2-side" aria-label="드롭 상태와 참여 정보">
+        <section class="drop-v2-side-panel drop-v2-status-panel">
+            <div><h2>드롭 상태</h2><span class="@statusClass">@Model.Drop.StatusText</span></div>
+            <span class="drop-v2-status-icon" aria-hidden="true">⌛</span>
+            <p>@(Model.Drop.Status == KeyDropStatus.Scheduled ? "오픈 알림을 신청하고, 오픈 30분 전부터 대기실에 참여하세요." : "현재 상태와 대기실 안내를 확인해 주세요.")</p>
+        </section>
+
+        <section class="drop-v2-side-panel">
+            <h2>배포 정보</h2>
+            <dl class="drop-v2-facts">
+                <div><dt>오픈 시각</dt><dd>@KoreanStandardTime.ToLocal(Model.Drop.OpensAt).ToString("yyyy.MM.dd HH:mm") (KST)</dd></div>
+                <div><dt>전체 키 수</dt><dd>@Model.Drop.TotalKeys.ToString("N0")개</dd></div>
+                <div><dt>남은 키 수</dt><dd data-key-drop-inventory>총 @(Model.Drop.TotalKeys)개 중 @(Model.Drop.RemainingKeys)개 남음</dd></div>
+            </dl>
+            <p class="drop-v2-side-note">재고는 대기실 상태가 갱신될 때 함께 변경될 수 있습니다.</p>
+        </section>
+
+        <section class="drop-v2-side-panel">
+            <h2>참여 자격</h2>
+            <dl class="drop-v2-eligibility">
+                @if (Model.Drop.MinimumAccountAgeDays is null && Model.Drop.MinimumCompletedReviewCount is null)
+                {
+                    <div><dt><span aria-hidden="true">✓</span> 참여 제한</dt><dd>없음</dd></div>
                 }
                 else
                 {
                     @if (Model.Drop.MinimumAccountAgeDays is int minimumAge)
                     {
-                        <span class="block">가입 후 @(minimumAge)일 이상</span>
+                        <div><dt><span aria-hidden="true">✓</span> 최소 가입 기간</dt><dd>@minimumAge.ToString("N0")일 이상</dd></div>
                     }
                     @if (Model.Drop.MinimumCompletedReviewCount is int minimumReviews)
                     {
-                        <span class="block">완료 리뷰 @(minimumReviews)개 이상</span>
+                        <div><dt><span aria-hidden="true">✓</span> 최소 완료 리뷰 수</dt><dd>@minimumReviews.ToString("N0")개 이상</dd></div>
                     }
                 }
-            </dd>
-        </div>
-    </dl>
-</section>
+            </dl>
+            <p class="drop-v2-side-note">표시된 조건을 모두 충족해야 참여할 수 있습니다.</p>
+        </section>
 
-<div class="drop-flow-grid ivory-drop-flow">
-@if (Model.Drop.Status == KeyDropStatus.Scheduled)
-{
-    <section class="surface-card ivory-drop-card ivory-drop-notification">
-        <p class="ivory-card-label">OPEN ALERT</p>
-        <h2 class="subsection-title">오픈 알림</h2>
-        <p class="mt-1 text-sm text-slate-600">
-            알림은 늦게 도착할 수 있으며, 신청해도 게임 키 수령 기회를 보장하지 않습니다.
-        </p>
-        @if (User.Identity?.IsAuthenticated != true)
-        {
-            <p class="mt-3 text-sm text-slate-600">로그인하면 배포 오픈 알림을 신청할 수 있습니다.</p>
-        }
-        else if (Model.IsOpenNotificationSubscribed)
-        {
-            <form method="post" asp-page-handler="UnsubscribeNotification" class="mt-3">
-                <button type="submit" class="button-outline">오픈 알림 신청 취소</button>
-            </form>
-        }
-        else
-        {
-            <form method="post" asp-page-handler="SubscribeNotification" class="mt-3">
-                <button type="submit" class="button-primary">오픈 알림 신청</button>
-            </form>
-        }
-    </section>
-}
-
-<section class="surface-card ivory-drop-card ivory-waiting-room-card">
-    <p class="ivory-card-label">WAITING ROOM</p>
-    <h2 class="subsection-title">가상 대기실</h2>
-    <p class="mt-1 text-sm text-slate-500">
-        대기실 진입은 게임 키 예약이나 지급을 보장하지 않습니다.
-    </p>
-    @if (User.Identity?.IsAuthenticated == true)
-    {
-        <div data-waiting-room-client
-             data-drop-id="@Model.Drop.Id"
-             data-total-keys="@Model.Drop.TotalKeys"
-             data-snapshot-url="@Url.Page("/KeyDrops/Detail", "WaitingRoomSnapshot", new { id = Model.Drop.Id })"
-             data-hub-url="@Url.Content("~/hubs/waiting-room")"
-             data-client-state="starting">
-            <p class="dynamic-status dynamic-status-loading mt-3"
-               data-live-state
-               aria-live="polite">최신 대기실 상태 확인 중…</p>
-            <p class="mt-1 text-sm text-slate-600" data-live-position hidden></p>
-            <p class="mt-1 text-sm text-slate-500" data-live-counts hidden></p>
-            <p class="mt-1 text-sm font-medium text-emerald-700" data-live-admission hidden></p>
-        </div>
-    }
-    @if (User.Identity?.IsAuthenticated != true)
-    {
-        <p class="mt-3 text-sm text-slate-600">로그인하면 대기실에 참여할 수 있습니다.</p>
-    }
-    else if (Model.WaitingRoom?.Entry is not null)
-    {
-        <p class="mt-3 font-medium" data-waiting-room-state>@Model.GetWaitingRoomStateText()</p>
-        @if (Model.WaitingRoom.Snapshot?.Position is int position
-            && Model.WaitingRoom.Snapshot.AheadCount is int aheadCount)
-        {
-            <p class="mt-1 text-sm text-slate-600" data-waiting-room-position>
-                현재 @(position)번 · 앞에 @(aheadCount)명
-            </p>
-        }
-        else if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.PreWaiting)
-        {
-            <p class="mt-1 text-sm text-slate-600">
-                오픈 시 사전 대기자의 순서를 한 번 무작위로 확정합니다.
-            </p>
-        }
-        @if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.Admitted
-            && Model.GetAdmissionExpiresAt() is DateTimeOffset admissionExpiresAt)
-        {
-            <p class="mt-2 text-sm font-medium text-emerald-700">
-                <time data-admission-expires-at="@admissionExpiresAt.ToString("O")">
-                    @KoreanStandardTime.ToLocal(admissionExpiresAt).ToString("HH:mm:ss") KST
-                </time>까지 키를 받아 주세요.
-            </p>
-            <p class="mt-1 text-sm text-slate-500">
-                재접속해도 입장 가능 시간은 연장되지 않으며, 이 상태만으로 키가 예약되지는 않습니다.
-            </p>
-        }
-        else if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.Expired)
-        {
-            <p class="mt-1 text-sm text-slate-600">
-                입장 가능 시간이 지났습니다. 다시 참여하면 현재 대기열의 마지막 순서로 들어갑니다.
-            </p>
-        }
-        @if (Model.WaitingRoom.Snapshot is { } waitingSnapshot)
-        {
-            <p class="mt-1 text-sm text-slate-500">
-                대기 @(waitingSnapshot.WaitingCount)명 · 사전 대기 @(waitingSnapshot.PreWaitingCount)명 · 입장 중 @(waitingSnapshot.AdmittedCount)명
-            </p>
-        }
-        <form method="post" asp-page-handler="Join" class="mt-3">
-            @if (Model.WaitingRoom.Entry.State == WaitingRoomEntryState.Expired)
+        <section class="drop-v2-side-panel drop-v2-preview-panel">
+            <h2>내 대기 상태</h2>
+            @if (User.Identity?.IsAuthenticated != true)
             {
-                <button type="submit" class="button-primary">대기열 마지막으로 다시 참여</button>
+                <div class="drop-v2-preview-empty"><span aria-hidden="true">● ● <b>●</b> ● ●</span><p>로그인 후 대기실에 입장하면<br />내 순서를 확인할 수 있습니다.</p></div>
+            }
+            else if (Model.WaitingRoom?.Entry is not null)
+            {
+                <div class="drop-v2-preview-empty"><span aria-hidden="true">● ● <b>●</b> ● ●</span><p>@Model.GetWaitingRoomStateText()</p></div>
+                <dl class="drop-v2-facts">
+                    <div><dt>내 순서</dt><dd>@(Model.WaitingRoom.Snapshot?.Position?.ToString() ?? "-")</dd></div>
+                    <div><dt>앞 대기자</dt><dd>@(Model.WaitingRoom.Snapshot?.AheadCount?.ToString() ?? "-")</dd></div>
+                    <div><dt>남은 키</dt><dd>@Model.Drop.RemainingKeys.ToString("N0")개</dd></div>
+                </dl>
             }
             else
             {
-                <button type="submit" class="button-link">현재 상태 다시 확인</button>
+                <div class="drop-v2-preview-empty"><span aria-hidden="true">● ● <b>●</b> ● ●</span><p>대기실에 입장하면<br />내 순서를 확인할 수 있습니다.</p></div>
             }
-        </form>
-    }
-    else if (Model.WaitingRoom?.CanJoin == true)
-    {
-        <form method="post" asp-page-handler="Join" class="mt-3">
-            <button type="submit" class="button-primary">대기실 입장</button>
-        </form>
-    }
-    else if (Model.WaitingRoom?.Outcome == WaitingRoomParticipationOutcome.NotYetOpen)
-    {
-        <p class="mt-3 text-sm text-slate-600">오픈 30분 전부터 입장할 수 있습니다.</p>
-    }
-    else if (Model.WaitingRoom?.Outcome == WaitingRoomParticipationOutcome.NotEligible)
-    {
-        <p class="mt-3 text-sm text-slate-600">현재 참여 자격을 충족하지 못했습니다.</p>
-    }
-    else if (Model.WaitingRoom?.Outcome == WaitingRoomParticipationOutcome.Unavailable)
-    {
-        <p class="mt-3 text-sm text-slate-600">현재 대기실에 연결할 수 없습니다.</p>
-    }
-</section>
+            <p class="drop-v2-side-note">실제 순서와 대기 시간은 계속 변경될 수 있습니다.</p>
+        </section>
+
+        <section class="drop-v2-side-panel drop-v2-caution">
+            <h2>유의 사항</h2>
+            <ul>
+                <li>키 요청과 수령에는 로그인이 필요합니다.</li>
+                <li>네트워크 환경에 따라 상태 갱신이 잠시 늦어질 수 있습니다.</li>
+                <li>입장 가능 상태만으로 키가 예약되지는 않습니다.</li>
+                <li>드롭은 재고 소진 또는 개발자의 조기 마감으로 종료될 수 있습니다.</li>
+            </ul>
+        </section>
+    </aside>
 </div>
-
-<section class="drop-action-panel ivory-drop-action" aria-labelledby="drop-action-heading">
-    <div>
-        <p class="ivory-card-label">CLAIM</p>
-        <h2 id="drop-action-heading" class="text-lg font-bold">게임 키 받기</h2>
-        <p class="text-meta mt-1">대기실에서 입장 가능 상태가 된 뒤 재고가 남아 있을 때 요청할 수 있습니다.</p>
-    </div>
-    <div>
-        @if (Model.ClaimedKey is not null)
-        {
-            <div class="rounded-xl bg-white px-4 py-3 text-brand-deep"
-                 role="alert"
-                 data-claim-result="granted">
-                받은 키: <strong>@Model.ClaimedKey</strong>
-            </div>
-        }
-        else if (!Model.Drop.CanClaim)
-        {
-            <button type="button" class="button-primary" disabled>@Model.Drop.StatusText</button>
-        }
-        else if (User.Identity?.IsAuthenticated != true)
-        {
-            <a asp-page="/Login"
-               asp-route-returnUrl="@Url.Page("/KeyDrops/Detail", new { id = Model.Drop.Id })"
-               class="button-primary">로그인 후 참여</a>
-        }
-        else
-        {
-            <form method="post" asp-page-handler="Claim">
-                @if (Model.WaitingRoom?.Entry?.State == WaitingRoomEntryState.Admitted)
-                {
-                    <button type="submit" class="button-primary" data-waiting-room-claim>키 받기</button>
-                }
-                else
-                {
-                    <button type="submit" class="button-primary" data-waiting-room-claim disabled>대기실 입장 후 키 받기</button>
-                }
-            </form>
-        }
-    </div>
-</section>
-
-<a asp-page="/Games/Detail"
-   asp-route-id="@Model.Drop.GameId"
-   class="text-link mt-6 inline-block">← 게임으로</a>
 
 @section Scripts
 {
