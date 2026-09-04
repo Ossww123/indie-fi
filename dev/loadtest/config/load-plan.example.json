@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "safety": {
+    "pollSeconds": 5,
+    "targetFailureSeconds": 15,
+    "coolDownSeconds": 60,
+    "maxRunSeconds": 1800
+  },
+  "stages": [
+    {
+      "name": "browse-smoke",
+      "scenario": "browse",
+      "contractStage": "smoke",
+      "parameters": {
+        "ratePerSecond": 2,
+        "durationSeconds": 15,
+        "preAllocatedVUs": 2,
+        "maxVUs": 4
+      }
+    },
+    {
+      "name": "browse-warmup",
+      "scenario": "browse",
+      "contractStage": "warmup",
+      "parameters": {
+        "ratePerSecond": 10,
+        "durationSeconds": 60,
+        "preAllocatedVUs": 10,
+        "maxVUs": 20
+      }
+    },
+    {
+      "name": "browse-baseline-1",
+      "scenario": "browse",
+      "contractStage": "baseline-1",
+      "parameters": {
+        "ratePerSecond": 25,
+        "durationSeconds": 120,
+        "preAllocatedVUs": 25,
+        "maxVUs": 50
+      }
+    },
+    {
+      "name": "browse-baseline-2",
+      "scenario": "browse",
+      "contractStage": "baseline-2",
+      "parameters": {
+        "ratePerSecond": 50,
+        "durationSeconds": 120,
+        "preAllocatedVUs": 50,
+        "maxVUs": 100
+      }
+    },
+    {
+      "name": "keydrop-smoke",
+      "scenario": "keydrop",
+      "contractStage": "smoke",
+      "parameters": {
+        "pollIntervalMilliseconds": 1000,
+        "admissionTimeoutSeconds": 180,
+        "lateWindowSeconds": 10,
+        "preparationSpreadSeconds": 60
+      }
+    },
+    {
+      "name": "keydrop-baseline",
+      "scenario": "keydrop",
+      "contractStage": "baseline",
+      "parameters": {
+        "pollIntervalMilliseconds": 1000,
+        "admissionTimeoutSeconds": 300,
+        "lateWindowSeconds": 30,
+        "preparationSpreadSeconds": 300
+      }
+    }
+  ]
+}

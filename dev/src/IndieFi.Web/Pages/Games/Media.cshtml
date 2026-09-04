@@ -1,0 +1,248 @@
+@page "{id:long}"
+@model MediaModel
+@using IndieFi.Web.Modules.Media.Domain
+@{
+    ViewData["Title"] = $"{Model.Media.GameTitle} 미디어 관리";
+    ViewData["MainClass"] = "site-main-media";
+    var hasCurrentCover = Model.Media.Covers.Any(item => item.IsCurrent);
+    var currentScreenshotCount = Model.Media.Screenshots.Count(item => item.IsCurrent);
+}
+
+<section data-game-media
+         data-game-id="@Model.Media.GameId"
+         data-max-screenshots="@Model.MaximumScreenshotCount"
+         data-max-file-bytes="@Model.MaximumFileBytes"
+         data-media-api-base="/api/media">
+    <nav class="ivory-breadcrumb" aria-label="현재 위치">
+        <a asp-page="/Games/Index">내 게임</a>
+        <span aria-hidden="true">/</span>
+        <a asp-page="/Games/Detail" asp-route-id="@Model.Media.GameId">@Model.Media.GameTitle</a>
+        <span aria-hidden="true">/</span>
+        <span>미디어</span>
+    </nav>
+
+    <header class="ivory-page-heading">
+        <div>
+            <p class="ivory-heading-label">MEDIA</p>
+            <h1>미디어 관리</h1>
+            <p>@(Model.Media.GameTitle)의 대표 이미지와 공개 스크린샷을 구성합니다.</p>
+        </div>
+        <div class="button-group">
+            <a asp-page="/Games/Edit" asp-route-id="@Model.Media.GameId" class="button-outline">게임 정보 수정</a>
+            <a asp-page="/Games/Detail" asp-route-id="@Model.Media.GameId" class="button-link">게임으로 돌아가기</a>
+        </div>
+    </header>
+
+    <div class="ivory-media-notice">
+        <span aria-hidden="true">i</span>
+        <p>JPEG·PNG·WebP 이미지를 파일당 최대 10 MiB까지 올릴 수 있습니다. 대표 이미지는 1개, 스크린샷은 최대 @Model.MaximumScreenshotCount 개까지 공개됩니다.</p>
+    </div>
+
+    <p class="dynamic-status dynamic-status-loading ivory-media-client-status"
+       data-media-client-status
+       aria-live="polite">미디어 관리 도구 준비 중…</p>
+    <div class="alert-neutral mb-5 hidden"
+         data-media-notice
+         role="status"
+         aria-live="polite"></div>
+
+    <div class="ivory-media-layout">
+        <section class="ivory-media-panel" aria-labelledby="game-screenshot-heading">
+            <div class="ivory-media-panel-heading">
+                <div>
+                    <p class="ivory-card-label">SCREENSHOTS</p>
+                    <h2 id="game-screenshot-heading">스크린샷</h2>
+                    <p>게임 플레이와 분위기를 보여줄 이미지를 공개 순서대로 관리합니다.</p>
+                </div>
+                <strong>@currentScreenshotCount / @Model.MaximumScreenshotCount</strong>
+            </div>
+
+            <form data-media-upload-form
+                  data-attachment-kind="GameScreenshot"
+                  class="media-upload-form ivory-media-upload">
+                <div class="field-group">
+                    <label for="game-screenshot-file" class="field-label">스크린샷 파일</label>
+                    <input id="game-screenshot-file"
+                           data-media-file
+                           class="field-input"
+                           type="file"
+                           accept="image/jpeg,image/png,image/webp" />
+                </div>
+                <button type="button"
+                        data-media-upload-submit
+                        class="button-primary"
+                        disabled>업로드</button>
+                <button type="button"
+                        data-media-upload-cancel
+                        class="button-outline hidden"
+                        disabled>취소</button>
+            </form>
+
+            <div class="ivory-screenshot-grid" data-media-list="GameScreenshot">
+                @if (Model.Media.Screenshots.Count == 0)
+                {
+                    <div class="ivory-media-empty" data-media-empty>
+                        <span aria-hidden="true">▧</span>
+                        <strong>등록된 스크린샷이 없습니다.</strong>
+                        <p>첫 이미지를 선택하면 이곳에서 처리 상태와 공개 순서를 확인할 수 있습니다.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var item in Model.Media.Screenshots)
+                    {
+                        <article class="ivory-media-card"
+                                 data-media-item
+                                 data-media-id="@item.MediaId"
+                                 data-media-status="@item.Status"
+                                 data-media-sort-order="@(item.SortOrder?.ToString() ?? string.Empty)"
+                                 data-attachment-kind="@item.AttachmentKind">
+                            <div class="ivory-media-preview-stage">
+                                @if (item.PreviewUrl is not null)
+                                {
+                                    <img data-media-preview
+                                         src="@item.PreviewUrl"
+                                         alt="@Model.Media.GameTitle 스크린샷 미리보기"
+                                         class="media-preview"
+                                         width="352"
+                                         height="224"
+                                         loading="lazy" />
+                                }
+                                else
+                                {
+                                    <span aria-hidden="true">PROCESSING</span>
+                                }
+                            </div>
+                            <div class="ivory-media-card-copy">
+                                <div>
+                                    <span class="font-semibold" data-media-status-text>@MediaModel.StatusText(item.Status)</span>
+                                    @if (item.SortOrder is int sortOrder)
+                                    {
+                                        <span class="badge-neutral" data-media-sort-badge>순서 @(sortOrder + 1)</span>
+                                    }
+                                </div>
+                                <p>@MediaModel.FormatBytes(item.DeclaredBytes) · 처리 시도 @item.ProcessingAttemptCount 회</p>
+                                <time datetime="@item.UpdatedAt.ToString("O")">갱신 @item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</time>
+                                @if (item.FailureCode is not null)
+                                {
+                                    <p class="field-error" data-media-failure>오류 코드: @item.FailureCode</p>
+                                }
+                                @if (item.Status == MediaStatus.Ready && item.IsCurrent)
+                                {
+                                    <div class="button-group" data-media-actions>
+                                        <button type="button" data-media-action="up" class="button-outline button-small" aria-label="스크린샷 위로 이동" disabled>위로</button>
+                                        <button type="button" data-media-action="down" class="button-outline button-small" aria-label="스크린샷 아래로 이동" disabled>아래로</button>
+                                        <button type="button" data-media-action="remove" class="button-danger button-small" aria-label="스크린샷 제거" disabled>제거</button>
+                                    </div>
+                                }
+                                else if (MediaModel.CanRemove(item.Status))
+                                {
+                                    <div data-media-actions>
+                                        <button type="button" data-media-action="remove" class="button-danger button-small" aria-label="스크린샷 제거" disabled>제거</button>
+                                    </div>
+                                }
+                            </div>
+                        </article>
+                    }
+                }
+            </div>
+        </section>
+
+        <aside class="ivory-media-sidebar">
+            <section class="ivory-media-panel" aria-labelledby="game-cover-heading">
+                <div class="ivory-media-panel-heading">
+                    <div>
+                        <p class="ivory-card-label">COVER IMAGE</p>
+                        <h2 id="game-cover-heading">대표 이미지</h2>
+                        <p>탐색 카드와 상세 상단에 사용합니다.</p>
+                    </div>
+                </div>
+
+                <div class="ivory-cover-list" data-media-list="GameCover">
+                    @if (Model.Media.Covers.Count == 0)
+                    {
+                        <div class="ivory-cover-empty" data-media-empty>
+                            <span aria-hidden="true">COVER</span>
+                            <p>등록된 대표 이미지가 없습니다.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Media.Covers)
+                        {
+                            <article class="ivory-cover-card"
+                                     data-media-item
+                                     data-media-id="@item.MediaId"
+                                     data-media-status="@item.Status"
+                                     data-attachment-kind="@item.AttachmentKind">
+                                <div class="ivory-cover-preview">
+                                    @if (item.PreviewUrl is not null)
+                                    {
+                                        <img data-media-preview
+                                             src="@item.PreviewUrl"
+                                             alt="@Model.Media.GameTitle 대표 이미지 미리보기"
+                                             class="media-preview"
+                                             width="352"
+                                             height="220" />
+                                    }
+                                    else
+                                    {
+                                        <span aria-hidden="true">PROCESSING</span>
+                                    }
+                                </div>
+                                <div class="ivory-media-card-copy">
+                                    <div>
+                                        <span class="font-semibold" data-media-status-text>@MediaModel.StatusText(item.Status)</span>
+                                        @if (item.IsCurrent)
+                                        {
+                                            <span class="badge-success">현재 공개</span>
+                                        }
+                                    </div>
+                                    <p>@MediaModel.FormatBytes(item.DeclaredBytes)</p>
+                                    <time datetime="@item.UpdatedAt.ToString("O")">갱신 @item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</time>
+                                    @if (item.FailureCode is not null)
+                                    {
+                                        <p class="field-error" data-media-failure>오류 코드: @item.FailureCode</p>
+                                    }
+                                    @if (MediaModel.CanRemove(item.Status))
+                                    {
+                                        <div data-media-actions>
+                                            <button type="button" data-media-action="remove" class="button-danger button-small" aria-label="대표 이미지 제거" disabled>제거</button>
+                                        </div>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    }
+                </div>
+
+                <form data-media-upload-form
+                      data-attachment-kind="GameCover"
+                      data-media-upload-mode="@(hasCurrentCover ? "replace" : "create")"
+                      class="media-upload-form ivory-cover-upload">
+                    <div class="field-group">
+                        <label for="game-cover-file" class="field-label">대표 이미지 파일</label>
+                        <input id="game-cover-file"
+                               data-media-file
+                               class="field-input"
+                               type="file"
+                               accept="image/jpeg,image/png,image/webp" />
+                    </div>
+                    <button type="button" data-media-upload-submit class="button-primary" disabled>@(hasCurrentCover ? "교체 업로드" : "업로드")</button>
+                    <button type="button" data-media-upload-cancel class="button-outline hidden" disabled>취소</button>
+                </form>
+            </section>
+
+            <section class="ivory-side-card ivory-editor-note">
+                <p class="ivory-card-label">PROCESSING</p>
+                <p>업로드한 원본은 백그라운드에서 검증·가공됩니다. 준비가 끝난 이미지만 공개 화면에 반영됩니다.</p>
+            </section>
+        </aside>
+    </div>
+</section>
+
+@section Scripts {
+    <script type="module"
+            src="~/js/dist/games/media.js"
+            asp-append-version="true"></script>
+}

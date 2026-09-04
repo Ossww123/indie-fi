@@ -1,0 +1,23 @@
+{
+  "name": "indiefi-web",
+  "private": true,
+  "scripts": {
+    "build": "npm run typecheck && npm run build:scripts -- --minify && npm run build:styles -- --minify",
+    "build:development": "npm run typecheck && npm run build:scripts && npm run build:styles",
+    "build:scripts": "node scripts/build-client.mjs",
+    "build:styles": "tailwindcss -i ./ClientApp/styles/site.css -o ./wwwroot/css/dist/site.css",
+    "watch:client": "node scripts/build-client.mjs --watch",
+    "watch:styles": "npm run build:styles -- --watch",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "esbuild": "0.28.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^10.0.0"
+  }
+}

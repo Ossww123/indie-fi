@@ -1,68 +1,57 @@
 using System.ComponentModel.DataAnnotations;
-using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
-using Microsoft.AspNetCore.Identity;
+using IndieFi.Web.Modules.Accounts.Application;
+using IndieFi.Web.Modules.Accounts.Domain;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace IndieFi.Web.Pages;
 
 public class SignupModel : PageModel
 {
-    /// <summary>PostgreSQL SQLSTATE for a unique constraint violation.</summary>
-    private const string UniqueViolation = "23505";
+    private readonly AccountRegistrationService _accountRegistrationService;
 
-    private readonly AppDbContext _db;
-    private readonly IPasswordHasher<User> _passwordHasher;
-
-    public SignupModel(AppDbContext db, IPasswordHasher<User> passwordHasher)
+    public SignupModel(AccountRegistrationService accountRegistrationService)
     {
-        _db = db;
-        _passwordHasher = passwordHasher;
+        _accountRegistrationService = accountRegistrationService;
     }
 
+    // The service owns validation. [DataType] only controls how the browser renders
+    // each field, so it does not duplicate any validation rule.
     [BindProperty]
-    [Required(ErrorMessage = "이메일을 입력해 주세요.")]
-    [EmailAddress(ErrorMessage = "이메일 형식이 아닙니다.")]
-    [StringLength(320, ErrorMessage = "이메일이 너무 깁니다.")]
-    public string Email { get; set; } = string.Empty;
+    [DataType(DataType.EmailAddress)]
+    public string? Email { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "비밀번호를 입력해 주세요.")]
-    [StringLength(128, MinimumLength = 8, ErrorMessage = "비밀번호는 8자 이상이어야 합니다.")]
     [DataType(DataType.Password)]
-    public string Password { get; set; } = string.Empty;
+    public string? Password { get; set; }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (!ModelState.IsValid)
-        {
-            return Page();
-        }
+        var result = await _accountRegistrationService.RegisterAsync(
+            Email,
+            Password,
+            HttpContext.RequestAborted);
 
-        var user = new User { Email = Email };
-        user.PasswordHash = _passwordHasher.HashPassword(user, Password);
-
-        _db.Users.Add(user);
-
-        try
+        if (result.Outcome == AccountRegistrationOutcome.EmailAlreadyRegistered)
         {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException exception)
-            when (exception.InnerException is PostgresException { SqlState: UniqueViolation })
-        {
-            // The database is the only place that can settle this: two requests can
-            // both pass an application-side "is this email taken?" check and still
-            // race. The unique index on users.email is what actually decides.
             ModelState.AddModelError(string.Empty, "이미 가입된 이메일입니다.");
             return Page();
         }
 
+        if (result.Outcome == AccountRegistrationOutcome.Invalid)
+        {
+            foreach (var violation in result.Violations)
+            {
+                ModelState.AddModelError(violation.Field, violation.Message);
+            }
+
+            return Page();
+        }
+
         // Redirect after a successful POST so refreshing the page does not resubmit.
-        TempData["SignupMessage"] = $"{user.Email} 가입 완료";
+        TempData["SignupMessage"] =
+            $"{UserDisplayIdentifier.Format(result.UserId!.Value)} 가입 완료. " +
+            "이메일 확인 메일을 확인해 주세요.";
         return RedirectToPage("/Index");
     }
 }

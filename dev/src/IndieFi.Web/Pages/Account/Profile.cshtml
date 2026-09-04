@@ -1,0 +1,185 @@
+@page
+@model ProfileModel
+@using IndieFi.Web.Modules.Media.Domain
+@{
+    ViewData["Title"] = "내 프로필";
+    ViewData["MainClass"] = "site-main-profile-settings";
+    var currentImage = Model.Media?.Images.FirstOrDefault(item => item.IsCurrent);
+}
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">ACCOUNT</p>
+        <h1>내 프로필</h1>
+        <p>다른 사용자에게 공개할 프로필 이미지, 닉네임과 소개를 관리합니다.</p>
+    </div>
+    <a asp-page="/Profiles/Detail" asp-route-id="@Model.PublicProfileUserId" class="button-outline">공개 프로필 보기</a>
+</header>
+
+<partial name="_AccountTools" />
+
+@if (Model.StatusMessage is not null)
+{
+    <div class="alert-success mb-5" role="status">@Model.StatusMessage</div>
+}
+
+<div class="ivory-profile-settings-layout">
+    <section class="ivory-profile-information" aria-labelledby="profile-information-heading">
+        <div class="ivory-settings-heading">
+            <p class="ivory-card-label">PUBLIC INFORMATION</p>
+            <h2 id="profile-information-heading">공개 프로필 정보</h2>
+            <p>닉네임과 소개는 공개 프로필과 게임의 개발자 정보에 표시됩니다.</p>
+        </div>
+
+        <form method="post" class="ivory-settings-form">
+            <div asp-validation-summary="ModelOnly" role="alert"></div>
+
+            <div class="field-group">
+                <label asp-for="Nickname" class="field-label">닉네임</label>
+                <input asp-for="Nickname"
+                       class="field-input"
+                       maxlength="@Model.NicknameMaxLength"
+                       autocomplete="nickname"
+                       readonly="@(!Model.CanChangeNickname ? "readonly" : null)" />
+                <span asp-validation-for="Nickname" class="field-error"></span>
+                @if (Model.CanChangeNickname)
+                {
+                    <p class="field-hint">
+                        @Model.NicknameMinLength~@(Model.NicknameMaxLength)자의 한글, 영문, 숫자, 공백, 밑줄과 하이픈을 사용할 수 있습니다.
+                        비워 두면 <strong>@Model.FallbackDisplayIdentifier</strong>로 표시되며, 설정·변경·해제 후 7일 동안 다시 바꿀 수 없습니다.
+                    </p>
+                }
+                else if (Model.NicknameChangeAvailableAt is DateTimeOffset availableAt)
+                {
+                    <p class="field-hint">
+                        다음 변경 가능 시각:
+                        <time datetime="@availableAt.ToString("O")">@availableAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</time>
+                    </p>
+                }
+            </div>
+
+            <div class="field-group">
+                <label asp-for="Biography" class="field-label">소개</label>
+                <textarea asp-for="Biography" class="field-input ivory-profile-biography" rows="10"></textarea>
+                <span asp-validation-for="Biography" class="field-error"></span>
+                <p class="field-hint">최대 @(Model.BiographyMaxLength)자까지 입력할 수 있습니다.</p>
+            </div>
+
+            <div class="ivory-settings-actions">
+                <button type="submit" class="button-primary">프로필 저장</button>
+            </div>
+        </form>
+    </section>
+
+    <aside class="ivory-profile-media-column">
+        @if (Model.Media is not null)
+        {
+            <section data-profile-media
+                     data-profile-user-id="@Model.Media.UserId"
+                     data-max-file-bytes="@Model.MaximumProfileImageBytes"
+                     data-media-api-base="/api/media"
+                     class="ivory-profile-media-card"
+                     aria-labelledby="profile-image-heading">
+                <div class="ivory-settings-heading">
+                    <p class="ivory-card-label">PROFILE IMAGE</p>
+                    <h2 id="profile-image-heading">프로필 이미지</h2>
+                    <p>새 이미지가 준비되면 현재 공개 이미지를 교체합니다.</p>
+                </div>
+
+                <div class="ivory-profile-image-stage">
+                    @if (currentImage?.PreviewUrl is not null)
+                    {
+                        <img data-media-id="@currentImage.MediaId"
+                             src="@currentImage.PreviewUrl"
+                             alt="현재 프로필 이미지"
+                             width="128"
+                             height="128"
+                             data-media-preview />
+                    }
+                    else
+                    {
+                        <div data-default-profile-image>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" role="img" aria-label="기본 프로필 이미지">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.5 20.12a7.5 7.5 0 0 1 15 0A17.9 17.9 0 0 1 12 21.75a17.9 17.9 0 0 1-7.5-1.63Z" />
+                            </svg>
+                        </div>
+                    }
+                </div>
+
+                <p class="dynamic-status dynamic-status-loading ivory-profile-media-status"
+                   data-media-client-status
+                   aria-live="polite">이미지 업로더 준비 중…</p>
+                <div class="alert-neutral mb-3 hidden" data-media-notice role="status" aria-live="polite"></div>
+
+                <form data-media-upload-form
+                      data-attachment-kind="ProfileImage"
+                      data-media-upload-mode="@(currentImage is null ? "create" : "replace")"
+                      class="media-upload-form ivory-profile-media-upload">
+                    <div class="field-group">
+                        <label for="profile-image-file" class="field-label">프로필 이미지 파일</label>
+                        <input id="profile-image-file" data-media-file class="field-input" type="file" accept="image/jpeg,image/png,image/webp" />
+                    </div>
+                    <div class="button-group">
+                        <button type="button" data-media-upload-submit class="button-primary" disabled>@(currentImage is null ? "업로드" : "교체 업로드")</button>
+                        <button type="button" data-media-upload-cancel class="button-outline hidden" disabled>취소</button>
+                    </div>
+                </form>
+                <p class="ivory-profile-media-hint">JPEG·PNG·WebP 정지 이미지 · 최대 5 MiB</p>
+
+                <div class="ivory-profile-media-list" data-media-list="ProfileImage">
+                    @if (Model.Media.Images.Count == 0)
+                    {
+                        <div class="ivory-profile-media-empty" data-media-empty>등록된 프로필 이미지가 없습니다.</div>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model.Media.Images)
+                        {
+                            <article data-media-item
+                                     data-media-id="@item.MediaId"
+                                     data-media-status="@item.Status"
+                                     data-attachment-kind="ProfileImage">
+                                @if (item.PreviewUrl is not null)
+                                {
+                                    <img src="@item.PreviewUrl" alt="프로필 이미지 미리보기" width="48" height="48" data-media-preview />
+                                }
+                                <div>
+                                    <span data-media-status-text>@ProfileModel.MediaStatusText(item.Status)</span>
+                                    @if (item.IsCurrent)
+                                    {
+                                        <span class="badge-success">현재 공개</span>
+                                    }
+                                    <p>@ProfileModel.FormatBytes(item.DeclaredBytes) · 처리 @item.ProcessingAttemptCount 회</p>
+                                    <time datetime="@item.UpdatedAt.ToString("O")">@item.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</time>
+                                    @if (item.FailureCode is not null)
+                                    {
+                                        <p class="field-error" data-media-failure>오류 코드: @item.FailureCode</p>
+                                    }
+                                    @if (ProfileModel.CanRemoveMedia(item.Status))
+                                    {
+                                        <div data-media-actions>
+                                            <button type="button" data-media-action="remove" class="button-danger button-small" aria-label="프로필 이미지 제거" disabled>제거</button>
+                                        </div>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="ivory-side-card ivory-editor-shortcuts">
+            <a asp-page="/Account/Following"><strong>팔로잉 목록</strong><span>팔로우한 사용자 →</span></a>
+            <a asp-page="/Account/FavoriteGames"><strong>관심 게임</strong><span>저장한 게임 →</span></a>
+            <a asp-page="/Account/Notifications"><strong>알림 설정</strong><span>채널과 이벤트 설정 →</span></a>
+        </section>
+    </aside>
+</div>
+
+@section Scripts {
+    @if (Model.Media is not null)
+    {
+        <script type="module" src="~/js/dist/account/profile-media.js" asp-append-version="true"></script>
+    }
+}

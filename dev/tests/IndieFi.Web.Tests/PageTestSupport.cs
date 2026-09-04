@@ -24,18 +24,64 @@ internal static class PageTestSupport
         return WebUtility.HtmlDecode(match.Groups[1].Value);
     }
 
+    public static string ExtractHiddenInput(string html, string name)
+    {
+        var match = Regex.Match(
+            html,
+            $"""<input\b(?=[^>]*\btype="hidden")(?=[^>]*\bname="{Regex.Escape(name)}")[^>]*\bvalue="([^"]+)"[^>]*>""",
+            RegexOptions.IgnoreCase);
+
+        if (!match.Success)
+        {
+            throw new InvalidOperationException(
+                $"The response HTML did not contain the '{name}' hidden input.");
+        }
+
+        return WebUtility.HtmlDecode(match.Groups[1].Value);
+    }
+
     public static async Task<(string Email, string Password)> CreateUserWithKnownPasswordAsync(
-        PostgreSqlFixture fixture)
+        PostgreSqlFixture fixture,
+        bool emailConfirmed = true,
+        long sessionVersion = 1)
     {
         const string password = "Known-Test-Password-123!";
         var email = $"{Guid.NewGuid():N}@example.test";
 
         await using var db = fixture.NewDbContext();
-        var user = new User { Email = email };
+        var user = TestAccountProtection.AddUser(db, email, passwordHash: null);
         user.PasswordHash = new PasswordHasher<User>().HashPassword(user, password);
-        db.Users.Add(user);
+        user.SessionVersion = sessionVersion;
+        if (emailConfirmed)
+        {
+            user.EmailConfirmedAt = DateTimeOffset.UtcNow;
+        }
+
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return (email, password);
+    }
+
+    public static async Task LoginAsync(HttpClient client, string email, string password)
+    {
+        using var loginPageResponse = await client.GetAsync(
+            "/Login",
+            TestContext.Current.CancellationToken);
+        var loginHtml = await loginPageResponse.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        var antiforgeryToken = ExtractAntiforgeryToken(loginHtml);
+
+        using var loginForm = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Email"] = email,
+            ["Password"] = password,
+            ["__RequestVerificationToken"] = antiforgeryToken,
+        });
+        using var loginResponse = await client.PostAsync(
+            "/Login",
+            loginForm,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
     }
 }

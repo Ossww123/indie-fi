@@ -1,26 +1,28 @@
 ﻿@page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = "문제가 발생했습니다";
+    ViewData["MainClass"] = "site-main-system";
 }
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
-
-@if (Model.ShowRequestId)
-{
-    <p>
-        <strong>Request ID:</strong> <code>@Model.RequestId</code>
+<section class="status-page ivory-system-card" data-status-page="500">
+    <p class="status-page-code"><span>500</span><small>INTERNAL ERROR</small></p>
+    <h1 class="status-page-title">요청을 처리하지 못했습니다.</h1>
+    <p class="status-page-description">
+        일시적인 문제일 수 있습니다. 잠시 뒤 다시 시도하거나 홈으로 돌아가 주세요.
     </p>
-}
 
-<h3>Development Mode</h3>
-<p>
-    Swapping to the <strong>Development</strong> environment displays detailed information about the error that occurred.
-</p>
-<p>
-    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-    It can result in displaying sensitive information from exceptions to end users.
-    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-    and restarting the app.
-</p>
+    @if (Model.ShowRequestId)
+    {
+        <div class="ivory-request-reference">
+            <span>REQUEST ID</span>
+            <code>@Model.RequestId</code>
+            <p>문의 시 이 요청 번호를 알려 주세요.</p>
+        </div>
+    }
+
+    <div class="status-page-actions">
+        <a href="" class="button-primary">다시 시도</a>
+        <a asp-page="/Index" class="button-outline">홈으로 돌아가기</a>
+    </div>
+</section>

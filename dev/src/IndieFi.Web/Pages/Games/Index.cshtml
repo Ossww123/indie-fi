@@ -2,41 +2,92 @@
 @model IndexModel
 @{
     ViewData["Title"] = "내 게임";
+    ViewData["MainClass"] = "site-main-games-dashboard";
 }
 
-<div class="d-flex justify-content-between align-items-start">
-    <h1 class="h3 mb-4">내 게임</h1>
-    <a asp-page="/Games/New" class="btn btn-primary">게임 등록</a>
-</div>
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">CREATOR DASHBOARD</p>
+        <h1>내 게임</h1>
+        <p>등록한 게임의 공개 정보, 미디어, 피드백 요청과 키 배포를 관리합니다.</p>
+    </div>
+    <a asp-page="/Games/New" class="button-primary">새 게임 등록</a>
+</header>
+
+<partial name="_AccountTools" />
 
 @if (TempData["GameMessage"] is string gameMessage)
 {
-    <div class="alert alert-success">@gameMessage</div>
+    <div class="alert-success" role="status">@gameMessage</div>
 }
+
+<div class="ivory-dashboard-summary">
+    <div class="ivory-dashboard-stat">
+        <span>REGISTERED GAMES</span>
+        <strong>@Model.Games.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)</strong>
+    </div>
+    <a asp-page="/Credits/Index" class="ivory-dashboard-shortcut">
+        <span>CREDITS</span>
+        <strong>내 크레딧 보기 →</strong>
+    </a>
+    <a asp-page="/Reviews/Index" class="ivory-dashboard-shortcut">
+        <span>REVIEW WORK</span>
+        <strong>리뷰 작업 보기 →</strong>
+    </a>
+</div>
 
 @if (Model.Games.Count == 0)
 {
-    <div class="alert alert-secondary">등록한 게임이 없습니다. 첫 게임을 등록해 보세요.</div>
+    <div class="empty-state" data-empty-state="owned-games">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">등록한 게임이 없습니다.</h2>
+        <p class="empty-state-description">게임 기본 정보를 등록한 뒤 미디어, 피드백과 키 배포를 차례로 관리할 수 있습니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Games/New" class="button-primary">첫 게임 등록하기</a>
+        </div>
+    </div>
 }
 else
 {
-    <div class="list-group">
+    <div class="ivory-owned-game-list">
         @foreach (var game in Model.Games)
         {
-            <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="list-group-item list-group-item-action">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="fw-bold">@game.Title</span>
-                    <span class="text-muted">@game.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+            <article class="ivory-owned-game">
+                <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="ivory-owned-game-cover">
+                    @if (Model.Covers.TryGetValue(game.Id, out var cover))
+                    {
+                        <img data-game-list-cover
+                             data-media-id="@cover.MediaId"
+                             src="@cover.Url"
+                             alt="@game.Title 대표 이미지"
+                             width="640"
+                             height="400"
+                             loading="lazy"
+                             decoding="async"
+                             referrerpolicy="no-referrer" />
+                    }
+                    else
+                    {
+                        <span data-game-list-cover-fallback aria-hidden="true">COVER 640×400</span>
+                    }
+                </a>
+                <div class="ivory-owned-game-copy">
+                    <div>
+                        <a asp-page="/Games/Detail" asp-route-id="@game.Id">@game.Title</a>
+                        <span class="ivory-published-badge">PUBLIC</span>
+                    </div>
+                    <time datetime="@game.CreatedAt.ToString("O")">@game.CreatedAt.ToLocalTime().ToString("yyyy.MM.dd") 등록</time>
+                    <p>@(game.Description ?? "(소개 없음)")</p>
                 </div>
-                @if (game.Description is not null)
-                {
-                    <div>@game.Description</div>
-                }
-                else
-                {
-                    <div class="text-muted">(소개 없음)</div>
-                }
-            </a>
+                <div class="ivory-owned-game-meta">
+                    <span>GAME ID</span>
+                    <strong>#@game.Id</strong>
+                </div>
+                <div class="ivory-owned-game-actions">
+                    <a asp-page="/Games/Detail" asp-route-id="@game.Id" class="button-primary button-small">게임 보기</a>
+                    <a asp-page="/Games/Edit" asp-route-id="@game.Id" class="button-outline button-small">페이지 수정</a>
+                </div>
+            </article>
         }
     </div>
 }

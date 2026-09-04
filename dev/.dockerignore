@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/TestResults/
+**/*.user
+**/*.suo
+loadtest/results/
+ops/validation/runs/
+ops/recovery/runs/
+ops/recovery/private/
+ops/recovery/*.env

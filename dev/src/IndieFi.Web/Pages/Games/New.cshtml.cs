@@ -1,56 +1,74 @@
-using System.ComponentModel.DataAnnotations;
-using IndieFi.Web.Data;
-using IndieFi.Web.Entities;
-using IndieFi.Web.Extensions;
+using IndieFi.Web.Application.Abstractions;
+using IndieFi.Web.Modules.Games.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace IndieFi.Web.Pages.Games;
 
 [Authorize]
-public class NewModel : PageModel
+public class NewModel : GameFormPageModel
 {
-    private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
+    private readonly GameManagementService _gameManagementService;
+    private readonly GameClassificationCatalogQueryService _classificationCatalog;
 
-    public NewModel(AppDbContext db)
+    public NewModel(
+        ICurrentUser currentUser,
+        GameManagementService gameManagementService,
+        GameClassificationCatalogQueryService classificationCatalog)
     {
-        _db = db;
+        _currentUser = currentUser;
+        _gameManagementService = gameManagementService;
+        _classificationCatalog = classificationCatalog;
     }
 
-    [BindProperty]
-    [Required(ErrorMessage = "게임 제목을 입력해 주세요.")]
-    [StringLength(200, ErrorMessage = "제목이 너무 깁니다.")]
-    public string Title { get; set; } = string.Empty;
-
-    [BindProperty]
-    [StringLength(2000, ErrorMessage = "소개가 너무 깁니다.")]
-    public string? Description { get; set; }
+    public async Task OnGetAsync()
+    {
+        await LoadActiveClassificationCatalogAsync(
+            _classificationCatalog,
+            HttpContext.RequestAborted);
+        EnsureLinkEditorRow();
+    }
 
     public async Task<IActionResult> OnPostAsync()
     {
         if (!ModelState.IsValid)
         {
+            await LoadActiveClassificationCatalogAsync(
+                _classificationCatalog,
+                HttpContext.RequestAborted);
+            EnsureLinkEditorRow();
             return Page();
         }
 
         // The owner is taken from the signed cookie, never from the form;
         // otherwise anyone could register a game under someone else's id.
-        var ownerId = User.GetUserId();
-        var description = string.IsNullOrWhiteSpace(Description) ? null : Description;
+        var ownerId = _currentUser.GetRequiredUserId();
+        var result = await _gameManagementService.CreateAsync(
+            ownerId,
+            Title,
+            Description,
+            CreateClassificationInput(),
+            CreateLinkInputs(),
+            HttpContext.RequestAborted);
 
-        var game = new Game
+        if (result.Outcome == CreateGameOutcome.Invalid)
         {
-            OwnerId = ownerId,
-            Title = Title,
-            Description = description,
-        };
+            AddViolations(result.Violations);
+            await LoadActiveClassificationCatalogAsync(
+                _classificationCatalog,
+                HttpContext.RequestAborted);
+            EnsureLinkEditorRow();
+            return Page();
+        }
 
-        _db.Games.Add(game);
-        await _db.SaveChangesAsync();
+        if (result.Outcome == CreateGameOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
 
         // Redirect after a successful POST so refreshing the page does not resubmit.
-        TempData["GameMessage"] = $"'{game.Title}' 등록 완료";
+        TempData["GameMessage"] = $"'{result.Title}' 등록 완료";
         return RedirectToPage("/Games/Index");
     }
 }

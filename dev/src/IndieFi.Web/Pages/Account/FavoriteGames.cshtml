@@ -1,0 +1,67 @@
+@page
+@model FavoriteGamesModel
+@{
+    ViewData["Title"] = "관심 게임";
+    ViewData["MainClass"] = "site-main-account-ledger";
+}
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">SAVED GAMES</p>
+        <h1>관심 게임</h1>
+        <p>게임 상세에서 저장한 프로젝트를 다시 살펴보는 개인 목록입니다.</p>
+    </div>
+    <a asp-page="/Index" class="button-outline">게임 둘러보기</a>
+</header>
+
+<partial name="_AccountTools" />
+
+<div class="ivory-collection-summary">
+    <span>COLLECTION</span>
+    <strong>@Model.Items.Count</strong>
+    <p>개의 관심 게임</p>
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="empty-state" data-empty-state="favorite-games">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">아직 관심 게임이 없습니다.</h2>
+        <p class="empty-state-description">게임 상세에서 관심 게임으로 추가하면 이곳에서 다시 찾아볼 수 있습니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Index" class="button-primary">게임 둘러보기</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="ivory-library-grid">
+        @foreach (var item in Model.Items)
+        {
+            <article class="ivory-library-card">
+                <a asp-page="/Games/Detail" asp-route-id="@item.GameId" class="ivory-library-visual">
+                    <span aria-hidden="true">@(item.Title[..1].ToUpperInvariant())</span>
+                    <small>VIEW GAME</small>
+                </a>
+                <div class="ivory-library-copy">
+                    <div>
+                        <p class="ivory-card-label">SAVED @item.FavoritedAt.ToLocalTime().ToString("yyyy.MM.dd")</p>
+                        <h2><a asp-page="/Games/Detail" asp-route-id="@item.GameId">@item.Title</a></h2>
+                    </div>
+                    <p class="ivory-library-owner">
+                        개발자 <a asp-page="/Profiles/Detail" asp-route-id="@item.OwnerId">@item.OwnerDisplayName</a>
+                    </p>
+                    @if (item.Description is null)
+                    {
+                        <p class="ivory-library-description ivory-library-description-empty">소개 없음</p>
+                    }
+                    else
+                    {
+                        <p class="ivory-library-description">@item.Description</p>
+                    }
+                    <a asp-page="/Games/Detail" asp-route-id="@item.GameId" class="ivory-library-link">게임 상세 보기 →</a>
+                </div>
+            </article>
+        }
+    </div>
+}

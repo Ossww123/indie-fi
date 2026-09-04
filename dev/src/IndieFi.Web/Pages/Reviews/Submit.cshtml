@@ -1,0 +1,69 @@
+@page "{assignmentId:long}"
+@model SubmitModel
+@{
+    ViewData["Title"] = "피드백 쓰기";
+    ViewData["MainClass"] = "site-main-review";
+}
+
+<div class="ivory-review-layout" data-review-submit>
+    <section class="ivory-review-editor">
+        <header class="ivory-review-heading">
+            <div class="ivory-assignment-badge">REVIEW ASSIGNMENT</div>
+            <h1>@Model.GameTitle 피드백</h1>
+            <p>별점이 아니라 실제 플레이 중 관찰한 경험과 개선 제안을 구체적으로 작성해 주세요.</p>
+        </header>
+
+        <div class="ivory-review-prompt">
+            <p class="ivory-side-label">좋은 피드백의 기준</p>
+            <p>어디에서 무엇을 시도했고, 어떤 결과를 예상했으며, 실제로 무엇이 달랐는지를 함께 적으면 개발자가 문제를 재현하고 판단하기 쉽습니다.</p>
+        </div>
+
+        <form method="post" class="ivory-review-form">
+            <div class="field-group">
+                <div class="ivory-review-label-row">
+                    <label asp-for="Body" class="field-label">플레이 경험과 제안</label>
+                    <span class="field-hint">30자 이상</span>
+                </div>
+                <textarea asp-for="Body"
+                          class="field-input ivory-review-textarea"
+                          rows="14"
+                          placeholder="어느 구간에서 무엇을 시도했는지부터 적어 보세요."></textarea>
+                <span asp-validation-for="Body" class="field-error"></span>
+            </div>
+
+            <div class="ivory-review-submit-row">
+                <button type="submit" class="button-primary">피드백 제출</button>
+                <a asp-page="Index" class="button-outline">목록으로 돌아가기</a>
+            </div>
+        </form>
+    </section>
+
+    <aside class="ivory-review-sidebar" aria-label="배정 정보">
+        <section class="ivory-side-card">
+            <div class="ivory-review-game-cover" aria-hidden="true">GAME COVER</div>
+            <div class="ivory-review-game-copy">
+                <p class="ivory-side-label">ASSIGNED GAME</p>
+                <h2>@Model.GameTitle</h2>
+                <p>현재 배정된 게임의 피드백 작성 화면입니다.</p>
+            </div>
+        </section>
+
+        <section class="ivory-side-card ivory-side-card-accent">
+            <p class="ivory-side-label">DEADLINE</p>
+            <time class="ivory-review-deadline"
+                  datetime="@Model.LeasedUntil.ToString("O")">
+                @Model.LeasedUntil.ToLocalTime().ToString("yyyy.MM.dd HH:mm")
+            </time>
+            <p class="ivory-side-copy">마감 전에 제출해야 작업이 완료되고 리뷰 활동에 반영됩니다.</p>
+        </section>
+
+        <section class="ivory-side-card">
+            <p class="ivory-side-label">BEFORE SUBMITTING</p>
+            <ul class="ivory-review-checklist">
+                <li>실제로 플레이한 상황을 적었는지</li>
+                <li>좋았던 점과 막힌 지점을 구분했는지</li>
+                <li>개발자가 실행할 수 있는 제안인지</li>
+            </ul>
+        </section>
+    </aside>
+</div>

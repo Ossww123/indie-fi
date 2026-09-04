@@ -1,0 +1,216 @@
+@page
+@using IndieFi.Web.Application.Time
+@model IndexModel
+@{
+    ViewData["Title"] = "리뷰 작업";
+    ViewData["MainClass"] = "site-main-queue";
+    var completedCount = Model.AssignmentHistory.Count(item => item.IsCompleted);
+    var expiredCount = Model.AssignmentHistory.Count - completedCount;
+}
+
+<header class="review-v2-heading">
+    <div>
+        <span class="review-v2-eyebrow">REVIEW WORKSPACE</span>
+        <h1>리뷰 작업</h1>
+        <p>한 번에 하나씩 작업이 배정됩니다. 마감 전까지 플레이 경험을 구체적인 피드백으로 남겨 주세요.</p>
+    </div>
+    <a asp-page="/Credits/Index" class="review-v2-credit-link">내 크레딧 보기 <span aria-hidden="true">›</span></a>
+</header>
+
+@if (Model.SubmitMessage is { } submitMessage)
+{
+    <div class="@(submitMessage.IsSuccess ? "alert-success" : "alert-warning") review-v2-page-notice" role="status">
+        @submitMessage.Message
+    </div>
+}
+
+<section class="review-v2-stats" aria-label="리뷰 작업 상태 요약">
+    <article class="review-v2-stat">
+        <div><span>진행 중인 작업</span><strong>@Model.MyAssignments.Count <small>개</small></strong></div>
+        <span class="review-v2-stat-icon review-v2-stat-icon-primary" aria-hidden="true">⌛</span>
+    </article>
+    <article class="review-v2-stat">
+        <div><span>제출 완료</span><strong>@completedCount <small>개</small></strong></div>
+        <span class="review-v2-stat-icon review-v2-stat-icon-success" aria-hidden="true">✓</span>
+    </article>
+    <article class="review-v2-stat">
+        <div><span>만료된 작업</span><strong>@expiredCount <small>개</small></strong></div>
+        <span class="review-v2-stat-icon review-v2-stat-icon-warning" aria-hidden="true">!</span>
+    </article>
+</section>
+
+<div class="review-v2-layout">
+    <div class="review-v2-main">
+        <section class="review-v2-panel" aria-labelledby="active-assignments-heading">
+            <div class="review-v2-panel-heading">
+                <h2 id="active-assignments-heading">현재 배정된 작업</h2>
+                <span>@Model.MyAssignments.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)개 배정</span>
+            </div>
+            @if (Model.MyAssignments.Count == 0)
+            {
+                <div class="empty-state empty-state-compact review-v2-empty" data-empty-state="active-review-assignments">
+                    <div class="empty-state-icon" aria-hidden="true">◇</div>
+                    <h3 class="empty-state-title">진행 중인 리뷰 작업이 없습니다.</h3>
+                    <p class="empty-state-description">아래에서 새 리뷰 작업을 배정받을 수 있습니다.</p>
+                </div>
+            }
+            else
+            {
+                <div class="review-v2-assignment-list">
+                @foreach (var assignment in Model.MyAssignments)
+                {
+                    var isOverdue = assignment.LeasedUntil <= DateTimeOffset.UtcNow;
+                    var remaining = assignment.LeasedUntil - DateTimeOffset.UtcNow;
+                    var remainingText = isOverdue
+                        ? "마감 시간이 지났습니다"
+                        : remaining.TotalDays >= 1
+                            ? $"{(int)remaining.TotalDays}일 {remaining.Hours}시간 {remaining.Minutes}분"
+                            : remaining.TotalHours >= 1
+                                ? $"{(int)remaining.TotalHours}시간 {remaining.Minutes}분"
+                                : $"{Math.Max(0, remaining.Minutes)}분";
+                    <article class="review-v2-assignment">
+                        @if (Model.Covers.TryGetValue(assignment.GameId, out var assignmentCover))
+                        {
+                            <img src="@assignmentCover.Url" alt="@assignment.GameTitle 대표 이미지" width="640" height="400" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                        }
+                        else
+                        {
+                            <span class="review-v2-cover-fallback" role="img" aria-label="@assignment.GameTitle 대표 이미지 없음">GAME COVER</span>
+                        }
+                        <div class="review-v2-assignment-copy">
+                            <div class="review-v2-assignment-title">
+                                <h3>@assignment.GameTitle</h3>
+                                <span class="@(isOverdue ? "badge-warning" : "review-v2-active-badge")">@(isOverdue ? "마감 지남" : "진행 중")</span>
+                            </div>
+                            <dl>
+                                <div><dt>배정 시각</dt><dd>@KoreanStandardTime.ToLocal(assignment.AssignedAt).ToString("yyyy.MM.dd HH:mm") (KST)</dd></div>
+                                <div><dt>제출 마감</dt><dd>@KoreanStandardTime.ToLocal(assignment.LeasedUntil).ToString("yyyy.MM.dd HH:mm") (KST)</dd></div>
+                                <div class="@(isOverdue ? "review-v2-time-overdue" : "review-v2-time-remaining")"><dt>남은 시간</dt><dd>@remainingText</dd></div>
+                            </dl>
+                        </div>
+                        <div class="review-v2-assignment-action">
+                            @if (!isOverdue)
+                            {
+                                <a asp-page="Submit" asp-route-assignmentId="@assignment.AssignmentId" class="button-primary">피드백 쓰기</a>
+                                <small>마감 전까지 언제든 작성할 수 있습니다.</small>
+                            }
+                            else
+                            {
+                                <span class="text-meta">마감된 작업을 정리해 주세요.</span>
+                            }
+                        </div>
+                    </article>
+                }
+                </div>
+            }
+        </section>
+
+        <section class="review-v2-action-panel" aria-labelledby="review-claim-heading">
+            <div><h2 id="review-claim-heading">새 리뷰 작업 받기</h2><p>대기 중인 요청 중에서 나에게 배정 가능한 작업을 하나 받습니다.</p></div>
+            <form method="post" asp-page-handler="Claim">
+                <input type="hidden" name="operationId" value="@Model.ClaimOperationId" />
+                <button type="submit" class="button-primary">리뷰 작업 받기</button>
+            </form>
+            @if (Model.ClaimMessage is { } claimMessage)
+            {
+                <p class="@(claimMessage.IsSuccess ? "review-v2-inline-success" : "review-v2-inline-warning")" role="status"><span aria-hidden="true">@(claimMessage.IsSuccess ? "✓" : "!")</span> @claimMessage.Message</p>
+            }
+        </section>
+
+        <section class="review-v2-action-panel" aria-labelledby="review-sweep-heading">
+            <div><h2 id="review-sweep-heading">마감 지난 작업 정리</h2><p>기한이 지난 작업을 다른 리뷰어가 받을 수 있도록 대기 상태로 되돌립니다.</p></div>
+            <form method="post" asp-page-handler="Sweep"><button type="submit" class="button-outline">마감 지난 작업 정리</button></form>
+            @if (Model.SweepMessage is { } sweepMessage)
+            {
+                <p class="@(sweepMessage.IsSuccess ? "review-v2-inline-success" : "review-v2-inline-neutral")" role="status"><span aria-hidden="true">@(sweepMessage.IsSuccess ? "✓" : "·")</span> @sweepMessage.Message</p>
+            }
+        </section>
+
+        <section class="review-v2-panel" aria-labelledby="review-history-heading">
+            <div class="review-v2-panel-heading">
+                <h2 id="review-history-heading">내 작업 이력</h2>
+                <span>@Model.AssignmentHistory.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)개</span>
+            </div>
+            @if (Model.AssignmentHistory.Count == 0)
+            {
+                <div class="empty-state empty-state-compact review-v2-empty" data-empty-state="review-history">
+                    <div class="empty-state-icon" aria-hidden="true">◇</div>
+                    <h3 class="empty-state-title">완료하거나 만료된 작업이 없습니다.</h3>
+                    <p class="empty-state-description">작업을 제출하거나 마감이 지나면 이력에서 상태를 확인할 수 있습니다.</p>
+                </div>
+            }
+            else
+            {
+                <div class="review-v2-history" role="table" aria-label="리뷰 작업 이력">
+                    <div class="review-v2-history-head" role="row"><span role="columnheader">게임 제목</span><span role="columnheader">배정 시각</span><span role="columnheader">완료/만료 시각</span><span role="columnheader">상태</span></div>
+                    @foreach (var assignment in Model.AssignmentHistory)
+                    {
+                        <div class="review-v2-history-row" role="row">
+                            <span class="review-v2-history-game" role="cell">
+                                @if (Model.Covers.TryGetValue(assignment.GameId, out var historyCover))
+                                {
+                                    <img src="@historyCover.Url" alt="" width="96" height="60" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                                }
+                                else
+                                {
+                                    <span class="review-v2-history-fallback" aria-hidden="true"></span>
+                                }
+                                <strong>@assignment.GameTitle</strong>
+                            </span>
+                            <time role="cell" datetime="@assignment.AssignedAt.ToString("O")">@KoreanStandardTime.ToLocal(assignment.AssignedAt).ToString("yyyy.MM.dd HH:mm") (KST)</time>
+                            <time role="cell" datetime="@assignment.EndedAt.ToString("O")">@KoreanStandardTime.ToLocal(assignment.EndedAt).ToString("yyyy.MM.dd HH:mm") (KST)</time>
+                            <span role="cell"><span class="@(assignment.IsCompleted ? "badge-success" : "badge-warning")">@assignment.StatusText</span></span>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+
+    <aside class="review-v2-side" aria-labelledby="review-queue-heading">
+        <section class="review-v2-panel review-v2-waiting-panel">
+            <div class="review-v2-panel-heading">
+                <h2 id="review-queue-heading">피드백을 기다리는 게임</h2>
+                <span>전체 @Model.Items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)개</span>
+            </div>
+            @if (Model.Items.Count == 0)
+            {
+                <div class="empty-state empty-state-compact review-v2-empty" data-empty-state="review-queue">
+                    <div class="empty-state-icon" aria-hidden="true">◇</div>
+                    <h3 class="empty-state-title">지금은 기다리는 요청이 없습니다.</h3>
+                    <p class="empty-state-description">새 피드백 요청이 등록되면 작업 받기 대상에 포함됩니다.</p>
+                </div>
+            }
+            else
+            {
+                <div class="review-v2-waiting-list">
+                @foreach (var item in Model.Items)
+                {
+                    <article class="review-v2-waiting-item">
+                        @if (Model.Covers.TryGetValue(item.GameId, out var waitingCover))
+                        {
+                            <img src="@waitingCover.Url" alt="@item.GameTitle 대표 이미지" width="128" height="80" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                        }
+                        else
+                        {
+                            <span class="review-v2-waiting-fallback" aria-hidden="true"></span>
+                        }
+                        <div>
+                            <h3>@item.GameTitle</h3>
+                            <p>요청자 <a asp-page="/Profiles/Detail" asp-route-id="@item.RequesterId">@item.RequesterDisplayName</a></p>
+                            <time datetime="@item.RequestedAt.ToString("O")">@KoreanStandardTime.ToLocal(item.RequestedAt).ToString("yyyy.MM.dd HH:mm") (KST)</time>
+                        </div>
+                        <span class="review-v2-queued-mark" title="자동 배정 대기 중" aria-label="자동 배정 대기 중">·</span>
+                    </article>
+                }
+                </div>
+            }
+            <p class="review-v2-waiting-note">특정 게임을 직접 선택할 수 없으며, 조건에 맞는 작업이 자동으로 배정됩니다.</p>
+        </section>
+
+        <section class="review-v2-guide" aria-labelledby="review-guide-heading">
+            <span class="review-v2-guide-icon" aria-hidden="true">✎</span>
+            <div><h2 id="review-guide-heading">좋은 피드백을 남기는 방법</h2><p>느낀 점과 함께 재현 상황, 기대한 결과와 개선 아이디어를 구체적으로 작성해 주세요.</p></div>
+        </section>
+    </aside>
+</div>

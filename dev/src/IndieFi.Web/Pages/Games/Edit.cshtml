@@ -2,26 +2,110 @@
 @model EditModel
 @{
     ViewData["Title"] = "게임 수정";
+    ViewData["MainClass"] = "site-main-game-editor";
     var id = RouteData.Values["id"];
 }
 
-<h1 class="h3 mb-4">게임 수정</h1>
+<nav class="ivory-breadcrumb" aria-label="현재 위치">
+    <a asp-page="/Games/Index">내 게임</a>
+    <span aria-hidden="true">/</span>
+    <a asp-page="/Games/Detail" asp-route-id="@id">게임 상세</a>
+    <span aria-hidden="true">/</span>
+    <span>정보 수정</span>
+</nav>
 
-<form method="post" class="col-md-5">
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
-    <div class="mb-3">
-        <label asp-for="Title" class="form-label">게임 제목</label>
-        <input asp-for="Title" class="form-control" />
-        <span asp-validation-for="Title" class="text-danger small"></span>
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">EDIT GAME</p>
+        <h1>게임 수정</h1>
+        <p>공개 상세에 표시되는 게임 정보와 실제 플레이 경로를 최신 상태로 유지합니다.</p>
     </div>
+    <a asp-page="/Games/Detail" asp-route-id="@id" class="button-outline">공개 화면 보기</a>
+</header>
 
-    <div class="mb-3">
-        <label asp-for="Description" class="form-label">소개</label>
-        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
-        <span asp-validation-for="Description" class="text-danger small"></span>
-    </div>
+<div class="ivory-game-editor-layout" data-game-editor="edit">
+    <form method="post" class="ivory-game-editor-form">
+        <div asp-validation-summary="ModelOnly" role="alert"></div>
 
-    <button type="submit" class="btn btn-primary">저장</button>
-    <a asp-page="/Games/Detail" asp-route-id="@id" class="btn btn-link">취소</a>
-</form>
+        <section class="ivory-form-section" aria-labelledby="game-basic-heading">
+            <div class="ivory-form-section-heading">
+                <span>01</span>
+                <div>
+                    <h2 id="game-basic-heading">기본 정보</h2>
+                    <p>게임 상세와 탐색 카드에서 플레이어가 가장 먼저 확인하는 정보입니다.</p>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label asp-for="Title" class="field-label">게임 제목</label>
+                <input asp-for="Title" class="field-input" autocomplete="off" />
+                <span asp-validation-for="Title" class="field-error"></span>
+            </div>
+
+            <div class="field-group">
+                <label asp-for="Description" class="field-label">소개</label>
+                <textarea asp-for="Description" class="field-input ivory-game-description" rows="7"></textarea>
+                <span asp-validation-for="Description" class="field-error"></span>
+            </div>
+        </section>
+
+        <section class="ivory-form-section" aria-labelledby="game-classification-heading">
+            <div class="ivory-form-section-heading">
+                <span>02</span>
+                <div>
+                    <h2 id="game-classification-heading">분류</h2>
+                    <p>검색과 필터에서 사용될 장르, 태그와 지원 플랫폼을 관리합니다.</p>
+                </div>
+            </div>
+            <partial name="_GameClassificationFields" model="Model" />
+        </section>
+
+        <section class="ivory-form-section" aria-labelledby="game-link-heading">
+            <div class="ivory-form-section-heading">
+                <span>03</span>
+                <div>
+                    <h2 id="game-link-heading">플레이 경로</h2>
+                    <p>플랫폼별 외부 주소의 표시 이름과 순서를 조정합니다.</p>
+                </div>
+            </div>
+            <partial name="_GamePlayLinkFields" model="Model" />
+        </section>
+
+        <div class="ivory-editor-actions">
+            <a asp-page="/Games/Detail" asp-route-id="@id" class="button-link">취소</a>
+            <button type="submit" class="button-primary">저장</button>
+        </div>
+    </form>
+
+    <aside class="ivory-game-editor-sidebar" aria-label="게임 관리 바로가기">
+        <section class="ivory-side-card">
+            <p class="ivory-card-label">GAME MANAGEMENT</p>
+            <h2>다른 관리 작업</h2>
+            <div class="ivory-editor-shortcuts">
+                <a asp-page="/Games/Media" asp-route-id="@id">
+                    <strong>미디어 관리</strong>
+                    <span>대표 이미지와 스크린샷 →</span>
+                </a>
+                <a asp-page="/Games/Feedback" asp-route-id="@id">
+                    <strong>받은 피드백</strong>
+                    <span>리뷰 내용과 품질 평가 →</span>
+                </a>
+                <a asp-page="/KeyDrops/New" asp-route-gameId="@id">
+                    <strong>키 배포 만들기</strong>
+                    <span>새로운 게임 키 배포 →</span>
+                </a>
+            </div>
+        </section>
+
+        <section class="ivory-side-card ivory-editor-note">
+            <p class="ivory-card-label">NOTE</p>
+            <p>저장하면 공개 게임 상세의 텍스트와 플레이 링크에 바로 반영됩니다.</p>
+        </section>
+    </aside>
+</div>
+
+@section Scripts {
+    <script type="module"
+            src="~/js/dist/games/play-links.js"
+            asp-append-version="true"></script>
+}

@@ -27,7 +27,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in dev/.env - copy dev/.env.example}
       POSTGRES_DB: indiefi
     ports:
-      - "5432:5432"
+      # Keep the development database off the LAN as well as the public internet.
+      # Applications on this machine still connect through localhost.
+      - "127.0.0.1:5432:5432"
     volumes:
       # PostgreSQL 18+ stores data in a version-specific subdirectory,
       # so the mount point is /var/lib/postgresql (not .../data).
@@ -38,5 +40,131 @@ services:
       timeout: 3s
       retries: 10
 
+  # Local SMTP inbox for confirmation and password-reset email development.
+  # Open http://localhost:8025 to inspect messages captured on SMTP port 1025.
+  mailpit:
+    image: axllent/mailpit:v1.30.7
+    container_name: indiefi-mailpit
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+  # Shared temporary state for the virtual waiting room and SignalR backplane.
+  # AOF everysec keeps the initial recovery-point target near one second.
+  redis:
+    image: redis:8.8.1-alpine
+    container_name: indiefi-redis
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--appendfsync"
+      - "everysec"
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # Durable local broker for Transactional Outbox delivery and notification workers.
+  # The management UI is available only on this machine at http://localhost:15672.
+  rabbitmq:
+    image: rabbitmq:4.3.4-management-alpine
+    container_name: indiefi-rabbitmq
+    hostname: indiefi-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: indiefi
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set it in dev/.env - copy dev/.env.example}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # S3-compatible object storage used only for local media development.
+  # The API and console stay on loopback; browser access uses short-lived signed URLs.
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
+    container_name: indiefi-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: indiefi-admin
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set it in dev/.env - copy dev/.env.example}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Create a private bucket and a least-privilege application user after MinIO is ready.
+  # This one-shot service is safe to run again when `docker compose up` is repeated.
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: indiefi-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: indiefi-admin
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set it in dev/.env - copy dev/.env.example}
+      MINIO_APP_USER: indiefi-media
+      MINIO_APP_PASSWORD: ${MINIO_APP_PASSWORD:?set it in dev/.env - copy dev/.env.example}
+      MINIO_BUCKET: indiefi-media-dev
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        if [ "$$MINIO_ROOT_PASSWORD" = "$$MINIO_APP_PASSWORD" ]; then
+          echo "MINIO_ROOT_PASSWORD and MINIO_APP_PASSWORD must be different." >&2
+          exit 1
+        fi
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+        mc anonymous set private "local/$$MINIO_BUCKET"
+        cat >/tmp/indiefi-media-policy.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+              "Resource": ["arn:aws:s3:::$$MINIO_BUCKET"]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:AbortMultipartUpload",
+                "s3:DeleteObject",
+                "s3:GetObject",
+                "s3:ListMultipartUploadParts",
+                "s3:PutObject"
+              ],
+              "Resource": ["arn:aws:s3:::$$MINIO_BUCKET/*"]
+            }
+          ]
+        }
+        EOF
+        mc admin user add local "$$MINIO_APP_USER" "$$MINIO_APP_PASSWORD"
+        mc admin policy create local indiefi-media-dev-rw /tmp/indiefi-media-policy.json
+        mc admin policy attach local indiefi-media-dev-rw --user "$$MINIO_APP_USER"
+
 volumes:
   db-data:
+  redis-data:
+  rabbitmq-data:
+  minio-data:

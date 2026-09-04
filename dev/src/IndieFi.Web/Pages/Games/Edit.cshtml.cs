@@ -1,35 +1,36 @@
-using System.ComponentModel.DataAnnotations;
+using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
-using IndieFi.Web.Extensions;
+using IndieFi.Web.Modules.Games.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace IndieFi.Web.Pages.Games;
 
 [Authorize]
-public class EditModel : PageModel
+public class EditModel : GameFormPageModel
 {
     private readonly AppDbContext _db;
+    private readonly ICurrentUser _currentUser;
+    private readonly GameManagementService _gameManagementService;
+    private readonly GameClassificationCatalogQueryService _classificationCatalog;
 
-    public EditModel(AppDbContext db)
+    public EditModel(
+        AppDbContext db,
+        ICurrentUser currentUser,
+        GameManagementService gameManagementService,
+        GameClassificationCatalogQueryService classificationCatalog)
     {
         _db = db;
+        _currentUser = currentUser;
+        _gameManagementService = gameManagementService;
+        _classificationCatalog = classificationCatalog;
     }
-
-    [BindProperty]
-    [Required(ErrorMessage = "게임 제목을 입력해 주세요.")]
-    [StringLength(200, ErrorMessage = "제목이 너무 깁니다.")]
-    public string Title { get; set; } = string.Empty;
-
-    [BindProperty]
-    [StringLength(2000, ErrorMessage = "소개가 너무 깁니다.")]
-    public string? Description { get; set; }
 
     public async Task<IActionResult> OnGetAsync(long id)
     {
-        var game = await _db.Games.FindAsync(id);
-        var ownerId = User.GetUserId();
+        var game = await _db.Games.FindAsync([id], HttpContext.RequestAborted);
+        var ownerId = _currentUser.GetRequiredUserId();
 
         // Return 404 (not 403) when the game is missing OR not owned by the caller —
         // a 403 would reveal that the game exists. Same reason the login page does
@@ -41,30 +42,82 @@ public class EditModel : PageModel
 
         Title = game.Title;
         Description = game.Description;
+        if (!await LoadEditorClassificationCatalogAsync(
+                _classificationCatalog,
+                id,
+                loadSelections: true,
+                HttpContext.RequestAborted))
+        {
+            return NotFound();
+        }
+
+        Links = await _db.GamePlayLinks
+            .Where(link => link.GameId == id)
+            .OrderBy(link => link.SortOrder)
+            .Select(link => new GamePlayLinkFormInput
+            {
+                DisplayName = link.DisplayName,
+                Provider = link.Provider,
+                TargetPlatform = link.TargetPlatform,
+                Url = link.Url,
+            })
+            .ToListAsync(HttpContext.RequestAborted);
+        EnsureLinkEditorRow();
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync(long id)
     {
+        var ownerId = _currentUser.GetRequiredUserId();
         if (!ModelState.IsValid)
         {
+            var ownsGame = await _db.Games.AnyAsync(
+                game => game.Id == id && game.OwnerId == ownerId,
+                HttpContext.RequestAborted);
+            if (!ownsGame)
+            {
+                return NotFound();
+            }
+
+            await LoadEditorClassificationCatalogAsync(
+                _classificationCatalog,
+                id,
+                loadSelections: false,
+                HttpContext.RequestAborted);
+            EnsureLinkEditorRow();
             return Page();
         }
 
-        var game = await _db.Games.FindAsync(id);
-        var ownerId = User.GetUserId();
+        var result = await _gameManagementService.UpdateAsync(
+            id,
+            ownerId,
+            Title,
+            Description,
+            CreateClassificationInput(),
+            CreateLinkInputs(),
+            HttpContext.RequestAborted);
 
-        // The ownership check must be repeated on POST: an attacker can send this
-        // POST directly without ever loading the GET page. Hiding the edit link in
-        // the UI is not a security boundary — this server check is.
-        if (game is null || game.OwnerId != ownerId)
+        if (result.Outcome == UpdateGameOutcome.NotFound)
         {
             return NotFound();
         }
 
-        game.Title = Title;
-        game.Description = string.IsNullOrWhiteSpace(Description) ? null : Description;
-        await _db.SaveChangesAsync();
+        if (result.Outcome == UpdateGameOutcome.AccountUnavailable)
+        {
+            return Challenge();
+        }
+
+        if (result.Outcome == UpdateGameOutcome.Invalid)
+        {
+            AddViolations(result.Violations);
+            await LoadEditorClassificationCatalogAsync(
+                _classificationCatalog,
+                id,
+                loadSelections: false,
+                HttpContext.RequestAborted);
+            EnsureLinkEditorRow();
+            return Page();
+        }
 
         TempData["GameMessage"] = "수정되었습니다";
         return RedirectToPage("/Games/Detail", new { id });

@@ -1,0 +1,478 @@
+using IndieFi.Web.Data;
+using IndieFi.Web.Entities;
+using IndieFi.Web.Modules.Credits.Domain;
+using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Notifications.Application;
+using IndieFi.Web.Modules.Notifications.Contracts;
+using IndieFi.Web.Modules.Notifications.Domain;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
+using Xunit;
+
+namespace IndieFi.Web.Tests;
+
+[Collection(PostgreSqlCollection.Name)]
+public sealed class FeedbackSubmissionServiceTests
+{
+    private const string UniqueViolation = "23505";
+    private const string CheckViolation = "23514";
+
+    private readonly PostgreSqlFixture _fixture;
+
+    public FeedbackSubmissionServiceTests(PostgreSqlFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenTheReviewerOwnsALiveAssignment_CompletesTheAssignmentAndTheRequest()
+    {
+        const string Body = "The controls feel responsive and predictable.";
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+
+        FeedbackSubmissionResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewSubmissionService(serviceDb).SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                Body);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var assignmentState = await verificationDb.ReviewAssignments
+            .Where(item => item.Id == assignment.AssignmentId)
+            .Select(item => new { item.Status, item.CompletedAt, item.ExpiredAt })
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var requestState = await verificationDb.ReviewRequests
+            .Where(item => item.Id == assignment.RequestId)
+            .Select(item => new { item.Status, item.CompletedAt, item.CancelledAt })
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var submissions = await verificationDb.FeedbackSubmissions
+            .Where(item => item.AssignmentId == assignment.AssignmentId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, result.Outcome);
+        Assert.Equal(ReviewAssignmentStatus.Completed, assignmentState.Status);
+        Assert.NotNull(assignmentState.CompletedAt);
+        Assert.Null(assignmentState.ExpiredAt);
+        Assert.Equal(ReviewRequestStatus.Completed, requestState.Status);
+        Assert.NotNull(requestState.CompletedAt);
+        Assert.Null(requestState.CancelledAt);
+        var submission = Assert.Single(submissions);
+        Assert.Equal(Body, submission.Body);
+        Assert.Equal(assignment.ReviewerId, submission.ReviewerId);
+        Assert.True(submission.EarnEntryId > 0);
+        Assert.True(await verificationDb.CreditLedgerEntries.AnyAsync(
+            entry => entry.Id == submission.EarnEntryId
+                && entry.UserId == assignment.ReviewerId
+                && entry.Kind == CreditEntryKind.Earn
+                && entry.Delta == 1,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenTheSubmissionSucceeds_EarnsExactlyOneCredit()
+    {
+        const string Body = "The difficulty curve feels fair and rewarding.";
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        int balanceBefore;
+
+        await using (var beforeDb = _fixture.NewDbContext())
+        {
+            balanceBefore = await beforeDb.Users
+                .Where(user => user.Id == assignment.ReviewerId)
+                .Select(user => user.CreditBalance)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        FeedbackSubmissionResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewSubmissionService(serviceDb).SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                Body);
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var earnEntries = await verificationDb.CreditLedgerEntries
+            .Where(entry => entry.UserId == assignment.ReviewerId)
+            .Where(entry => entry.Kind == CreditEntryKind.Earn)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        var balanceAfter = await verificationDb.Users
+            .Where(user => user.Id == assignment.ReviewerId)
+            .Select(user => user.CreditBalance)
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, result.Outcome);
+        var earnEntry = Assert.Single(earnEntries);
+        Assert.Equal(1, earnEntry.Delta);
+        Assert.Equal(balanceBefore + 1, balanceAfter);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenTheAssignmentBelongsToSomeoneElse_ReportsNotSubmittable()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        long otherReviewerId;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            otherReviewerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+        }
+
+        FeedbackSubmissionResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewSubmissionService(serviceDb).SubmitAsync(
+                assignment.AssignmentId,
+                otherReviewerId,
+                "This reviewer does not own the assignment.");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var assignmentStatus = await verificationDb.ReviewAssignments
+            .Where(item => item.Id == assignment.AssignmentId)
+            .Select(item => item.Status)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var requestStatus = await verificationDb.ReviewRequests
+            .Where(item => item.Id == assignment.RequestId)
+            .Select(item => item.Status)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var submissionCount = await verificationDb.FeedbackSubmissions.CountAsync(
+            item => item.AssignmentId == assignment.AssignmentId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(FeedbackSubmissionOutcome.NotSubmittable, result.Outcome);
+        Assert.Equal(ReviewAssignmentStatus.Active, assignmentStatus);
+        Assert.Equal(ReviewRequestStatus.Assigned, requestStatus);
+        Assert.Equal(0, submissionCount);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenTheSubmissionIsRefused_EarnsNothing()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        long otherReviewerId;
+        int balanceBefore;
+
+        await using (var arrangeDb = _fixture.NewDbContext())
+        {
+            otherReviewerId = (await ReviewTestData.CreateUserWithCreditAsync(
+                arrangeDb,
+                balance: 0)).Id;
+            balanceBefore = await arrangeDb.Users
+                .Where(user => user.Id == otherReviewerId)
+                .Select(user => user.CreditBalance)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        FeedbackSubmissionResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewSubmissionService(serviceDb).SubmitAsync(
+                assignment.AssignmentId,
+                otherReviewerId,
+                "This reviewer cannot submit someone else's assignment.");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var earnEntryCount = await verificationDb.CreditLedgerEntries.CountAsync(
+            entry => entry.UserId == otherReviewerId && entry.Kind == CreditEntryKind.Earn,
+            TestContext.Current.CancellationToken);
+        var balanceAfter = await verificationDb.Users
+            .Where(user => user.Id == otherReviewerId)
+            .Select(user => user.CreditBalance)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var submissionCount = await verificationDb.FeedbackSubmissions.CountAsync(
+            submission => submission.AssignmentId == assignment.AssignmentId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(FeedbackSubmissionOutcome.NotSubmittable, result.Outcome);
+        Assert.Equal(0, earnEntryCount);
+        Assert.Equal(balanceBefore, balanceAfter);
+        Assert.Equal(0, submissionCount);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenTheLeaseHasExpired_ReportsLeaseExpired()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+
+        await using (var expirationDb = _fixture.NewDbContext())
+        {
+            var storedAssignment = await expirationDb.ReviewAssignments.SingleAsync(
+                item => item.Id == assignment.AssignmentId,
+                TestContext.Current.CancellationToken);
+            storedAssignment.LeasedUntil = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await expirationDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        FeedbackSubmissionResult result;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            result = await NewSubmissionService(serviceDb).SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                "This feedback arrived after the lease expired.");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var assignmentStatus = await verificationDb.ReviewAssignments
+            .Where(item => item.Id == assignment.AssignmentId)
+            .Select(item => item.Status)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        var submissionCount = await verificationDb.FeedbackSubmissions.CountAsync(
+            item => item.AssignmentId == assignment.AssignmentId,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(FeedbackSubmissionOutcome.LeaseExpired, result.Outcome);
+        Assert.Equal(ReviewAssignmentStatus.Active, assignmentStatus);
+        Assert.Equal(0, submissionCount);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenCalledTwice_ReturnsSuccessAndKeepsTheFirstFeedback()
+    {
+        const string FirstBody = "Keep the first submission exactly as it was.";
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+
+        FeedbackSubmissionResult firstResult;
+        FeedbackSubmissionResult secondResult;
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var service = NewSubmissionService(serviceDb);
+            firstResult = await service.SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                FirstBody);
+            secondResult = await service.SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                "The second submission must not replace the first.");
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        var submissions = await verificationDb.FeedbackSubmissions
+            .Where(item => item.AssignmentId == assignment.AssignmentId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, firstResult.Outcome);
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, secondResult.Outcome);
+        var submission = Assert.Single(submissions);
+        Assert.Equal(FirstBody, submission.Body);
+        Assert.Equal(1, await verificationDb.CreditLedgerEntries.CountAsync(
+            entry => entry.UserId == assignment.ReviewerId
+                && entry.Kind == CreditEntryKind.Earn,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task SubmitAsync_StagesStableFeedbackEventForGameOwner()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        var publisher = new TestNotificationEventPublisher();
+        await using var serviceDb = _fixture.NewDbContext();
+        var service = new FeedbackSubmissionService(
+            serviceDb,
+            NullLogger<FeedbackSubmissionService>.Instance,
+            publisher);
+
+        var first = await service.SubmitAsync(
+            assignment.AssignmentId,
+            assignment.ReviewerId,
+            "This feedback creates one stable owner event.");
+        var replay = await service.SubmitAsync(
+            assignment.AssignmentId,
+            assignment.ReviewerId,
+            "This replay must use the same event identity.");
+
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, first.Outcome);
+        Assert.Equal(FeedbackSubmissionOutcome.Submitted, replay.Outcome);
+        var source = await (
+                from submission in serviceDb.FeedbackSubmissions
+                join reviewAssignment in serviceDb.ReviewAssignments
+                    on submission.AssignmentId equals reviewAssignment.Id
+                join request in serviceDb.ReviewRequests
+                    on reviewAssignment.RequestId equals request.Id
+                join game in serviceDb.Games on request.GameId equals game.Id
+                where submission.AssignmentId == assignment.AssignmentId
+                select new
+                {
+                    submission.Id,
+                    OwnerId = game.OwnerId,
+                    submission.CreatedAt,
+                })
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, publisher.Events.Count);
+        Assert.All(publisher.Events, staged =>
+        {
+            Assert.Equal(
+                NotificationEventId.Create(
+                    NotificationKind.FeedbackCompleted,
+                    source.Id,
+                    source.OwnerId),
+                staged.EventId);
+            Assert.Equal(source.OwnerId, staged.RecipientUserId);
+            Assert.Equal(NotificationKind.FeedbackCompleted, staged.Kind);
+            Assert.Equal(NotificationSourceTypes.FeedbackSubmission, staged.SourceType);
+            Assert.Equal(source.Id, staged.SourceId);
+            Assert.Equal(source.CreatedAt, staged.OccurredAt);
+        });
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenEventStagingFails_RollsBackSubmissionAndCredit()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        int creditBefore;
+        await using (var beforeDb = _fixture.NewDbContext())
+        {
+            creditBefore = await beforeDb.Users
+                .Where(item => item.Id == assignment.ReviewerId)
+                .Select(item => item.CreditBalance)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var service = new FeedbackSubmissionService(
+                serviceDb,
+                NullLogger<FeedbackSubmissionService>.Instance,
+                new TestNotificationEventPublisher
+                {
+                    Failure = new InvalidOperationException("staging failed"),
+                });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                "This feedback must roll back with its failed event."));
+        }
+
+        await using var verificationDb = _fixture.NewDbContext();
+        Assert.False(await verificationDb.FeedbackSubmissions.AnyAsync(
+            item => item.AssignmentId == assignment.AssignmentId,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(
+            ReviewAssignmentStatus.Active,
+            await verificationDb.ReviewAssignments
+                .Where(item => item.Id == assignment.AssignmentId)
+                .Select(item => item.Status)
+                .SingleAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            ReviewRequestStatus.Assigned,
+            await verificationDb.ReviewRequests
+                .Where(item => item.Id == assignment.RequestId)
+                .Select(item => item.Status)
+                .SingleAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            creditBefore,
+            await verificationDb.Users
+                .Where(item => item.Id == assignment.ReviewerId)
+                .Select(item => item.CreditBalance)
+                .SingleAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task SubmittingTwiceForOneAssignment_IsRefusedByTheDatabase()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+
+        await using (var serviceDb = _fixture.NewDbContext())
+        {
+            var result = await NewSubmissionService(serviceDb).SubmitAsync(
+                assignment.AssignmentId,
+                assignment.ReviewerId,
+                "The service stores the first submission.");
+            Assert.Equal(FeedbackSubmissionOutcome.Submitted, result.Outcome);
+        }
+
+        var duplicateEarnEntryId = await CreateEarnEntryAsync(assignment.ReviewerId);
+        await using var attemptDb = _fixture.NewDbContext();
+        var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await attemptDb.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO feedback_submissions (
+                    assignment_id, reviewer_id, body, earn_entry_id)
+                VALUES ({0}, {1}, {2}, {3})
+                """,
+                new object[]
+                {
+                    assignment.AssignmentId,
+                    assignment.ReviewerId,
+                    "The database must reject this duplicate.",
+                    duplicateEarnEntryId,
+                },
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(UniqueViolation, exception.SqlState);
+    }
+
+    [Fact]
+    public async Task SubmittingFeedbackShorterThanTheMinimum_IsRefusedByTheDatabase()
+    {
+        var assignment = await ReviewTestData.CreateLiveAssignmentAsync(_fixture);
+        var earnEntryId = await CreateEarnEntryAsync(assignment.ReviewerId);
+        await using var attemptDb = _fixture.NewDbContext();
+
+        var shortBodyException = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await attemptDb.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO feedback_submissions (
+                    assignment_id, reviewer_id, body, earn_entry_id)
+                VALUES ({0}, {1}, {2}, {3})
+                """,
+                new object[]
+                {
+                    assignment.AssignmentId,
+                    assignment.ReviewerId,
+                    "짧다",
+                    earnEntryId,
+                },
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(CheckViolation, shortBodyException.SqlState);
+
+        var whitespaceBodyException = await Assert.ThrowsAsync<PostgresException>(async () =>
+            await attemptDb.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO feedback_submissions (
+                    assignment_id, reviewer_id, body, earn_entry_id)
+                VALUES ({0}, {1}, {2}, {3})
+                """,
+                new object[]
+                {
+                    assignment.AssignmentId,
+                    assignment.ReviewerId,
+                    new string(' ', 30),
+                    earnEntryId,
+                },
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(CheckViolation, whitespaceBodyException.SqlState);
+    }
+
+    private static FeedbackSubmissionService NewSubmissionService(AppDbContext db) =>
+        new(
+            db,
+            NullLogger<FeedbackSubmissionService>.Instance,
+            new TestNotificationEventPublisher());
+
+    private async Task<long> CreateEarnEntryAsync(long reviewerId)
+    {
+        await using var db = _fixture.NewDbContext();
+        var entry = new CreditLedgerEntry
+        {
+            UserId = reviewerId,
+            Kind = CreditEntryKind.Earn,
+            Delta = 1,
+        };
+        db.CreditLedgerEntries.Add(entry);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return entry.Id;
+    }
+}

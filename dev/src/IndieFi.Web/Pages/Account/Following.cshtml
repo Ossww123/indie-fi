@@ -1,0 +1,59 @@
+@page
+@model FollowingModel
+@{
+    ViewData["Title"] = "팔로잉 목록";
+    ViewData["MainClass"] = "site-main-account-ledger";
+}
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">FOLLOWING</p>
+        <h1>팔로잉 목록</h1>
+        <p>관심 있는 개발자와 리뷰어의 공개 프로필을 모아 봅니다.</p>
+    </div>
+    <a asp-page="/Index" class="button-outline">게임에서 사용자 찾기</a>
+</header>
+
+<partial name="_AccountTools" />
+
+<div class="ivory-collection-summary">
+    <span>PEOPLE</span>
+    <strong>@Model.Items.Count</strong>
+    <p>명을 팔로우 중</p>
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="empty-state" data-empty-state="following">
+        <div class="empty-state-icon" aria-hidden="true">◇</div>
+        <h2 class="empty-state-title">아직 팔로우한 사용자가 없습니다.</h2>
+        <p class="empty-state-description">게임 상세의 개발자나 리뷰어 공개 프로필에서 팔로우를 시작할 수 있습니다.</p>
+        <div class="empty-state-actions">
+            <a asp-page="/Index" class="button-primary">게임에서 개발자 찾기</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="ivory-following-grid">
+        @foreach (var item in Model.Items)
+        {
+            <a asp-page="/Profiles/Detail" asp-route-id="@item.UserId" class="ivory-following-card">
+                <div class="ivory-following-avatar" aria-hidden="true">@(item.DisplayName[..1].ToUpperInvariant())</div>
+                <div class="ivory-following-copy">
+                    <p class="ivory-card-label">FOLLOWING SINCE @item.FollowedAt.ToLocalTime().ToString("yyyy.MM.dd")</p>
+                    <h2>@item.DisplayName</h2>
+                    @if (string.IsNullOrEmpty(item.Biography))
+                    {
+                        <p class="ivory-following-empty">아직 등록된 소개가 없습니다.</p>
+                    }
+                    else
+                    {
+                        <p>@item.Biography</p>
+                    }
+                    <span>공개 프로필 보기 →</span>
+                </div>
+            </a>
+        }
+    </div>
+}

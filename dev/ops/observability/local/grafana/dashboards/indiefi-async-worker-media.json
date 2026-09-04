@@ -1,0 +1,82 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "id": 1,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (contract, outcome) (rate(indiefi_notifications_consumer_messages_total[1m]))", "legendFormat": "{{contract}} / {{outcome}}", "refId": "A"}],
+      "title": "Notification consumer throughput", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "id": 2,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, contract) (rate(indiefi_notifications_consumer_duration_milliseconds_bucket[5m])))", "legendFormat": "{{contract}} p95", "refId": "A"}],
+      "title": "Notification consumer duration", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}, "id": 3,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "indiefi_notifications_outbox_backlog", "legendFormat": "outbox", "refId": "A"}, {"expr": "indiefi_notifications_email_pending", "legendFormat": "email pending", "refId": "B"}, {"expr": "indiefi_notifications_email_failed", "legendFormat": "email failed", "refId": "C"}],
+      "title": "Notification backlog", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}, "id": 4,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "indiefi_notifications_outbox_oldest_age_seconds", "legendFormat": "outbox", "refId": "A"}, {"expr": "indiefi_notifications_email_oldest_due_age_seconds", "legendFormat": "email", "refId": "B"}],
+      "title": "Oldest asynchronous work", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}, "id": 5,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (queue) (rabbitmq_queue_messages_ready{queue=~\"indiefi.*\"})", "legendFormat": "{{queue}} ready", "refId": "A"}, {"expr": "sum by (queue) (rabbitmq_queue_consumers{queue=~\"indiefi.*\"})", "legendFormat": "{{queue}} consumers", "refId": "B"}],
+      "title": "RabbitMQ ready and consumers", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}, "id": 6,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "indiefi_media_processing_pending", "legendFormat": "processing pending", "refId": "A"}, {"expr": "indiefi_media_recovery_due", "legendFormat": "recovery due", "refId": "B"}, {"expr": "indiefi_media_cleanup_backlog", "legendFormat": "cleanup", "refId": "C"}, {"expr": "indiefi_media_failed", "legendFormat": "failed", "refId": "D"}],
+      "title": "Media operational state", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}, "id": 7,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(indiefi_media_processing_duration_milliseconds_bucket[5m])))", "legendFormat": "{{outcome}} p95", "refId": "A"}],
+      "title": "Media processing duration", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}, "id": 8,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (outcome) (rate(indiefi_notifications_email_deliveries_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A"}, {"expr": "rate(indiefi_notifications_consumer_retries_total[5m])", "legendFormat": "consumer retries", "refId": "B"}],
+      "title": "Email outcomes and consumer retries", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"min": 0, "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}, "id": 9,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (outcome) (rate(indiefi_media_processing_attempts_total[5m]))", "legendFormat": "processing {{outcome}}", "refId": "A"}, {"expr": "sum by (outcome) (rate(indiefi_media_cleanup_items_total[5m]))", "legendFormat": "cleanup {{outcome}}", "refId": "B"}],
+      "title": "Media processing and cleanup outcomes", "type": "timeseries"
+    }
+  ],
+  "refresh": "15s", "schemaVersion": 42, "tags": ["indiefi", "rabbitmq", "worker", "media"],
+  "templating": {"list": []}, "time": {"from": "now-1h", "to": "now"}, "timezone": "utc",
+  "title": "IndieFi / Async worker and media", "uid": "indiefi-async", "version": 1
+}

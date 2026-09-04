@@ -14,6 +14,7 @@ public class ErrorModel : PageModel
 
     public void OnGet()
     {
+        Response.StatusCode = StatusCodes.Status500InternalServerError;
         RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
     }
 }

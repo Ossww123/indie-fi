@@ -1,0 +1,90 @@
+@page
+@model IndieFi.Web.Pages.Account.NotificationsModel
+@{
+    ViewData["Title"] = "알림 설정";
+    ViewData["MainClass"] = "site-main-account-ledger";
+}
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">NOTIFICATION PREFERENCES</p>
+        <h1>알림 설정</h1>
+        <p>이벤트별 웹 알림과 이메일 수신 여부를 선택합니다. 변경값은 이후 생성되는 알림부터 적용됩니다.</p>
+    </div>
+    <a asp-page="/Notifications/Index" class="button-outline">알림함 보기</a>
+</header>
+
+<partial name="_AccountTools" />
+
+@if (Model.StatusMessage is not null)
+{
+    <div class="alert-success mb-5" role="status">@Model.StatusMessage</div>
+}
+
+<form method="post" class="ivory-preferences-form">
+    <div asp-validation-summary="ModelOnly" role="alert"></div>
+
+    <div class="ivory-preferences-heading">
+        <div>
+            <p class="ivory-card-label">DELIVERY MATRIX</p>
+            <h2>이벤트별 수신 채널</h2>
+            <p>필수 계정 알림은 보안을 위해 해제할 수 없습니다.</p>
+        </div>
+        <div class="ivory-channel-legend" aria-label="알림 채널">
+            <span>WEB</span>
+            <span>EMAIL</span>
+        </div>
+    </div>
+
+    <p class="table-scroll-hint sm:hidden">표를 좌우로 이동하면 모든 설정을 확인할 수 있습니다.</p>
+    <div class="ivory-preferences-table" role="region" aria-label="알림 설정 표" tabindex="0">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">이벤트</th>
+                    <th scope="col">웹</th>
+                    <th scope="col">이메일</th>
+                    <th scope="col">기본값</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var index = 0; index < Model.Preferences.Count; index++)
+                {
+                    var item = Model.Preferences[index];
+                    <tr>
+                        <td>
+                            <input type="hidden" asp-for="Preferences[index].Kind" />
+                            <strong>@NotificationsModel.GetLabel(item.Kind)</strong>
+                            @if (item.IsMandatory)
+                            {
+                                <span class="badge-neutral">필수</span>
+                                <small>해제할 수 없는 계정 알림</small>
+                            }
+                        </td>
+                        <td>
+                            <input asp-for="Preferences[index].WebEnabled"
+                                   class="field-check"
+                                   disabled="@(item.IsMandatory ? "disabled" : null)"
+                                   aria-label="@NotificationsModel.GetLabel(item.Kind) 웹 알림" />
+                        </td>
+                        <td>
+                            <input asp-for="Preferences[index].EmailEnabled"
+                                   class="field-check"
+                                   disabled="@(item.IsMandatory ? "disabled" : null)"
+                                   aria-label="@NotificationsModel.GetLabel(item.Kind) 이메일 알림" />
+                        </td>
+                        <td>
+                            <span>웹 @(item.DefaultWebEnabled ? "켬" : "끔")</span>
+                            <span>이메일 @(item.DefaultEmailEnabled ? "켬" : "끔")</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="ivory-preferences-actions">
+        <a asp-page="/Notifications/Index" class="button-link">취소</a>
+        <button type="submit" class="button-primary">설정 저장</button>
+    </div>
+</form>

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "runId": "opv-20260830T120000Z-a486bc39-abc123",
+  "purpose": "baseline",
+  "status": "planned",
+  "startedAtUtc": null,
+  "endedAtUtc": null,
+  "source": {
+    "commit": "a486bc3920a42d13bfa4eea7c63b7aae4f2eea87",
+    "worktreeClean": true,
+    "releasePath": null
+  },
+  "environment": {
+    "region": "ap-northeast-2",
+    "instanceType": "t3.medium",
+    "architecture": "x86_64",
+    "cpuCreditMode": "standard",
+    "topology": "single",
+    "webInstances": 1,
+    "workerInstances": 1,
+    "postgresImage": "postgres:18",
+    "redisImage": "redis:8.8.1-alpine",
+    "rabbitMqImage": "rabbitmq:4.3.4-management-alpine"
+  },
+  "observability": {
+    "enabled": true,
+    "collectorVersion": null,
+    "configurationSha256": null,
+    "clockDifferenceMilliseconds": null
+  },
+  "load": {
+    "generator": "local-k6",
+    "k6Version": null,
+    "scenario": "W0",
+    "stage": "smoke",
+    "targetUrl": null,
+    "parameters": {},
+    "thresholds": {}
+  },
+  "seed": {
+    "manifestPath": null,
+    "manifestSha256": null,
+    "users": 0,
+    "games": 0,
+    "drops": 0,
+    "keys": 0
+  },
+  "evidence": [],
+  "result": {
+    "classification": null,
+    "reason": null,
+    "metrics": {},
+    "consistencyPassed": null
+  }
+}

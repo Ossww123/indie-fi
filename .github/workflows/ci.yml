@@ -23,12 +23,26 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Validate operation scripts
+        run: bash -n dev/ops/*.sh
+
       # Build the whole solution rather than letting `dotnet test` build only what
       # the tests need. That is what catches a project which stopped compiling but
       # is not referenced by any test - it happened once and went unnoticed for
       # several commits.
+      #
+      # Worker references Web with different global properties so it can omit Web-only
+      # content. MSBuild treats that as a second Web build; one node keeps those builds
+      # from racing over the same runtimeconfig output. The deploy job publishes Web and
+      # Worker in separate sequential steps, so it does not need the same restriction.
       - name: Build
-        run: dotnet build dev/IndieFi.slnx
+        run: dotnet build dev/IndieFi.slnx -m:1
+
+      # The browser contracts render the real production CSS and client bundles in
+      # headless Chromium. Playwright versions and their browser binaries move as a
+      # pair, so install through the script produced by the just-built test project.
+      - name: Install the frontend test browser
+        run: pwsh dev/tests/IndieFi.Web.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
 
       # The tests start a throwaway PostgreSQL through Testcontainers, so this needs
       # Docker. ubuntu-latest runners already have it. The first run also pulls the
@@ -43,6 +57,13 @@ jobs:
     needs: test
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    # A second button press waits instead of letting two runners migrate and move
+    # the same current symlink at once.
+    concurrency:
+      group: portfolio-production-deployment
+      cancel-in-progress: false
 
     permissions:
       id-token: write
@@ -55,17 +76,47 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Framework-dependent, so the 21MB this produces carries no runtime: the server
-      # already has aspnetcore-runtime-10.0 from apt. Publishing here rather than on a
-      # laptop is what makes "what is committed" and "what is on the server" the same
-      # thing - uncommitted edits and machine-local packages cannot leak into a deploy.
+      # Both projects target the existing x86_64 Ubuntu host and remain framework-
+      # dependent, so the server must already have the .NET 10 and ASP.NET Core 10
+      # runtimes. Separate folders prevent files with the same dependency name from
+      # overwriting each other before they are packaged.
       #
       # SourceRevisionId ends up appended to the assembly's informational version, which is
       # where the footer reads it from. The SDK would infer the same value from the checkout
       # on its own; passing it explicitly ties the footer to the commit this run reports, so
       # the page and the run that produced it can never name different commits.
-      - name: Publish the app
-        run: dotnet publish dev/src/IndieFi.Web -c Release -o publish -p:SourceRevisionId=${{ github.sha }}
+      - name: Publish Web for Linux x64
+        run: |
+          mkdir -p release/web
+          dotnet publish dev/src/IndieFi.Web \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained false \
+            --output release/web \
+            -p:SourceRevisionId=${{ github.sha }}
+
+      - name: Publish Worker for Linux x64
+        run: |
+          mkdir -p release/worker
+          dotnet publish dev/src/IndieFi.Worker \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained false \
+            --output release/worker \
+            -p:SourceRevisionId=${{ github.sha }}
+
+      # The operational load seed/audit tool runs on the EC2 host because PostgreSQL
+      # remains loopback-only. It is framework-dependent like Web and Worker and is
+      # invoked only through the root-owned bounded wrapper in release/ops.
+      - name: Publish load validation data tool for Linux x64
+        run: |
+          mkdir -p release/seed
+          dotnet publish dev/tools/IndieFi.Seed \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained false \
+            --output release/seed \
+            -p:SourceRevisionId=${{ github.sha }}
 
       # The server has no SDK and no source, so it cannot run migrations the way a laptop
       # does. This bakes them into one executable instead.
@@ -76,7 +127,7 @@ jobs:
       # the build stops at NETSDK1047, and it does not survive between builds.
       - name: Build the migration bundle
         run: |
-          dotnet tool install --global dotnet-ef
+          dotnet tool install --global dotnet-ef --version 10.0.10
           export PATH="$PATH:$HOME/.dotnet/tools"
 
           dotnet restore dev/src/IndieFi.Web -r linux-x64
@@ -84,10 +135,56 @@ jobs:
             --project dev/src/IndieFi.Web \
             --target-runtime linux-x64 \
             --configuration Release \
-            --output efbundle \
+            --output release/efbundle \
             --force
 
-          file efbundle
+          file release/efbundle
+
+      # The manifest binds every executable, dependency, and host template to this
+      # commit. The server verifies the archive and then every extracted file before
+      # it runs anything with sudo.
+      - name: Package one immutable release
+        run: |
+          cp -a dev/ops release/ops
+          printf '%s\n' "$GITHUB_SHA" > release/release.sha
+
+          test -f release/web/IndieFi.Web.dll
+          test -f release/worker/IndieFi.Worker.dll
+          test -f release/seed/IndieFi.Seed.dll
+          test -x release/efbundle
+          test -x release/ops/deploy-portfolio-release.sh
+          test -x release/ops/migrate-portfolio-database.sh
+          test -x release/ops/configure-portfolio-database-role.sh
+          test -x release/ops/generate-portfolio-key-material.sh
+          test -x release/ops/configure-portfolio-runtime-environment.sh
+          test -x release/ops/run-load-validation-data.sh
+
+          if find release -type l -print -quit | grep -q .; then
+            echo "Release packages may not contain symlinks." >&2
+            exit 1
+          fi
+
+          (
+            cd release
+            find web worker seed ops -type f -print0 \
+              | sort -z \
+              | xargs -0 sha256sum
+            sha256sum efbundle release.sha
+          ) > release/SHA256SUMS
+
+          tar \
+            --create \
+            --gzip \
+            --file "$GITHUB_SHA.tar.gz" \
+            --directory release \
+            .
+          sha256sum "$GITHUB_SHA.tar.gz" > "$GITHUB_SHA.tar.gz.sha256"
+
+          file \
+            release/web/IndieFi.Web \
+            release/worker/IndieFi.Worker \
+            release/seed/IndieFi.Seed \
+            release/efbundle
 
       # Everything above takes tens of seconds and needs nothing from the server, so
       # port 22 stays shut until here. The role only trusts a subject carrying GitHub's
@@ -140,79 +237,30 @@ jobs:
             StrictHostKeyChecking accept-new
           EOF
 
-      # The app is running out of ~/app right now, and Linux happily lets a running
-      # binary be overwritten, so a transfer that dies halfway would leave that folder
-      # half new and half old - broken only at the next restart, with nothing to point
-      # at the cause. Landing beside it keeps the running copy untouched.
-      #
-      # scp copies into a directory that already exists but creates one that does not,
-      # so the same command would nest publish/ inside app-new/ from the second run
-      # onward. Removing the destination first makes every run end the same way.
-      - name: Send the published app next to the running one
+      # The upload directory is outside /opt and is owned by the unprivileged SSH user.
+      # No running release is touched until the remote script has verified both hashes.
+      - name: Upload the release archive
         run: |
-          ssh deploy-target 'rm -rf ~/app-new'
-          scp -r publish deploy-target:~/app-new
-          scp efbundle deploy-target:~/efbundle
+          ssh deploy-target 'install -d -m 0755 ~/indiefi-upload'
+          # GITHUB_SHA deliberately expands on the trusted runner; the remote command
+          # receives only the resulting 40-character hexadecimal filename.
+          # shellcheck disable=SC2029
+          ssh deploy-target \
+            "rm -f -- ~/indiefi-upload/$GITHUB_SHA.tar.gz ~/indiefi-upload/$GITHUB_SHA.tar.gz.sha256"
+          scp \
+            "$GITHUB_SHA.tar.gz" \
+            "$GITHUB_SHA.tar.gz.sha256" \
+            deploy-target:~/indiefi-upload/
 
-      # The browser still shows the old version at this point, because ~/app has not
-      # been touched. Printing both facts together is the proof: fresh files arrived,
-      # and the service kept serving the previous copy through the whole transfer.
-      - name: Show what arrived
+      # The remote script installs the matching service templates, validates all three
+      # environment files, stops Worker then Web, migrates, atomically moves current,
+      # and starts Web then Worker. It leaves failures visible instead of automatically
+      # rolling code back across a schema migration.
+      - name: Migrate and activate Web and Worker
         run: |
-          ssh deploy-target '
-            ls -l ~/app-new/IndieFi.Web.dll ~/efbundle
-            echo "files: $(ls ~/app-new | wc -l)"
-            systemctl is-active indiefi
-          '
-
-      # The whole swap runs in one ssh session so nothing can reconnect between the
-      # stop and the start. The previous copy stays as ~/app-old, which is the way
-      # back if the new one does not come up.
-      #
-      # There is deliberately no automatic rollback. A deploy that fails should stay
-      # failed and loud: an automatic recovery would hide how often this breaks and
-      # would be a safeguard built before anything had gone wrong. Going back is two
-      # commands, and the health check below says plainly that they are needed.
-      #
-      # The app takes a few seconds to come up, so a single curl right after start
-      # would call a normal boot a failure. The elapsed seconds printed here are the
-      # real downtime of this deploy.
-      - name: Swap in the new copy, migrate, and wait for it to answer
-        run: |
-          ssh deploy-target bash -s <<'REMOTE'
-          set -e
-          START=$(date +%s)
-          sudo systemctl stop indiefi
-
-          rm -rf ~/app-old
-          mv ~/app ~/app-old
-          mv ~/app-new ~/app
-
-          # Migrations run while nothing is serving, so the new code never meets the old
-          # schema. The bundle skips what is already applied, which is why it can run on
-          # every deploy instead of someone having to remember whether the schema moved.
-          #
-          # /etc/indiefi.env is systemd's format, not shell. The connection string holds
-          # semicolons, so sourcing the file would end the value at the first one and hand
-          # the bundle a string with no password. Reading the single line avoids that, and
-          # building the value inside the shell rather than passing it as an argument keeps
-          # the password off the process list.
-          sudo bash -c 'export ConnectionStrings__Database="$(sed -n "s/^ConnectionStrings__Database=//p" /etc/indiefi.env)"; exec /home/ubuntu/efbundle'
-
-          sudo systemctl start indiefi
-
-          for i in $(seq 1 15); do
-            if curl -fsS http://127.0.0.1:5000/ >/dev/null 2>&1; then
-              echo "healthy after $(( $(date +%s) - START ))s of downtime"
-              ls -l ~/app/IndieFi.Web.dll
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "the new copy never answered - ~/app-old still holds the previous one" >&2
-          exit 1
-          REMOTE
+          ssh deploy-target \
+            bash -s -- "$GITHUB_SHA" \
+            < dev/ops/deploy-portfolio-release.sh
 
       # always() covers ordinary failures above, but a forced workflow cancellation
       # can prevent cleanup from running. The described ingress rule then remains

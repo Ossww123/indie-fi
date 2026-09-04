@@ -1,0 +1,95 @@
+extensions:
+  health_check:
+    endpoint: 127.0.0.1:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4317
+
+  hostmetrics:
+    root_path: /hostfs
+    collection_interval: 15s
+    scrapers:
+      cpu:
+      disk:
+      filesystem:
+        exclude_fs_types:
+          fs_types: [autofs, binfmt_misc, bpf, cgroup2, configfs, debugfs, devpts, devtmpfs, fusectl, hugetlbfs, mqueue, nsfs, overlay, proc, procfs, pstore, securityfs, selinuxfs, squashfs, sysfs, tracefs]
+          match_type: strict
+      load:
+      memory:
+      network:
+      paging:
+      processes:
+      system:
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: cadvisor
+          scrape_interval: 15s
+          static_configs:
+            - targets: [127.0.0.1:8080]
+        - job_name: postgres
+          scrape_interval: 15s
+          static_configs:
+            - targets: [127.0.0.1:9187]
+        - job_name: redis
+          scrape_interval: 15s
+          static_configs:
+            - targets: [127.0.0.1:9121]
+        - job_name: rabbitmq
+          scrape_interval: 15s
+          metrics_path: /metrics/per-object
+          static_configs:
+            - targets: [127.0.0.1:15692]
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+    spike_limit_mib: 48
+  resource:
+    attributes:
+      - key: deployment.environment.name
+        value: portfolio-validation
+        action: upsert
+  batch:
+    send_batch_size: 1024
+    timeout: 2s
+
+exporters:
+  otlp/gateway:
+    endpoint: 127.0.0.1:14317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 2048
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 5s
+      max_elapsed_time: 30s
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/gateway]
+    metrics:
+      receivers: [otlp, hostmetrics, prometheus]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/gateway]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/gateway]

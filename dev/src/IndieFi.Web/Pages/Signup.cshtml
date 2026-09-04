@@ -2,24 +2,64 @@
 @model SignupModel
 @{
     ViewData["Title"] = "가입";
+    ViewData["MainClass"] = "site-main-auth";
 }
 
-<h1 class="h3 mb-4">가입</h1>
+<section class="auth-shell ivory-auth-shell" data-auth-page="signup">
+    <div class="ivory-auth-panel">
+        <nav class="ivory-auth-tabs" aria-label="인증 메뉴">
+            <a asp-page="/Login">SIGN IN</a>
+            <span aria-current="page">SIGN UP</span>
+            <a asp-page="/ForgotPassword">RESET</a>
+        </nav>
 
-<form method="post" class="col-md-5">
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+        <header class="auth-header">
+            <p class="auth-eyebrow">JOIN INDIE-FI</p>
+            <h1 class="auth-title">계정 만들기</h1>
+            <p class="auth-description">인디 게임을 발견하고 플레이 경험을 개발자와 나눠 보세요.</p>
+        </header>
 
-    <div class="mb-3">
-        <label asp-for="Email" class="form-label">이메일</label>
-        <input asp-for="Email" class="form-control" autocomplete="email" />
-        <span asp-validation-for="Email" class="text-danger small"></span>
+        <div class="auth-card">
+            <form method="post" class="auth-form">
+                <div asp-validation-summary="ModelOnly" role="alert"></div>
+
+                <div class="field-group">
+                    <label asp-for="Email" class="field-label">이메일</label>
+                    <input asp-for="Email" class="field-input" autocomplete="email" />
+                    <span asp-validation-for="Email" class="field-error"></span>
+                </div>
+
+                <div class="field-group">
+                    <label asp-for="Password" class="field-label">비밀번호</label>
+                    <input asp-for="Password" class="field-input" autocomplete="new-password" />
+                    <span asp-validation-for="Password" class="field-error"></span>
+                </div>
+
+                <button type="submit" class="button-primary w-full">가입하기</button>
+            </form>
+
+            <div class="ivory-auth-privacy">
+                <span aria-hidden="true">◇</span>
+                <p>이메일은 계정 확인과 로그인에 사용되며 공개 프로필에는 표시되지 않습니다.</p>
+            </div>
+
+            <nav class="auth-links" aria-label="가입 도움말">
+                <a asp-page="/Login" class="text-link">이미 계정이 있나요? 로그인</a>
+                <a asp-page="/ResendConfirmationEmail" class="text-link">확인 메일 다시 받기</a>
+            </nav>
+        </div>
     </div>
 
-    <div class="mb-3">
-        <label asp-for="Password" class="form-label">비밀번호</label>
-        <input asp-for="Password" class="form-control" autocomplete="new-password" />
-        <span asp-validation-for="Password" class="text-danger small"></span>
-    </div>
-
-    <button type="submit" class="btn btn-primary">가입하기</button>
-</form>
+    <aside class="ivory-auth-visual ivory-auth-visual-signup" aria-label="Indie-Fi 가입 안내">
+        <div class="ivory-auth-mark" aria-hidden="true">IF</div>
+        <div class="ivory-auth-visual-copy">
+            <p>ONE ACCOUNT · THREE ROLES</p>
+            <h2>플레이하고, 리뷰하고,<br />게임을 선보이세요.</h2>
+            <ul>
+                <li>플레이어</li>
+                <li>리뷰어</li>
+                <li>게임 개발자</li>
+            </ul>
+        </div>
+    </aside>
+</section>

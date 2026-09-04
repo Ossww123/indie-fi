@@ -1,0 +1,104 @@
+@page "/Notifications"
+@model IndieFi.Web.Pages.Notifications.IndexModel
+@{
+    ViewData["Title"] = "알림";
+    ViewData["MainClass"] = "site-main-account-ledger";
+}
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">INBOX</p>
+        <h1>알림</h1>
+        <p>게임·리뷰·키 배포 활동에서 도착한 소식을 확인합니다.</p>
+    </div>
+    <div class="button-group">
+        <a asp-page="/Account/Notifications" class="button-outline">알림 설정</a>
+        @if (Model.Snapshot.UnreadCount > 0)
+        {
+            <form method="post" asp-page-handler="ReadAll">
+                <button type="submit" class="button-outline">모두 읽음</button>
+            </form>
+        }
+    </div>
+</header>
+
+<partial name="_AccountTools" />
+
+<section class="ivory-inbox-summary" aria-label="알림 요약">
+    <div>
+        <span>UNREAD</span>
+        <strong data-notification-unread-count>@Model.Snapshot.UnreadCount</strong>
+        <p>읽지 않은 알림</p>
+    </div>
+    <p class="dynamic-status dynamic-status-loading"
+       data-notification-live-state
+       aria-live="polite">최신 알림 확인 중…</p>
+</section>
+
+@if (Model.Notice is not null)
+{
+    <div class="alert-success" role="status">@Model.Notice</div>
+}
+
+<section class="ivory-inbox" aria-labelledby="notification-list-heading">
+    <div class="ivory-inbox-heading">
+        <div>
+            <p class="ivory-card-label">ALL NOTIFICATIONS</p>
+            <h2 id="notification-list-heading">받은 알림</h2>
+        </div>
+        <span>최신순</span>
+    </div>
+
+    @if (Model.Snapshot.Items.Count == 0)
+    {
+        <div class="empty-state" data-empty-state="notifications">
+            <div class="empty-state-icon" aria-hidden="true">◇</div>
+            <h2 class="empty-state-title">표시할 알림이 없습니다.</h2>
+            <p class="empty-state-description">게임·리뷰·키 배포 활동에 새 소식이 생기면 이곳에 표시됩니다.</p>
+            <div class="empty-state-actions">
+                <a asp-page="/Account/Notifications" class="button-outline">알림 설정 확인</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="ivory-inbox-list" data-notification-list>
+            @foreach (var item in Model.Snapshot.Items)
+            {
+                <article class="ivory-inbox-item @(item.ReadAt is null ? "ivory-inbox-item-unread" : null)"
+                         data-notification-id="@item.Id"
+                         data-notification-read="@(item.ReadAt is not null ? "true" : "false")">
+                    <span class="ivory-inbox-dot" aria-hidden="true"></span>
+                    <div class="ivory-inbox-copy">
+                        <div>
+                            <h3>@item.Title</h3>
+                            <time datetime="@item.CreatedAt.ToString("O")">@item.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</time>
+                        </div>
+                        <p>@item.Body</p>
+                    </div>
+                    <div class="ivory-inbox-actions">
+                        @if (item.DestinationPath is not null)
+                        {
+                            <a href="@item.DestinationPath" class="button-link">확인</a>
+                        }
+                        <form method="post" asp-page-handler="SetRead">
+                            <input type="hidden" name="id" value="@item.Id" />
+                            <input type="hidden" name="isRead" value="@(item.ReadAt is null ? "true" : "false")" />
+                            <button type="submit" class="button-outline button-small">@(item.ReadAt is null ? "읽음" : "읽지 않음")</button>
+                        </form>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
+
+@if (Model.Snapshot.NextCursor is { } next)
+{
+    <div class="ivory-pagination-action">
+        <a asp-page="/Notifications/Index"
+           asp-route-before="@next.CreatedAt.ToString("O")"
+           asp-route-beforeId="@next.NotificationId"
+           class="button-outline">이전 알림 더 보기</a>
+    </div>
+}

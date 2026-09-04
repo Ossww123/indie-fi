@@ -1,0 +1,81 @@
+@page
+@using IndieFi.Web.Modules.Credits.Domain
+@model IndexModel
+@{
+    ViewData["Title"] = "내 크레딧";
+    ViewData["MainClass"] = "site-main-account-ledger";
+}
+
+<header class="ivory-page-heading">
+    <div>
+        <p class="ivory-heading-label">CREDITS</p>
+        <h1>내 크레딧</h1>
+        <p>리뷰 활동으로 적립하고 피드백 요청에 사용한 크레딧 흐름을 확인합니다.</p>
+    </div>
+</header>
+
+<partial name="_AccountTools" />
+
+<section class="ivory-credit-balance" aria-labelledby="credit-balance-heading">
+    <div>
+        <p class="ivory-card-label">AVAILABLE BALANCE</p>
+        <h2 id="credit-balance-heading"><strong>@Model.Balance</strong> 크레딧</h2>
+        <p>현재 사용할 수 있는 확정 잔액입니다.</p>
+    </div>
+    <a asp-page="/Reviews/Index" class="ivory-credit-earn-link">
+        <span>REVIEW WORK</span>
+        <strong>리뷰 작업으로 크레딧 적립 →</strong>
+    </a>
+</section>
+
+<section class="ivory-ledger" aria-labelledby="credit-ledger-heading">
+    <div class="ivory-ledger-heading">
+        <div>
+            <p class="ivory-card-label">TRANSACTION HISTORY</p>
+            <h2 id="credit-ledger-heading">크레딧 내역</h2>
+        </div>
+        <span>최신순</span>
+    </div>
+
+    @if (Model.Entries.Count == 0)
+    {
+        <div class="empty-state" data-empty-state="credits">
+            <div class="empty-state-icon" aria-hidden="true">◇</div>
+            <h2 class="empty-state-title">크레딧 내역이 없습니다.</h2>
+            <p class="empty-state-description">리뷰를 완료하거나 피드백 요청에 크레딧을 사용하면 내역이 여기에 기록됩니다.</p>
+            <div class="empty-state-actions">
+                <a asp-page="/Reviews/Index" class="button-primary">리뷰 작업 보기</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="ivory-ledger-list">
+            @foreach (var entry in Model.Entries)
+            {
+                var deltaClass = entry.Delta > 0
+                    ? "ivory-ledger-positive"
+                    : entry.Delta < 0
+                        ? "ivory-ledger-negative"
+                        : "ivory-ledger-neutral";
+                var description = entry.Kind switch
+                {
+                    CreditEntryKind.Grant => "가입 축하 지급",
+                    _ => entry.Kind.ToString(),
+                };
+
+                <article class="ivory-ledger-entry">
+                    <time datetime="@entry.CreatedAt.ToString("O")">
+                        <span>@entry.CreatedAt.ToLocalTime().ToString("yyyy.MM.dd")</span>
+                        @entry.CreatedAt.ToLocalTime().ToString("HH:mm")
+                    </time>
+                    <div>
+                        <strong>@description</strong>
+                        <span>크레딧 원장 기록</span>
+                    </div>
+                    <strong class="@deltaClass">@entry.Delta.ToString("+0;-0;0")</strong>
+                </article>
+            }
+        </div>
+    }
+</section>

@@ -1,0 +1,57 @@
+@page
+@model ResendConfirmationEmailModel
+@{
+    ViewData["Title"] = "확인 메일 다시 받기";
+    ViewData["MainClass"] = "site-main-auth";
+}
+
+<section class="auth-shell ivory-auth-shell" data-auth-page="resend-confirmation">
+    <div class="ivory-auth-panel">
+        <nav class="ivory-auth-tabs" aria-label="인증 메뉴">
+            <a asp-page="/Login">← SIGN IN</a>
+        </nav>
+
+        <header class="auth-header">
+            <div class="ivory-auth-state-icon" aria-hidden="true">✉</div>
+            <p class="auth-eyebrow ivory-auth-eyebrow-spaced">EMAIL CONFIRMATION</p>
+            <h1 class="auth-title">확인 메일 다시 받기</h1>
+            <p class="auth-description">가입할 때 사용한 이메일로 새 확인 링크를 요청합니다.</p>
+        </header>
+
+        <div class="auth-card">
+            @if (Model.RequestCompleted)
+            {
+                <div class="alert-success ivory-auth-request-result" role="status">
+                    입력한 이메일의 미확인 계정이 재발송 제한 범위 안에 있으면 확인 메일을 보냈습니다.
+                </div>
+            }
+
+            <form method="post" class="auth-form">
+                <div asp-validation-summary="ModelOnly" role="alert"></div>
+                <div class="field-group">
+                    <label asp-for="Email" class="field-label">이메일</label>
+                    <input asp-for="Email" class="field-input" autocomplete="email" />
+                    <span asp-validation-for="Email" class="field-error"></span>
+                </div>
+                <button type="submit" class="button-primary w-full">확인 메일 다시 받기</button>
+            </form>
+
+            <div class="ivory-auth-privacy">
+                <span aria-hidden="true">i</span>
+                <p>계정 존재 여부를 보호하기 위해 요청 결과는 같은 방식으로 안내됩니다. 메일이 보이지 않으면 스팸함도 확인해 주세요.</p>
+            </div>
+
+            <nav class="auth-links" aria-label="이메일 확인 도움말">
+                <a asp-page="/Login" class="text-link">로그인으로 돌아가기</a>
+            </nav>
+        </div>
+    </div>
+
+    <aside class="ivory-auth-visual ivory-auth-visual-confirm" aria-label="이메일 확인 안내">
+        <div class="ivory-auth-mark" aria-hidden="true">&#64;</div>
+        <div class="ivory-auth-visual-copy">
+            <p>CHECK YOUR INBOX</p>
+            <h2>새 링크로<br />계정 확인을 이어가세요.</h2>
+        </div>
+    </aside>
+</section>

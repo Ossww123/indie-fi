@@ -1,3 +1,5 @@
+using IndieFi.Web.Modules.Games.Domain;
+
 namespace IndieFi.Web.Entities;
 
 /// <summary>
@@ -8,6 +10,12 @@ public class Game
     public long Id { get; set; }
 
     public long OwnerId { get; set; }
+
+    /// <summary>
+    /// Existing games use the inactive legacy value until their owner selects an
+    /// active genre. New registration starts requiring an active value in 10-3.
+    /// </summary>
+    public long GenreId { get; set; } = GameClassificationCatalog.UnspecifiedGenreId;
 
     public string Title { get; set; } = string.Empty;
 

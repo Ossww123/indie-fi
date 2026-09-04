@@ -1,6 +1,8 @@
 using IndieFi.Web.Data;
+using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -8,6 +10,10 @@ namespace IndieFi.Web.Tests;
 
 public sealed class PostgreSqlFixture : IAsyncLifetime
 {
+    private const string ApplicationRolePassword = "indiefi_app_test_password";
+    private const string SetApplicationRolePasswordSql =
+        "ALTER ROLE indiefi_app PASSWORD '" + ApplicationRolePassword + "';";
+
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:18")
         .WithDatabase("indiefi_tests")
         .WithUsername("postgres")
@@ -18,13 +24,18 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
     {
         await _container.StartAsync();
 
-        await using var db = NewDbContext();
-        await db.Database.MigrateAsync();
+        var ownerOptions = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(_container.GetConnectionString())
+            .Options;
+
+        await using var ownerDb = new AppDbContext(ownerOptions);
+        await ownerDb.Database.MigrateAsync();
+        await ownerDb.Database.ExecuteSqlRawAsync(SetApplicationRolePasswordSql);
     }
 
     // Page tests boot the whole app, so they need the address of this container
     // rather than a DbContext. The fixture owns the container, so it answers for it.
-    public string ConnectionString => _container.GetConnectionString();
+    public string ConnectionString => CreateApplicationConnectionString();
 
     public AppDbContext NewDbContext()
     {
@@ -33,12 +44,71 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 
     public AppDbContext NewDbContext(params IInterceptor[] interceptors)
     {
+        return NewDbContext(CreateApplicationConnectionString(), interceptors);
+    }
+
+    public AppDbContext NewOwnerDbContext(params IInterceptor[] interceptors)
+    {
+        return NewDbContext(_container.GetConnectionString(), interceptors);
+    }
+
+    public AppDbContext NewApplicationDbContext(string database)
+    {
+        return NewDbContext(
+            CreateApplicationConnectionString(database, pooling: false),
+            []);
+    }
+
+    public string CreateOwnerConnectionString(string database)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        {
+            Database = database,
+            Pooling = false,
+        };
+
+        return builder.ConnectionString;
+    }
+
+    public Task<ExecResult> ExecAsync(
+        IList<string> command,
+        CancellationToken cancellationToken = default)
+    {
+        return _container.ExecAsync(command, cancellationToken);
+    }
+
+    private static AppDbContext NewDbContext(
+        string connectionString,
+        IInterceptor[] interceptors)
+    {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_container.GetConnectionString())
+            .UseNpgsql(connectionString)
             .AddInterceptors(interceptors)
             .Options;
 
         return new AppDbContext(options);
+    }
+
+    private string CreateApplicationConnectionString()
+    {
+        return CreateApplicationConnectionString(
+            new NpgsqlConnectionStringBuilder(_container.GetConnectionString()).Database!,
+            pooling: true);
+    }
+
+    private string CreateApplicationConnectionString(
+        string database,
+        bool pooling)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        {
+            Database = database,
+            Username = "indiefi_app",
+            Password = ApplicationRolePassword,
+            Pooling = pooling,
+        };
+
+        return builder.ConnectionString;
     }
 
     public async ValueTask DisposeAsync()
