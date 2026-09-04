@@ -2,11 +2,14 @@ using IndieFi.Web.Application.Abstractions;
 using IndieFi.Web.Data;
 using IndieFi.Web.Entities;
 using IndieFi.Web.Modules.Feedback.Application;
+using IndieFi.Web.Modules.Media.Application;
+using IndieFi.Web.Modules.Media.Infrastructure;
 using IndieFi.Web.Modules.Profiles.Application;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace IndieFi.Web.Pages.Reviews;
 
@@ -72,24 +75,29 @@ public class IndexModel : PageModel
     private readonly ReviewClaimService _reviewClaimService;
     private readonly ReviewLeaseSweepService _reviewLeaseSweepService;
     private readonly UserDisplayNameResolver _displayNames;
+    private readonly MediaObjectStorageOptions _mediaStorageOptions;
 
     public IndexModel(
         AppDbContext db,
         ICurrentUser currentUser,
         ReviewClaimService reviewClaimService,
         ReviewLeaseSweepService reviewLeaseSweepService,
-        UserDisplayNameResolver displayNames)
+        UserDisplayNameResolver displayNames,
+        IOptions<MediaObjectStorageOptions> mediaStorageOptions)
     {
         _db = db;
         _currentUser = currentUser;
         _reviewClaimService = reviewClaimService;
         _reviewLeaseSweepService = reviewLeaseSweepService;
         _displayNames = displayNames;
+        _mediaStorageOptions = mediaStorageOptions.Value;
     }
 
     public IReadOnlyList<ReviewListItem> Items { get; private set; } = [];
     public IReadOnlyList<ReviewAssignmentListItem> MyAssignments { get; private set; } = [];
     public IReadOnlyList<ReviewAssignmentHistoryItem> AssignmentHistory { get; private set; } = [];
+    public IReadOnlyDictionary<long, PublicGameMediaImage> Covers { get; private set; } =
+        new Dictionary<long, PublicGameMediaImage>();
     public ClaimNotice? ClaimMessage { get; private set; }
     public SubmitNotice? SubmitMessage { get; private set; }
     public SweepNotice? SweepMessage { get; private set; }
@@ -117,6 +125,10 @@ public class IndexModel : PageModel
 
         var userId = _currentUser.GetRequiredUserId();
         ClaimOperationId = Guid.NewGuid();
+        if (_mediaStorageOptions.Enabled)
+        {
+            Response.Headers["Referrer-Policy"] = "no-referrer";
+        }
 
         MyAssignments = await (
             from assignment in _db.ReviewAssignments
@@ -126,6 +138,7 @@ public class IndexModel : PageModel
             orderby assignment.LeasedUntil
             select new ReviewAssignmentListItem(
                 assignment.Id,
+                game.Id,
                 game.Title,
                 assignment.CreatedAt,
                 assignment.LeasedUntil))
@@ -139,6 +152,7 @@ public class IndexModel : PageModel
                 || assignment.Status == ReviewAssignmentStatus.Expired
             orderby assignment.Id descending
             select new ReviewAssignmentHistoryItem(
+                game.Id,
                 game.Title,
                 assignment.Status,
                 assignment.CreatedAt,
@@ -156,6 +170,7 @@ public class IndexModel : PageModel
             orderby reviewRequest.Id
             select new
             {
+                GameId = game.Id,
                 game.Title,
                 reviewRequest.RequesterId,
                 reviewRequest.CreatedAt,
@@ -167,11 +182,27 @@ public class IndexModel : PageModel
 
         Items = queuedItems
             .Select(item => new ReviewListItem(
+                item.GameId,
                 item.Title,
                 item.RequesterId,
                 displayNames[item.RequesterId],
                 item.CreatedAt))
             .ToList();
+
+        if (_mediaStorageOptions.Enabled)
+        {
+            var gameIds = MyAssignments.Select(item => item.GameId)
+                .Concat(AssignmentHistory.Select(item => item.GameId))
+                .Concat(Items.Select(item => item.GameId))
+                .Distinct()
+                .ToArray();
+            if (gameIds.Length > 0)
+            {
+                Covers = await HttpContext.RequestServices
+                    .GetRequiredService<GameMediaQueryService>()
+                    .GetPublicCoversAsync(gameIds, HttpContext.RequestAborted);
+            }
+        }
     }
 
     public async Task<IActionResult> OnPostClaimAsync(Guid operationId)
@@ -211,6 +242,7 @@ public class IndexModel : PageModel
     }
 
     public sealed record ReviewListItem(
+        long GameId,
         string GameTitle,
         long RequesterId,
         string RequesterDisplayName,
@@ -218,11 +250,13 @@ public class IndexModel : PageModel
 
     public sealed record ReviewAssignmentListItem(
         long AssignmentId,
+        long GameId,
         string GameTitle,
         DateTimeOffset AssignedAt,
         DateTimeOffset LeasedUntil);
 
     public sealed record ReviewAssignmentHistoryItem(
+        long GameId,
         string GameTitle,
         ReviewAssignmentStatus Status,
         DateTimeOffset AssignedAt,

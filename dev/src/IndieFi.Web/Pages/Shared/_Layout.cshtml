@@ -10,8 +10,9 @@
         ? "99+"
         : navigationUnreadCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     var navigationPage = ViewContext.RouteData.Values["page"]?.ToString();
-    var isDiscoveryPage = string.Equals(navigationPage, "/Index", StringComparison.Ordinal)
-        || string.Equals(navigationPage, "/Games/Detail", StringComparison.Ordinal);
+    var isHomePage = string.Equals(navigationPage, "/Index", StringComparison.Ordinal)
+        || string.Equals(navigationPage, "/KeyDrops/Detail", StringComparison.Ordinal);
+    var isDiscoveryPage = string.Equals(navigationPage, "/Games/Detail", StringComparison.Ordinal);
     var isReviewsPage = navigationPage?.StartsWith("/Reviews/", StringComparison.Ordinal) == true;
     var isNotificationsPage = string.Equals(navigationPage, "/Notifications/Index", StringComparison.Ordinal)
         || string.Equals(navigationPage, "/Account/Notifications", StringComparison.Ordinal);
@@ -39,8 +40,8 @@
         <nav class="site-container" aria-label="주 메뉴">
             <div class="site-header-row" data-navigation-container>
                 <a class="site-brand" asp-area="" asp-page="/Index" aria-label="Indie-Fi 홈">
-                    <span class="site-brand-mark" aria-hidden="true">i</span>
-                    <span>Indie-Fi</span>
+                    <span class="site-brand-mark" aria-hidden="true">iF</span>
+                    <span>IndieFi</span>
                 </a>
                 <button type="button"
                         class="site-navigation-toggle"
@@ -54,11 +55,16 @@
                 </button>
                 <div id="site-navigation"
                      class="site-navigation hidden sm:flex"
-                     data-navigation-menu>
+                    data-navigation-menu>
                     <div class="site-primary-navigation">
+                        <a class="site-primary-link @(isHomePage ? "site-primary-link-active" : null)"
+                           asp-area=""
+                           asp-page="/Index"
+                           aria-current="@(isHomePage ? "page" : null)">홈</a>
                         <a class="site-primary-link @(isDiscoveryPage ? "site-primary-link-active" : null)"
                            asp-area=""
                            asp-page="/Index"
+                           asp-fragment="game-discovery-results"
                            aria-current="@(isDiscoveryPage ? "page" : null)">게임 찾기</a>
                         @if (User.Identity?.IsAuthenticated == true)
                         {
@@ -73,19 +79,25 @@
                           class="site-header-search"
                           role="search">
                         <label for="site-search" class="sr-only">게임 검색</label>
+                        <svg class="site-header-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <circle cx="11" cy="11" r="6.5" />
+                            <path stroke-linecap="round" d="m16 16 4 4" />
+                        </svg>
                         <input id="site-search"
                                type="search"
                                name="q"
                                minlength="2"
                                maxlength="100"
-                               placeholder="게임 제목이나 소개 검색" />
+                               placeholder="게임 제목이나 소개를 검색하세요"
+                               data-header-search />
+                        <kbd class="site-header-search-key">Ctrl K</kbd>
                     </form>
                     <div class="site-account-navigation">
                     @if (User.Identity?.IsAuthenticated == true)
                     {
                         <a class="site-credit-link" asp-area="" asp-page="/Credits/Index">
-                            <span class="site-credit-dot" aria-hidden="true"></span>
-                            크레딧
+                            <span class="site-credit-dot" aria-hidden="true">C</span>
+                            <span>크레딧</span>
                         </a>
                         <a class="site-notification-link"
                            asp-area=""
@@ -95,7 +107,7 @@
                             <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M14.9 18a3 3 0 0 1-5.8 0m8.4-2H6.5c1.2-1.3 1.8-3 1.8-4.8V9.7a3.7 3.7 0 1 1 7.4 0v1.5c0 1.8.6 3.5 1.8 4.8Z" />
                             </svg>
-                            <span>알림</span>
+                            <span class="sr-only">알림</span>
                             <span class="site-notification-badge @(navigationUnreadCount == 0 ? "hidden" : null)"
                                   data-notification-badge
                                   aria-label="읽지 않은 알림 @(navigationUnreadCount)개">@navigationUnreadText</span>
